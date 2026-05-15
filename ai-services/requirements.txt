@@ -1,0 +1,12 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+python-dotenv==1.1.0
+pydantic==2.11.4
+pydantic-settings==2.9.1
+openai==1.79.0
+langchain==0.3.25
+pgvector==0.3.6
+pinecone-client==5.0.1
+tiktoken==0.9.0
+apscheduler==3.11.0
+redis==6.1.0

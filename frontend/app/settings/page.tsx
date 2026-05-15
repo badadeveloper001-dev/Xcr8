@@ -1,0 +1,273 @@
+"use client";
+
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { Bell, ChevronRight, Globe2, LogOut, Moon, Shield, User2 } from "lucide-react";
+import { MobileShell } from "@/components/mobile-shell";
+import {
+  connectPlatform,
+  disconnectPlatform,
+  getApiErrorMessage,
+  getPlatformConnections,
+} from "@/lib/api";
+import { useCreatorStore } from "@/lib/store";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+const platforms = [
+  { id: "instagram", label: "Instagram", cls: "badge-ig", short: "IG" },
+  { id: "tiktok", label: "TikTok", cls: "badge-tk", short: "TK" },
+  { id: "x", label: "X / Twitter", cls: "badge-x", short: "X" },
+  { id: "facebook", label: "Facebook", cls: "badge-fb", short: "FB" },
+  { id: "linkedin", label: "LinkedIn", cls: "badge-li", short: "LI" },
+];
+
+export default function SettingsPage() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const clearSession = useCreatorStore((s) => s.clearSession);
+  const userId = useCreatorStore((s) => s.userId);
+  const email = useCreatorStore((s) => s.email);
+  const displayName = useCreatorStore((s) => s.displayName);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userId) router.replace("/auth/login");
+  }, [router, userId]);
+
+  const { data: connections, isLoading } = useQuery({
+    queryKey: ["platform-connections", userId],
+    queryFn: () => getPlatformConnections(userId as number),
+    enabled: Boolean(userId),
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: async (platform: string) => {
+      return connectPlatform(userId as number, platform, `${displayName ?? "creator"}_${platform}`);
+    },
+    onSuccess: () => {
+      setNotice("Platform connected.");
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["platform-connections", userId] });
+    },
+    onError: (err) => {
+      setError(getApiErrorMessage(err, "Could not connect platform."));
+    },
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: async (platformId: number) => disconnectPlatform(userId as number, platformId),
+    onSuccess: () => {
+      setNotice("Platform disconnected.");
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["platform-connections", userId] });
+    },
+    onError: (err) => {
+      setError(getApiErrorMessage(err, "Could not disconnect platform."));
+    },
+  });
+
+  if (!userId) return null;
+
+  return (
+    <MobileShell title="Settings" subtitle="Profile, accounts & preferences.">
+      <div className="surface-card cyber-grid neon-ring space-y-3.5 rounded-2xl p-4">
+        {notice ? (
+          <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 light:text-emerald-700">
+            {notice}
+          </p>
+        ) : null}
+        {error ? (
+          <p
+            role="status"
+            className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 light:text-rose-700"
+          >
+            {error}
+          </p>
+        ) : null}
+
+        {/* Profile card */}
+        <motion.article
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="surface-luxe rounded-2xl p-4"
+        >
+          <p className="section-kicker mb-3">Identity</p>
+          <div className="flex items-center gap-4">
+            <div className="relative h-16 w-16 overflow-hidden rounded-2xl bg-violet-500/20 ring-2 ring-violet-500/30">
+              <Image
+                src="/avatar-placeholder.svg"
+                alt="avatar"
+                width={64}
+                height={64}
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-lg font-bold text-white light:text-slate-900">
+                {displayName ?? "Creator"}
+              </p>
+              <p className="text-sm text-slate-400 light:text-slate-500">
+                {email ?? "user@xcr8.app"}
+              </p>
+              <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-400 light:bg-violet-50 light:text-violet-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Creator plan
+              </div>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 grid h-9 w-9 place-items-center rounded-xl surface-soft text-slate-400 hover:text-slate-200 light:hover:text-slate-700"
+            >
+              <User2 size={16} />
+            </button>
+          </div>
+        </motion.article>
+
+        {/* Connected platforms */}
+        <motion.article
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.05 }}
+          className="surface-card rounded-2xl p-4"
+        >
+          <p className="section-kicker mb-2">Distribution control</p>
+          <p className="mb-3 flex items-center gap-2 text-sm font-bold text-white light:text-slate-900">
+            <Globe2 size={15} className="text-violet-400 light:text-violet-600" />
+            Connected Platforms
+          </p>
+          {isLoading && (
+            <div className="mb-2 space-y-2" aria-hidden="true">
+              <div className="skeleton h-10 rounded-xl" />
+              <div className="skeleton h-10 rounded-xl" />
+            </div>
+          )}
+          <div className="space-y-2">
+            {platforms.map((p) => (
+              <div
+                key={p.id}
+                className="surface-soft flex items-center gap-3 rounded-xl px-3 py-2.5"
+              >
+                <span
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${p.cls}`}
+                >
+                  {p.short}
+                </span>
+                <span className="flex-1 text-sm font-medium text-slate-300 light:text-slate-700">
+                  {p.label}
+                </span>
+                {connections?.find((c) => c.platform === p.id && c.active) ? (
+                  <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Connected
+                    <button
+                      type="button"
+                      className="ml-2 text-[11px] text-rose-400 hover:underline"
+                      onClick={() => {
+                        const row = connections?.find((c) => c.platform === p.id && c.active);
+                        if (row) void disconnectMutation.mutate(row.id);
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={connectMutation.isPending}
+                    onClick={() => void connectMutation.mutate(p.id)}
+                    className="text-xs font-medium text-violet-400 hover:underline disabled:opacity-60 light:text-violet-600"
+                  >
+                    Connect
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </motion.article>
+
+        {/* Appearance */}
+        <motion.article
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.08 }}
+          className="surface-card flex items-center justify-between rounded-2xl p-4"
+        >
+          <p className="sr-only">Appearance preferences</p>
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-700/60 text-slate-300 light:bg-slate-100 light:text-slate-600">
+              <Moon size={16} />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-white light:text-slate-900">Appearance</p>
+              <p className="text-xs text-slate-500">Toggle dark / light mode</p>
+            </div>
+          </div>
+          <ThemeToggle />
+        </motion.article>
+
+        {/* Notifications */}
+        <motion.article
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.11 }}
+          className="surface-card rounded-2xl overflow-hidden"
+        >
+          <div className="border-b border-white/6 px-4 py-2 light:border-slate-100">
+            <p className="section-kicker">Alerts and safety</p>
+          </div>
+          {[
+            {
+              icon: <Bell size={15} />,
+              label: "Post reminders",
+              sub: "Get notified before scheduled posts",
+            },
+            {
+              icon: <Shield size={15} />,
+              label: "Security alerts",
+              sub: "Login and access notifications",
+            },
+          ].map((item, idx) => (
+            <div
+              key={item.label}
+              className={`flex items-center gap-3 px-4 py-3.5 ${idx > 0 ? "border-t border-white/6 light:border-slate-100" : ""}`}
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-700/60 text-slate-300 light:bg-slate-100 light:text-slate-600">
+                {item.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-white light:text-slate-900">
+                  {item.label}
+                </p>
+                <p className="text-xs text-slate-500">{item.sub}</p>
+              </div>
+              <ChevronRight size={15} className="shrink-0 text-slate-600" />
+            </div>
+          ))}
+        </motion.article>
+
+        {/* Logout */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.14 }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              clearSession();
+              router.push("/auth/login");
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/10 py-3.5 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/20"
+          >
+            <LogOut size={15} />
+            Sign out
+          </button>
+        </motion.div>
+      </div>
+    </MobileShell>
+  );
+}

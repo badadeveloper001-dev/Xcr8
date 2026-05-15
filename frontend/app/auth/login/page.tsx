@@ -1,0 +1,154 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
+import { getApiErrorMessage, signup } from "@/lib/api";
+import { supabaseClient } from "@/lib/supabase";
+import { useCreatorStore } from "@/lib/store";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { Logo } from "@/components/logo";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const setSession = useCreatorStore((state) => state.setSession);
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const session = await signup({
+        email,
+        display_name: email.split("@")[0] ?? "Creator",
+        language: "english",
+        timezone: "Africa/Lagos",
+      });
+      setSession({
+        userId: session.user_id,
+        email: session.email,
+        displayName: session.display_name,
+        onboardingComplete: session.onboarding_complete,
+      });
+      router.push("/dashboard");
+    } catch (err) {
+      setError(
+        getApiErrorMessage(err, "Unable to sign in. Please check your connection and try again."),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    if (!supabaseClient) {
+      setError("Google auth is not configured yet.");
+      return;
+    }
+    await supabaseClient.auth.signInWithOAuth({ provider: "google" });
+  };
+
+  return (
+    <main className="flex min-h-screen w-full items-center justify-center px-5 py-12">
+      {/* Decorative blobs */}
+      <div className="pointer-events-none fixed left-[-120px] top-[-80px] h-[400px] w-[400px] rounded-full bg-violet-600/20 blur-[100px] dark:bg-violet-600/15" />
+      <div className="pointer-events-none fixed bottom-[-100px] right-[-100px] h-[350px] w-[350px] rounded-full bg-fuchsia-600/15 blur-[90px] dark:bg-fuchsia-600/10" />
+
+      <div className="relative w-full max-w-[440px]">
+        {/* Brand header */}
+        <div className="mb-8 text-center">
+          <Link href="/" className="inline-flex items-center gap-2.5">
+            <Logo size="md" className="!w-[220px] max-w-full" />
+          </Link>
+        </div>
+
+        <div className="surface-luxe rounded-[28px] p-7 backdrop-blur-xl">
+          {/* Badge */}
+          <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-400 light:border-violet-500/20 light:bg-violet-50 light:text-violet-600">
+            <Sparkles size={11} />
+            Creator workspace
+          </div>
+
+          <p className="section-kicker mb-2">Welcome back</p>
+          <h1 className="text-3xl font-bold tracking-tight text-white light:text-slate-900 sm:text-[2.05rem]">
+            Welcome back
+          </h1>
+          <p className="mt-1.5 text-sm text-slate-400 light:text-slate-500">
+            Continue with your creator email to open your workspace.
+          </p>
+
+          <form className="mt-6 space-y-3.5" onSubmit={(e) => void handleSubmit(e)}>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                Email address
+              </label>
+              <input
+                required
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="xcr8-input"
+                autoComplete="email"
+              />
+              <p className="mt-1.5 text-xs text-slate-500">
+                No password for now. We authenticate by email session.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="cta-btn mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold disabled:opacity-60"
+            >
+              {loading ? (
+                "Signing in…"
+              ) : (
+                <>
+                  Continue <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="h-px flex-1 bg-white/10 light:bg-slate-200" />
+            <span className="text-xs text-slate-500">or</span>
+            <div className="h-px flex-1 bg-white/10 light:bg-slate-200" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleGoogle()}
+            className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:shadow-sm light:hover:bg-slate-50"
+          >
+            Continue with Google
+          </button>
+
+          {error && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5 text-sm text-rose-400"
+            >
+              {error}
+            </p>
+          )}
+
+          <p className="mt-5 text-center text-sm text-slate-500">
+            New here?{" "}
+            <Link
+              href="/auth/signup"
+              className="font-medium text-violet-400 hover:underline light:text-violet-600"
+            >
+              Create account
+            </Link>
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}

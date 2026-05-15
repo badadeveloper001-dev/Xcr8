@@ -1,0 +1,27 @@
+{
+  "name": "Xcr8 Dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [3000, 8000, 8100, 5432, 6379],
+  "postCreateCommand": "corepack enable && pnpm install && python3 -m venv .venv && . .venv/bin/activate && pip install -U pip && pip install -r backend/requirements.txt -r ai-services/requirements.txt",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "github.copilot",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}

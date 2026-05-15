@@ -1,0 +1,29 @@
+# Node
+node_modules/
+.pnpm-store/
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.DS_Store
+.idea/
+
+# Logs
+*.log
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*

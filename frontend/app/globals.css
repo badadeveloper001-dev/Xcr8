@@ -1,0 +1,324 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design tokens ──────────────────────────────── */
+:root {
+  --background: 220 30% 97%;
+  --foreground: 226 30% 10%;
+  --primary: 263 86% 57%;
+  --primary-foreground: 0 0% 100%;
+  --border: 226 20% 88%;
+  --input: 226 24% 93%;
+  --ring: 263 86% 57%;
+  --radius: 0.875rem;
+
+  /* Surface tokens – light */
+  --surface-card-bg: rgba(255, 255, 255, 0.98);
+  --surface-card-border: rgba(18, 24, 38, 0.08);
+  --surface-card-shadow: 0 2px 12px rgba(20, 16, 50, 0.07), 0 1px 3px rgba(20, 16, 50, 0.05);
+  --surface-soft-bg: rgba(246, 247, 255, 0.95);
+  --surface-soft-border: rgba(18, 24, 38, 0.06);
+}
+
+.dark {
+  --background: 242 54% 6%;
+  --foreground: 210 40% 98%;
+  --primary: 263 86% 57%;
+  --primary-foreground: 0 0% 100%;
+  --border: 242 22% 20%;
+  --input: 242 22% 14%;
+  --ring: 263 86% 57%;
+
+  /* Surface tokens – dark */
+  --surface-card-bg: rgba(14, 17, 38, 0.92);
+  --surface-card-border: rgba(255, 255, 255, 0.09);
+  --surface-card-shadow: 0 4px 24px rgba(0, 0, 10, 0.4);
+  --surface-soft-bg: rgba(10, 13, 28, 0.78);
+  --surface-soft-border: rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Base reset ─────────────────────────────────── */
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: "Space Grotesk", sans-serif;
+  min-height: 100vh;
+  letter-spacing: 0.01em;
+}
+
+/* ─── Backgrounds ────────────────────────────────── */
+.dark body {
+  background-image:
+    radial-gradient(ellipse at 8% 10%, rgba(139, 72, 255, 0.22), transparent 38%),
+    radial-gradient(ellipse at 90% 8%, rgba(72, 36, 220, 0.18), transparent 32%),
+    radial-gradient(ellipse at 50% 90%, rgba(90, 20, 180, 0.12), transparent 40%),
+    linear-gradient(160deg, #080320 0%, #090420 50%, #07051a 100%);
+}
+
+html:not(.dark) body {
+  background-image:
+    radial-gradient(ellipse at 14% 10%, rgba(139, 80, 255, 0.1), transparent 36%),
+    radial-gradient(ellipse at 86% 6%, rgba(108, 60, 250, 0.08), transparent 32%),
+    linear-gradient(180deg, #f8f9ff 0%, #f0f2fb 100%);
+}
+
+/* ─── Reusable surface classes ───────────────────── */
+.surface-card {
+  background: var(--surface-card-bg);
+  border: 1px solid var(--surface-card-border);
+  box-shadow: var(--surface-card-shadow);
+  backdrop-filter: blur(10px);
+}
+
+.surface-soft {
+  background: var(--surface-soft-bg);
+  border: 1px solid var(--surface-soft-border);
+}
+
+.surface-luxe {
+  background:
+    radial-gradient(circle at 14% 12%, rgba(168, 85, 247, 0.2), transparent 36%),
+    radial-gradient(circle at 85% 84%, rgba(59, 130, 246, 0.14), transparent 34%),
+    var(--surface-card-bg);
+  border: 1px solid color-mix(in srgb, var(--surface-card-border) 72%, rgba(139, 92, 246, 0.4));
+  box-shadow:
+    0 14px 40px rgba(60, 20, 150, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.section-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #a78bfa;
+}
+
+.text-holo {
+  background: linear-gradient(100deg, #f4f6ff 0%, #c4b5fd 38%, #7dd3fc 68%, #f0abfc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.cyber-grid {
+  position: relative;
+}
+
+.cyber-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
+.neon-ring {
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.35),
+    0 0 0 3px rgba(56, 189, 248, 0.1),
+    0 0 24px rgba(139, 92, 246, 0.24);
+}
+
+.scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(125, 211, 252, 0.08) 45%,
+    transparent 100%
+  );
+  transform: translateY(-100%);
+  animation: scanline 5s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes scanline {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* ─── Gradient CTA ───────────────────────────────── */
+.cta-btn {
+  background: linear-gradient(100deg, #9f3fff 0%, #7c32ff 55%, #5f2eff 100%);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(95, 46, 255, 0.34);
+  transition:
+    opacity 0.15s ease,
+    transform 0.14s ease,
+    box-shadow 0.2s ease;
+}
+.cta-btn:hover {
+  opacity: 0.96;
+  box-shadow: 0 14px 32px rgba(95, 46, 255, 0.42);
+  transform: translateY(-1px);
+}
+.cta-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ─── Platform badge colours ─────────────────────── */
+.badge-ig {
+  background: linear-gradient(135deg, #f9225b, #ff7a00);
+}
+.badge-x {
+  background: #000;
+}
+.badge-fb {
+  background: #1877f2;
+}
+.badge-tk {
+  background: #010101;
+}
+.badge-yt {
+  background: #ff0000;
+}
+.badge-li {
+  background: #0a66c2;
+}
+.badge-th {
+  background: #101010;
+}
+
+/* ─── Status pills ───────────────────────────────── */
+.pill-published {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.pill-scheduled {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+}
+html:not(.dark) .pill-published {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+html:not(.dark) .pill-scheduled {
+  background: rgba(56, 189, 248, 0.1);
+  color: #0284c7;
+  border-color: rgba(56, 189, 248, 0.18);
+}
+
+/* ─── Light-mode text overrides ──────────────────── */
+html:not(.dark) .text-white {
+  color: #0f172a;
+}
+html:not(.dark) .text-slate-300 {
+  color: #3d4960;
+}
+html:not(.dark) .text-slate-400 {
+  color: #586070;
+}
+html:not(.dark) .text-slate-500 {
+  color: #717d8e;
+}
+html:not(.dark) .text-violet-300 {
+  color: #7c3aed;
+}
+
+/* ─── Insight icon tints ─────────────────────────── */
+html:not(.dark) .text-fuchsia-300 {
+  color: #a21caf;
+}
+html:not(.dark) .text-orange-300 {
+  color: #c2410c;
+}
+
+/* ─── Input focus ring ───────────────────────────── */
+.xcr8-input {
+  @apply w-full rounded-2xl border px-4 py-3.5 text-sm outline-none transition;
+  background: var(--surface-soft-bg);
+  border-color: var(--surface-soft-border);
+  color: inherit;
+}
+.xcr8-input::placeholder {
+  color: #64748b;
+}
+.xcr8-input:focus {
+  border-color: rgba(139, 92, 246, 0.6);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
+
+/* ─── Accessibility and feedback helpers ────────── */
+:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.8);
+  outline-offset: 2px;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.14),
+    rgba(148, 163, 184, 0.24),
+    rgba(148, 163, 184, 0.14)
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Smooth page entry ──────────────────────────── */
+.page-enter {
+  animation: slideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

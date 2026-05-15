@@ -1,0 +1,29 @@
+{
+  "name": "xcr8-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n frontend,backend,ai,worker -c cyan,green,magenta,yellow \"./scripts/start-frontend.sh\" \"./scripts/start-backend.sh\" \"./scripts/start-ai-services.sh\" \"./scripts/start-workers.sh\"",
+    "dev:frontend": "./scripts/start-frontend.sh",
+    "dev:backend": "./scripts/start-backend.sh",
+    "dev:ai": "./scripts/start-ai-services.sh",
+    "dev:workers": "./scripts/start-workers.sh",
+    "build": "pnpm --filter frontend build",
+    "lint": "pnpm --filter frontend lint",
+    "format": "prettier . --write",
+    "typecheck": "pnpm --filter frontend typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "@next/eslint-plugin-next": "^15.3.2",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.27.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.1"
+  }
+}

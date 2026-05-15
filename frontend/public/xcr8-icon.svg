@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 90" fill="none">
+  <defs>
+    <linearGradient id="pg" x1="40" y1="4" x2="40" y2="86" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a855f7"/>
+      <stop offset="0.5" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+  </defs>
+
+  <!--
+    Figure-8 / hourglass icon.
+    Uses fill-rule="evenodd" so the two inner subpaths cut transparent holes
+    through the outer shape, giving a clean result on any background.
+
+    Outer path  → clockwise  → filled
+    Top hole    → goes from tip upward then back → enclosed twice → empty
+    Bottom hole → mirror of top                 → enclosed twice → empty
+  -->
+  <path
+    fill="url(#pg)"
+    fill-rule="evenodd"
+    d="
+      M 40,4
+      C 58,4 74,15 74,31
+      C 74,40 68,45 59,46
+      C 68,47 74,52 74,61
+      C 74,77 58,86 40,86
+      C 22,86  6,77  6,61
+      C  6,52 12,47 21,46
+      C 12,45  6,40  6,31
+      C  6,15 22,4  40,4 Z
+
+      M 40,42
+      C 35,39 17,32 15,24
+      C 13,15 24,10 40,10
+      C 56,10 67,15 65,24
+      C 63,32 45,39 40,42 Z
+
+      M 40,50
+      C 35,53 17,60 15,68
+      C 13,77 24,80 40,80
+      C 56,80 67,77 65,68
+      C 63,60 45,53 40,50 Z
+    "
+  />
+
+  <!-- 4-point sparkle at the crossing point (40, 46) -->
+  <path
+    d="M 40,41 L 41.8,44.2 L 45.5,46 L 41.8,47.8 L 40,51 L 38.2,47.8 L 34.5,46 L 38.2,44.2 Z"
+    fill="white"
+  />
+</svg>

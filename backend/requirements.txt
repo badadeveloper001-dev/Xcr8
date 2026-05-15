@@ -1,0 +1,15 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+sqlalchemy==2.0.40
+psycopg2-binary==2.9.10
+python-dotenv==1.1.0
+supabase==2.15.1
+pydantic==2.11.4
+pydantic-settings==2.9.1
+celery==5.5.2
+redis==6.1.0
+apscheduler==3.11.0
+boto3==1.38.16
+httpx==0.28.1
+python-multipart==0.0.20
+email-validator==2.2.0

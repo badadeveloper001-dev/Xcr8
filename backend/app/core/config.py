@@ -1,0 +1,32 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    environment: str = "development"
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    database_url: str = "sqlite:///./xcr8.db"
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
+    supabase_jwt_secret: str = ""
+    google_oauth_enabled: bool = True
+
+    ai_service_url: str = "http://localhost:8100"
+    default_timezone: str = "Africa/Lagos"
+
+    storage_provider: str = "s3"
+    storage_bucket: str = "xcr8-assets"
+    storage_region: str = "us-east-1"
+    storage_access_key_id: str = ""
+    storage_secret_access_key: str = ""
+    storage_endpoint_url: str | None = None
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
+settings = Settings()
