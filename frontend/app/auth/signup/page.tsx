@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { getApiErrorMessage, signup } from "@/lib/api";
+import { supabaseClient } from "@/lib/supabase";
 import { useCreatorStore } from "@/lib/store";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Logo } from "@/components/logo";
@@ -11,19 +12,30 @@ import { Logo } from "@/components/logo";
 export default function SignupPage() {
   const router = useRouter();
   const setSession = useCreatorStore((state) => state.setSession);
-  const [displayName, setDisplayName] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!agreeTerms) {
+      setError("You must agree to the Terms to continue.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const session = await signup({
+        full_name: fullName,
+        username,
         email,
-        display_name: displayName,
+        password,
+        confirm_password: confirmPassword,
         language: "english",
         timezone: "Africa/Lagos",
       });
@@ -31,6 +43,8 @@ export default function SignupPage() {
         userId: session.user_id,
         email: session.email,
         displayName: session.display_name,
+        fullName: session.full_name,
+        username: session.username,
         onboardingComplete: session.onboarding_complete,
       });
       router.push("/onboarding");
@@ -44,6 +58,14 @@ export default function SignupPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogle = async () => {
+    if (!supabaseClient) {
+      setError("Google auth is not configured yet.");
+      return;
+    }
+    await supabaseClient.auth.signInWithOAuth({ provider: "google" });
   };
 
   return (
@@ -79,15 +101,28 @@ export default function SignupPage() {
           <form className="mt-6 space-y-3.5" onSubmit={(e) => void handleSubmit(e)}>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
-                Your name
+                Full name
               </label>
               <input
                 required
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Display name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your full name"
                 className="xcr8-input"
                 autoComplete="name"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                Username
+              </label>
+              <input
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="creator_handle"
+                className="xcr8-input"
+                autoComplete="username"
               />
             </div>
             <div>
@@ -104,10 +139,44 @@ export default function SignupPage() {
                 autoComplete="email"
               />
             </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                Password
+              </label>
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 chars with a number"
+                className="xcr8-input"
+                autoComplete="new-password"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                Confirm password
+              </label>
+              <input
+                required
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                className="xcr8-input"
+                autoComplete="new-password"
+              />
+            </div>
 
-            <p className="text-xs text-slate-500 light:text-slate-400">
-              By creating an account you agree to our Terms of Service.
-            </p>
+            <label className="flex items-start gap-2 text-xs text-slate-500 light:text-slate-400">
+              <input
+                type="checkbox"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                className="mt-0.5"
+              />
+              I agree to the Terms of Service and Privacy Policy.
+            </label>
 
             <button
               type="submit"
@@ -121,6 +190,14 @@ export default function SignupPage() {
                   Create account <ArrowRight size={16} />
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleGoogle()}
+              className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:shadow-sm light:hover:bg-slate-50"
+            >
+              Continue with Google
             </button>
           </form>
 

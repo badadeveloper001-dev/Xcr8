@@ -9,24 +9,42 @@ export type SessionPayload = {
   user_id: number;
   email: string;
   display_name: string;
+  full_name?: string | null;
+  username?: string | null;
   onboarding_complete: boolean;
   google_oauth_enabled: boolean;
 };
 
 export type SignupPayload = {
+  full_name: string;
+  username: string;
   email: string;
-  display_name: string;
+  password: string;
+  confirm_password: string;
   language: string;
   timezone: string;
 };
 
+export type LoginPayload = {
+  email: string;
+  password: string;
+  remember_me: boolean;
+};
+
+export type PasswordResetPayload = {
+  email: string;
+};
+
 export type OnboardingPayload = {
   user_id: number;
-  niche: string;
+  creator_type: string;
+  platforms_used: string[];
+  content_niche: string;
+  audience_location: string;
+  content_goals: string[];
+  posting_frequency: string;
   tone: string;
-  emoji_style: string;
-  slang_profile: string;
-  multilingual_profile: string[];
+  personality: string;
 };
 
 export type DistributionDraftPayload = {
@@ -114,6 +132,21 @@ type MemoryProfileResponse = {
 
 export async function signup(payload: SignupPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup", payload);
+  return data;
+}
+
+export async function login(payload: LoginPayload): Promise<SessionPayload> {
+  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/login", payload);
+  return data;
+}
+
+export async function requestPasswordReset(
+  payload: PasswordResetPayload,
+): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>(
+    "/api/v1/auth/password-reset/request",
+    payload,
+  );
   return data;
 }
 

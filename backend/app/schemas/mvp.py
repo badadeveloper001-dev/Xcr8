@@ -6,27 +6,45 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class AuthSignupRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=120)
+    username: str = Field(min_length=3, max_length=40, pattern=r"^[a-zA-Z0-9_]+$")
     email: EmailStr
-    display_name: str = Field(min_length=2, max_length=120)
+    password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
     language: str = "english"
     timezone: str = "Africa/Lagos"
+
+
+class AuthLoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    remember_me: bool = False
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
 
 
 class AuthSessionResponse(BaseModel):
     user_id: int
     email: EmailStr
     display_name: str
+    full_name: str | None = None
+    username: str | None = None
     onboarding_complete: bool
     google_oauth_enabled: bool
 
 
 class OnboardingRequest(BaseModel):
     user_id: int
-    niche: str
+    creator_type: str
+    platforms_used: list[str]
+    content_niche: str
+    audience_location: str
+    content_goals: list[str]
+    posting_frequency: str
     tone: str
-    emoji_style: str
-    slang_profile: str
-    multilingual_profile: list[str]
+    personality: str
 
 
 class PlatformConnection(BaseModel):

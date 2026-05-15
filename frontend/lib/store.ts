@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 type CreatorState = {
   activeCreatorId: string | null;
@@ -6,6 +7,8 @@ type CreatorState = {
   userId: number | null;
   email: string | null;
   displayName: string | null;
+  fullName: string | null;
+  username: string | null;
   onboardingComplete: boolean;
   theme: "dark" | "light";
   distributionDraft: {
@@ -23,6 +26,8 @@ type CreatorState = {
     userId: number;
     email: string;
     displayName: string;
+    fullName?: string | null;
+    username?: string | null;
     onboardingComplete: boolean;
   }) => void;
   clearSession: () => void;
@@ -30,27 +35,56 @@ type CreatorState = {
   setDistributionDraft: (payload: CreatorState["distributionDraft"]) => void;
 };
 
-export const useCreatorStore = create<CreatorState>((set) => ({
-  activeCreatorId: null,
-  setActiveCreatorId: (id) => set({ activeCreatorId: id }),
-  userId: null,
-  email: null,
-  displayName: null,
-  onboardingComplete: false,
-  theme: "dark",
-  distributionDraft: null,
-  setSession: ({ userId, email, displayName, onboardingComplete }) =>
-    set({ userId, email, displayName, onboardingComplete, activeCreatorId: String(userId) }),
-  clearSession: () =>
-    set({
+export const useCreatorStore = create<CreatorState>()(
+  persist(
+    (set) => ({
+      activeCreatorId: null,
+      setActiveCreatorId: (id) => set({ activeCreatorId: id }),
       userId: null,
       email: null,
       displayName: null,
+      fullName: null,
+      username: null,
       onboardingComplete: false,
-      activeCreatorId: null,
+      theme: "dark",
       distributionDraft: null,
+      setSession: ({ userId, email, displayName, fullName, username, onboardingComplete }) =>
+        set({
+          userId,
+          email,
+          displayName,
+          fullName: fullName ?? displayName,
+          username: username ?? null,
+          onboardingComplete,
+          activeCreatorId: String(userId),
+        }),
+      clearSession: () =>
+        set({
+          userId: null,
+          email: null,
+          displayName: null,
+          fullName: null,
+          username: null,
+          onboardingComplete: false,
+          activeCreatorId: null,
+          distributionDraft: null,
+        }),
+      setTheme: (theme) => set({ theme }),
+      setDistributionDraft: (distributionDraft) => set({ distributionDraft }),
     }),
-  setTheme: (theme) => set({ theme }),
-  setDistributionDraft: (distributionDraft) => set({ distributionDraft }),
-}));
-
+    {
+      name: "xcr8-creator-store",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        userId: state.userId,
+        email: state.email,
+        displayName: state.displayName,
+        fullName: state.fullName,
+        username: state.username,
+        onboardingComplete: state.onboardingComplete,
+        theme: state.theme,
+        activeCreatorId: state.activeCreatorId,
+      }),
+    },
+  ),
+);

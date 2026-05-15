@@ -44,6 +44,7 @@ class User(Base):
     )
 
     profile: Mapped[CreatorProfile] = relationship(back_populates="user", uselist=False)
+    auth_credential: Mapped[AuthCredential] = relationship(back_populates="user", uselist=False)
     posts: Mapped[list[ContentPost]] = relationship(back_populates="user")
     connected_platforms: Mapped[list[ConnectedPlatform]] = relationship(back_populates="user")
     schedules: Mapped[list[ScheduledPost]] = relationship(back_populates="user")
@@ -65,6 +66,22 @@ class CreatorProfile(Base):
     preferences: Mapped[dict] = mapped_column(JSON, default=dict)
 
     user: Mapped[User] = relationship(back_populates="profile")
+
+
+class AuthCredential(Base):
+    __tablename__ = "auth_credentials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(Text)
+    password_salt: Mapped[str] = mapped_column(Text)
+    password_reset_token_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    remember_me_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    user: Mapped[User] = relationship(back_populates="auth_credential")
 
 
 class ConnectedPlatform(Base):

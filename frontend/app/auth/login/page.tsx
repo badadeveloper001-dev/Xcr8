@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { getApiErrorMessage, signup } from "@/lib/api";
+import { getApiErrorMessage, login } from "@/lib/api";
 import { supabaseClient } from "@/lib/supabase";
 import { useCreatorStore } from "@/lib/store";
 import { ArrowRight, Sparkles } from "lucide-react";
@@ -13,6 +13,8 @@ export default function LoginPage() {
   const router = useRouter();
   const setSession = useCreatorStore((state) => state.setSession);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,19 +23,20 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const session = await signup({
+      const session = await login({
         email,
-        display_name: email.split("@")[0] ?? "Creator",
-        language: "english",
-        timezone: "Africa/Lagos",
+        password,
+        remember_me: rememberMe,
       });
       setSession({
         userId: session.user_id,
         email: session.email,
         displayName: session.display_name,
+        fullName: session.full_name,
+        username: session.username,
         onboardingComplete: session.onboarding_complete,
       });
-      router.push("/dashboard");
+      router.push(session.onboarding_complete ? "/dashboard" : "/onboarding");
     } catch (err) {
       setError(
         getApiErrorMessage(err, "Unable to sign in. Please check your connection and try again."),
@@ -77,7 +80,7 @@ export default function LoginPage() {
             Welcome back
           </h1>
           <p className="mt-1.5 text-sm text-slate-400 light:text-slate-500">
-            Continue with your creator email to open your workspace.
+            Sign in to continue to your creator workspace.
           </p>
 
           <form className="mt-6 space-y-3.5" onSubmit={(e) => void handleSubmit(e)}>
@@ -94,9 +97,38 @@ export default function LoginPage() {
                 className="xcr8-input"
                 autoComplete="email"
               />
-              <p className="mt-1.5 text-xs text-slate-500">
-                No password for now. We authenticate by email session.
-              </p>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                Password
+              </label>
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                className="xcr8-input"
+                autoComplete="current-password"
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <label className="flex items-center gap-2 text-slate-400 light:text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                Remember me
+              </label>
+              <Link
+                href="/auth/forgot-password"
+                className="font-medium text-violet-400 hover:underline light:text-violet-600"
+              >
+                Forgot password?
+              </Link>
             </div>
 
             <button
@@ -108,7 +140,7 @@ export default function LoginPage() {
                 "Signing in…"
               ) : (
                 <>
-                  Continue <ArrowRight size={16} />
+                  Log In <ArrowRight size={16} />
                 </>
               )}
             </button>
