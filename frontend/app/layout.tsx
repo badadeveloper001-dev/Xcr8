@@ -16,7 +16,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+  try {
+    const raw = localStorage.getItem('xcr8-theme');
+    const theme = raw === 'dark' || raw === 'light' || raw === 'system' ? raw : 'system';
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const resolved = theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
+    document.documentElement.classList.toggle('dark', resolved === 'dark');
+  } catch (_) {}
+})();`,
+          }}
+        />
+      </head>
       <body className={spaceGrotesk.className}>
         <Providers>{children}</Providers>
       </body>

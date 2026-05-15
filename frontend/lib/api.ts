@@ -260,7 +260,7 @@ export async function disconnectPlatform(userId: number, platformId: number): Pr
 }
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {
-  if (axios.isAxiosError(error)) {
+  if (axios.isAxiosError<{ detail?: string }>(error)) {
     const detail = error.response?.data?.detail;
     if (typeof detail === "string" && detail.trim().length > 0) {
       return detail;

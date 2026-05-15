@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, Home, PlusCircle, Settings } from "lucide-react";
+import { BarChart3, CalendarDays, Home, Palette, PlusCircle, User2 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/dashboard", label: "Home", icon: Home },
   { href: "/compose", label: "Create", icon: PlusCircle },
-  { href: "/calendar", label: "Scheduled", icon: CalendarDays },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/ai-studio", label: "AI Studio", icon: Palette },
+  { href: "/settings", label: "Profile", icon: User2 },
 ];
 
 export function MobileNav() {

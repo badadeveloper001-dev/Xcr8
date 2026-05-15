@@ -46,6 +46,21 @@ const steps = [
   { n: 4, icon: <CheckCircle2 size={14} />, label: "Approve & schedule" },
 ];
 
+function getUploadUrl(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+
+  const candidate =
+    "url" in payload
+      ? payload.url
+      : "file_url" in payload
+        ? payload.file_url
+        : "path" in payload
+          ? payload.path
+          : "";
+
+  return typeof candidate === "string" ? candidate : "";
+}
+
 export default function ComposePage() {
   const router = useRouter();
   const userId = useCreatorStore((s) => s.userId);
@@ -178,6 +193,31 @@ export default function ComposePage() {
     }
   };
 
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    void (async () => {
+      setUploading(true);
+      setError(null);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/v1/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const data: unknown = await res.json();
+        setMediaUrl(getUploadUrl(data));
+      } catch {
+        setError("Upload failed. Please try again.");
+      } finally {
+        setUploading(false);
+      }
+    })();
+  };
+
   return (
     <MobileShell title="Create Post" subtitle="One caption, everywhere.">
       {notice ? (
@@ -242,27 +282,7 @@ export default function ComposePage() {
               accept="image/*,video/*"
               className="xcr8-input"
               disabled={uploading}
-              onChange={async (e: ChangeEvent<HTMLInputElement>) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setUploading(true);
-                setError(null);
-                try {
-                  const formData = new FormData();
-                  formData.append("file", file);
-                  const res = await fetch("/api/v1/upload", {
-                    method: "POST",
-                    body: formData,
-                  });
-                  if (!res.ok) throw new Error("Upload failed");
-                  const data = await res.json();
-                  setMediaUrl(data.url || data.file_url || data.path || "");
-                } catch (err) {
-                  setError("Upload failed. Please try again.");
-                } finally {
-                  setUploading(false);
-                }
-              }}
+              onChange={handleFileChange}
             />
             {mediaUrl && (
               <div className="mt-2">

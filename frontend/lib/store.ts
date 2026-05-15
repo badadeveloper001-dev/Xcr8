@@ -10,7 +10,7 @@ type CreatorState = {
   fullName: string | null;
   username: string | null;
   onboardingComplete: boolean;
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "system";
   distributionDraft: {
     postId: number;
     variants: Array<{
@@ -31,7 +31,7 @@ type CreatorState = {
     onboardingComplete: boolean;
   }) => void;
   clearSession: () => void;
-  setTheme: (theme: "dark" | "light") => void;
+  setTheme: (theme: "dark" | "light" | "system") => void;
   setDistributionDraft: (payload: CreatorState["distributionDraft"]) => void;
 };
 
@@ -46,7 +46,7 @@ export const useCreatorStore = create<CreatorState>()(
       fullName: null,
       username: null,
       onboardingComplete: false,
-      theme: "dark",
+      theme: "system",
       distributionDraft: null,
       setSession: ({ userId, email, displayName, fullName, username, onboardingComplete }) =>
         set({

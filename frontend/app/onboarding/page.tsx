@@ -85,7 +85,6 @@ export default function OnboardingPage() {
   const setSession = useCreatorStore((state) => state.setSession);
   const displayName = useCreatorStore((state) => state.displayName) ?? "Creator";
   const fullName = useCreatorStore((state) => state.fullName) ?? displayName;
-  const email = useCreatorStore((state) => state.email) ?? "user@xcr8.app";
 
   const [step, setStep] = useState(1);
   const [initializing, setInitializing] = useState(false);
