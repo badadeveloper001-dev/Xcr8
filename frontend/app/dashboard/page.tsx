@@ -20,7 +20,6 @@ import {
   Settings2,
   Sparkles,
   Upload,
-  User,
   Video,
   Wand2,
 } from "lucide-react";
@@ -37,11 +36,32 @@ const fadeUp = (delay = 0) => ({
 
 const quickActions = [
   { label: "Upload Content", href: "/upload", icon: Upload },
-  { label: "Create With AI", href: "/compose", icon: Wand2 },
-  { label: "Generate Artwork", href: "/ai-studio?tab=art", icon: Paintbrush },
-  { label: "Record Audio", href: "/ai-studio?tab=audio", icon: Mic },
-  { label: "AI Voiceover", href: "/ai-studio?tab=voice", icon: MessageSquare },
-  { label: "Go Live Planning", href: "/calendar?mode=live", icon: Radio },
+  { label: "Write a Post", href: "/compose", icon: Wand2 },
+  { label: "Create an Image", href: "/ai-studio?tab=art", icon: Paintbrush },
+  { label: "Record Voice", href: "/ai-studio?tab=audio", icon: Mic },
+  { label: "Add Narration", href: "/ai-studio?tab=voice", icon: MessageSquare },
+  { label: "Plan a Live Session", href: "/calendar?mode=live", icon: Radio },
+] as const;
+
+const primaryActions = [
+  {
+    title: "Check Your Schedule",
+    description: "See what is planned today and adjust quickly.",
+    href: "/calendar",
+    icon: Compass,
+  },
+  {
+    title: "Create New Content",
+    description: "Write your next post in a few simple steps.",
+    href: "/compose",
+    icon: Wand2,
+  },
+  {
+    title: "See What Worked",
+    description: "Review performance and get clear next actions.",
+    href: "/analytics",
+    icon: Brain,
+  },
 ] as const;
 
 const connectedPlatformCards = [
@@ -67,9 +87,9 @@ const multiverseVariants = [
 ];
 
 const assistantPrompts = [
-  "Help me improve this caption",
-  "Generate a luxury promo concept",
-  "Why did this post underperform?",
+  "Improve this caption",
+  "Give me 3 post ideas for this week",
+  "Why did this post perform poorly?",
 ];
 
 export default function DashboardPage() {
@@ -95,11 +115,10 @@ export default function DashboardPage() {
   });
 
   const dynamicGreeting = useMemo(() => {
-    if ((data?.ai_suggestions ?? 0) >= 6) return "You have high-performing AI drafts ready.";
-    if ((data?.platforms_connected ?? 0) >= 4)
-      return "AI systems active across your connected platforms.";
-    if ((data?.scheduled ?? 0) >= 3) return "Your audience is highly active today.";
-    return "Your creator command center is synchronized and ready.";
+    if ((data?.ai_suggestions ?? 0) >= 6) return "You have several ready-to-publish drafts.";
+    if ((data?.platforms_connected ?? 0) >= 4) return "Your connected apps are synced and ready.";
+    if ((data?.scheduled ?? 0) >= 3) return "You already have a good posting plan for today.";
+    return "Everything is set up. Start with your top task below.";
   }, [data?.ai_suggestions, data?.platforms_connected, data?.scheduled]);
 
   if (!userId) return null;
@@ -138,7 +157,7 @@ export default function DashboardPage() {
                 />
               </button>
               <div>
-                <p className="section-kicker mb-1">Creator command center</p>
+                <p className="section-kicker mb-1">Dashboard</p>
                 <h1 className="text-2xl font-bold tracking-tight text-white light:text-slate-900 sm:text-3xl">
                   Welcome back, {displayName}
                 </h1>
@@ -164,35 +183,63 @@ export default function DashboardPage() {
               >
                 <Settings2 size={17} />
               </button>
-              <button
-                type="button"
-                onClick={() => router.push("/settings")}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl surface-soft text-slate-300 transition hover:text-white light:text-slate-600 light:hover:text-slate-900"
-              >
-                <User size={17} />
-              </button>
             </div>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="surface-soft rounded-xl px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">AI Status</p>
-              <p className="mt-1 flex items-center gap-1.5 text-sm text-emerald-300 light:text-emerald-700">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" /> AI systems active
+              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Ready Drafts</p>
+              <p className="mt-1 text-sm text-slate-300 light:text-slate-700">
+                {data?.drafts ?? 12} posts in your draft queue
               </p>
             </div>
             <div className="surface-soft rounded-xl px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Sync Status</p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                Scheduled Today
+              </p>
               <p className="mt-1 text-sm text-slate-300 light:text-slate-700">
-                Realtime sync healthy
+                {data?.scheduled ?? 2} posts planned
               </p>
             </div>
             <div className="surface-soft rounded-xl px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Platforms</p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                Connected Apps
+              </p>
               <p className="mt-1 text-sm text-slate-300 light:text-slate-700">
-                {(data?.platforms_connected ?? 0) || 3} connected and monitored
+                {(data?.platforms_connected ?? 0) || 3} apps linked
               </p>
             </div>
+          </div>
+        </div>
+      </motion.section>
+
+      <motion.section {...fadeUp(0.03)} className="mb-4 sm:mb-5">
+        <div className="surface-card rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white light:text-slate-900">Start Here</h2>
+            <span className="text-xs text-slate-500">Most-used actions</span>
+          </div>
+          <div className="grid gap-2.5 sm:grid-cols-3">
+            {primaryActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Link
+                  key={action.title}
+                  href={action.href}
+                  className="surface-soft rounded-xl p-3 transition hover:opacity-95"
+                >
+                  <span className="mb-2 grid h-9 w-9 place-items-center rounded-xl bg-violet-500/20 text-violet-300 light:bg-violet-100 light:text-violet-700">
+                    <Icon size={16} />
+                  </span>
+                  <p className="text-sm font-semibold text-white light:text-slate-900">
+                    {action.title}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
+                    {action.description}
+                  </p>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </motion.section>
@@ -200,8 +247,8 @@ export default function DashboardPage() {
       <motion.section {...fadeUp(0.05)} className="mb-4 sm:mb-5">
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white light:text-slate-900">Quick Create</h2>
-            <span className="text-xs text-slate-500">Instant workflows</span>
+            <h2 className="text-lg font-bold text-white light:text-slate-900">More Actions</h2>
+            <span className="text-xs text-slate-500">Quick shortcuts</span>
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {quickActions.map((action) => {
@@ -235,34 +282,36 @@ export default function DashboardPage() {
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-500/20 text-violet-300 light:bg-violet-100 light:text-violet-700">
                 <Brain size={15} />
               </span>
-              AI Creator Brain
+              Your Progress Today
             </h2>
             <Link
               href="/analytics"
               className="text-xs font-medium text-violet-400 hover:underline light:text-violet-700"
             >
-              View Full Insights
+              Open Analytics
             </Link>
           </div>
           <div className="grid gap-2.5 sm:grid-cols-3">
             <article className="surface-soft rounded-xl p-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Doing well</p>
+              <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
+                Story-based posts are getting stronger engagement.
+              </p>
+            </article>
+            <article className="surface-soft rounded-xl p-3">
               <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                Audience behavior
+                Needs attention
               </p>
               <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
-                Storytelling content performs 42% better.
-              </p>
-            </article>
-            <article className="surface-soft rounded-xl p-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Weak area</p>
-              <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
-                Retention drops after 25 seconds.
+                Viewers drop off after the first 25 seconds.
               </p>
             </article>
             <article className="surface-soft rounded-xl p-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Best timing</p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                Best time to post
+              </p>
               <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
-                Recommended posting time: 7:30 PM.
+                Try posting around 7:30 PM today.
               </p>
             </article>
           </div>
@@ -271,19 +320,19 @@ export default function DashboardPage() {
               href="/analytics"
               className="cta-btn rounded-xl px-3 py-2 text-center text-sm font-semibold"
             >
-              View Full Insights
+              See Detailed Results
             </Link>
             <Link
               href="/analytics?tab=strategy"
               className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
             >
-              Optimize Strategy
+              What to Improve
             </Link>
             <Link
               href="/compose?mode=recommendations"
               className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
             >
-              AI Recommendations
+              Get Content Ideas
             </Link>
           </div>
         </div>
@@ -293,13 +342,13 @@ export default function DashboardPage() {
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white light:text-slate-900">
-              Connected Platforms
+              Connected Accounts
             </h2>
             <Link
               href="/settings"
               className="text-xs font-medium text-violet-400 hover:underline light:text-violet-700"
             >
-              Manage Access
+              Manage Connections
             </Link>
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -339,7 +388,7 @@ export default function DashboardPage() {
               href="/settings"
               className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
             >
-              Manage Access
+              Manage Connections
             </Link>
           </div>
         </div>
@@ -349,7 +398,7 @@ export default function DashboardPage() {
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white light:text-slate-900">
-              Content Calendar Preview
+              Content Plan Preview
             </h2>
             <Link
               href="/calendar"
@@ -364,7 +413,7 @@ export default function DashboardPage() {
                 Today: 2 scheduled posts
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                AI suggests moving one post to 7:30 PM for better retention.
+                Suggested move: shift one post to 7:30 PM for better retention.
               </p>
             </article>
             <article className="surface-soft rounded-xl p-3">
@@ -402,7 +451,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className="mt-2 text-[11px] text-slate-500">
-            Drag cards to reprioritize your posting sequence.
+            Drag and drop to reorder your posting plan.
           </p>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Link
@@ -428,14 +477,12 @@ export default function DashboardPage() {
 
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white light:text-slate-900">
-              Recent Content Performance
-            </h2>
+            <h2 className="text-lg font-bold text-white light:text-slate-900">Recent Posts</h2>
             <Link
               href="/analytics"
               className="text-xs font-medium text-violet-400 hover:underline light:text-violet-700"
             >
-              Analyze
+              View Details
             </Link>
           </div>
           <div className="space-y-2.5">
@@ -449,17 +496,17 @@ export default function DashboardPage() {
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                   <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-violet-300 light:text-violet-700">
-                    Predicted longevity: High
+                    Likely to perform well
                   </span>
                   <span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-fuchsia-300 light:text-fuchsia-700">
-                    Viral potential: Medium
+                    Reach potential: Medium
                   </span>
                 </div>
               </article>
             ))}
             {!data?.recent_posts?.length ? (
               <article className="surface-soft rounded-xl p-3 text-xs text-slate-500">
-                Performance cards will populate as new content goes live.
+                Insights will appear as your new posts go live.
               </article>
             ) : null}
           </div>
@@ -490,7 +537,7 @@ export default function DashboardPage() {
         <div className="surface-luxe rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
-              <Compass size={16} className="text-violet-400" /> Trend Radar
+              <Compass size={16} className="text-violet-400" /> Trending Ideas
             </h2>
             <Link
               href="/analytics?tab=trends"
@@ -536,7 +583,7 @@ export default function DashboardPage() {
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
-              <Clapperboard size={16} className="text-violet-400" /> AI Multiverse Testing
+              <Clapperboard size={16} className="text-violet-400" /> Post Version Testing
             </h2>
             <Link
               href="/analytics?tab=testing"
@@ -560,7 +607,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button type="button" className="cta-btn rounded-xl px-3 py-2 text-sm font-semibold">
-              Apply Version A
+              Use Top Version
             </button>
             <button
               type="button"
@@ -582,7 +629,7 @@ export default function DashboardPage() {
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
-              <Video size={16} className="text-violet-400" /> AI Shorts Generator
+              <Video size={16} className="text-violet-400" /> Short Video Creator
             </h2>
             <Link
               href="/compose?mode=shorts"
@@ -593,10 +640,10 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-2.5">
             <article className="surface-soft rounded-xl p-3 text-xs text-slate-500">
-              Long-form clips detected: 4 · Highlights auto-selected by AI.
+              Long videos detected: 4 · best highlight moments selected.
             </article>
             <article className="surface-soft rounded-xl p-3 text-xs text-slate-500">
-              Emotional moment detection enabled for hook extraction.
+              Hook-focused intro suggestions are enabled.
             </article>
           </div>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
@@ -630,7 +677,7 @@ export default function DashboardPage() {
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
-              <Images size={16} className="text-violet-400" /> AI Visual Studio Preview
+              <Images size={16} className="text-violet-400" /> Visual Studio Preview
             </h2>
             <Link
               href="/ai-studio?tab=visual"
@@ -686,7 +733,7 @@ export default function DashboardPage() {
               </button>
             </div>
             <p className="mb-2 text-xs text-slate-500">
-              Conversational, creator-aware guidance across your workflow.
+              Quick help for writing, planning, and improving your posts.
             </p>
             <div className="space-y-1.5">
               {assistantPrompts.map((prompt) => (
@@ -706,7 +753,7 @@ export default function DashboardPage() {
           onClick={() => setAssistantOpen((prev) => !prev)}
           className="cta-btn mx-auto inline-flex h-12 items-center gap-2 rounded-full px-4 text-sm font-semibold sm:mx-0"
         >
-          <Sparkles size={16} /> AI Assistant
+          <Sparkles size={16} /> Quick Help
         </button>
       </div>
     </MobileShell>
