@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -5,7 +7,10 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    database_url: str = "sqlite:///./xcr8.db"
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        "sqlite:////tmp/xcr8.db" if os.getenv("VERCEL") else "sqlite:///./xcr8.db",
+    )
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
