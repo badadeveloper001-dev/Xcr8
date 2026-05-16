@@ -120,7 +120,7 @@ export default function DashboardPage() {
 
   return (
     <MobileShell hideHeader>
-      <motion.section {...fadeUp(0)} className="mb-5">
+      <motion.section {...fadeUp(0)} className="mb-4 sm:mb-5">
         <div className="surface-luxe cyber-grid neon-ring rounded-[24px] p-4 sm:p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
@@ -197,7 +197,7 @@ export default function DashboardPage() {
         </div>
       </motion.section>
 
-      <motion.section {...fadeUp(0.05)} className="mb-5">
+      <motion.section {...fadeUp(0.05)} className="mb-4 sm:mb-5">
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white light:text-slate-900">Quick Create</h2>
@@ -228,7 +228,7 @@ export default function DashboardPage() {
         </div>
       </motion.section>
 
-      <motion.section {...fadeUp(0.1)} className="mb-5">
+      <motion.section {...fadeUp(0.1)} className="mb-4 sm:mb-5">
         <div className="surface-luxe cyber-grid scanline rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
@@ -289,7 +289,7 @@ export default function DashboardPage() {
         </div>
       </motion.section>
 
-      <motion.section {...fadeUp(0.12)} className="mb-5">
+      <motion.section {...fadeUp(0.12)} className="mb-4 sm:mb-5">
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white light:text-slate-900">
@@ -345,7 +345,7 @@ export default function DashboardPage() {
         </div>
       </motion.section>
 
-      <motion.section {...fadeUp(0.14)} className="mb-5 grid gap-5 lg:grid-cols-2">
+      <motion.section {...fadeUp(0.14)} className="mb-4 grid gap-4 sm:mb-5 sm:gap-5 lg:grid-cols-2">
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white light:text-slate-900">
@@ -413,13 +413,13 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/calendar?mode=reschedule"
-              className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Reschedule
             </Link>
             <Link
               href="/compose"
-              className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Generate More Content
             </Link>
@@ -472,13 +472,13 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/compose?mode=repurpose"
-              className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Repurpose Content
             </Link>
             <Link
               href="/compose?mode=variations"
-              className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Generate Variations
             </Link>
@@ -486,7 +486,7 @@ export default function DashboardPage() {
         </div>
       </motion.section>
 
-      <motion.section {...fadeUp(0.16)} className="mb-5 grid gap-5 lg:grid-cols-2">
+      <motion.section {...fadeUp(0.16)} className="mb-4 grid gap-4 sm:mb-5 sm:gap-5 lg:grid-cols-2">
         <div className="surface-luxe rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
@@ -520,13 +520,13 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/compose"
-              className="surface-soft rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-center text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Generate Content
             </Link>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Save Trend
             </button>
@@ -564,13 +564,13 @@ export default function DashboardPage() {
             </button>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Generate New Variation
             </button>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Compare Results
             </button>
@@ -599,7 +599,7 @@ export default function DashboardPage() {
               Emotional moment detection enabled for hook extraction.
             </article>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
             <Link
               href="/compose?mode=shorts"
               className="cta-btn rounded-xl px-3 py-2 text-center text-sm font-semibold"
@@ -608,19 +608,19 @@ export default function DashboardPage() {
             </Link>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Edit Clip
             </button>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Add Captions
             </button>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Export
             </button>
@@ -656,13 +656,13 @@ export default function DashboardPage() {
             </Link>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Edit Design
             </button>
             <button
               type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
+              className="surface-soft hidden rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700 sm:block"
             >
               Export Assets
             </button>
@@ -670,9 +670,9 @@ export default function DashboardPage() {
         </div>
       </motion.section>
 
-      <div className="fixed bottom-24 right-4 z-50 sm:right-6">
+      <div className="fixed bottom-24 inset-x-0 z-50 px-3 sm:inset-x-auto sm:right-6 sm:px-0">
         {assistantOpen ? (
-          <div className="surface-card neon-ring mb-3 w-[min(92vw,340px)] rounded-2xl p-3">
+          <div className="surface-card neon-ring mx-auto mb-3 w-full max-w-[340px] rounded-2xl p-3 sm:mx-0">
             <div className="mb-2 flex items-center justify-between">
               <p className="flex items-center gap-1.5 text-sm font-semibold text-white light:text-slate-900">
                 <Lightbulb size={14} className="text-violet-400" /> AI Assistant
@@ -704,7 +704,7 @@ export default function DashboardPage() {
         <button
           type="button"
           onClick={() => setAssistantOpen((prev) => !prev)}
-          className="cta-btn inline-flex h-12 items-center gap-2 rounded-full px-4 text-sm font-semibold"
+          className="cta-btn mx-auto inline-flex h-12 items-center gap-2 rounded-full px-4 text-sm font-semibold sm:mx-0"
         >
           <Sparkles size={16} /> AI Assistant
         </button>
