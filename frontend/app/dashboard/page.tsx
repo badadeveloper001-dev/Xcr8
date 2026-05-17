@@ -95,8 +95,8 @@ export default function DashboardPage() {
   return (
     <MobileShell hideHeader>
       <motion.section {...fadeUp(0)} className="mb-4 sm:mb-5">
-        <div className="surface-luxe relative overflow-hidden rounded-[24px] p-4 sm:p-5">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,rgba(20,184,166,0.18),transparent_38%),radial-gradient(circle_at_88%_8%,rgba(249,115,22,0.18),transparent_34%)]" />
+        <div className="surface-luxe relative overflow-hidden rounded-[24px] border border-white/10 p-4 shadow-[0_18px_55px_-30px_rgba(139,92,246,0.7)] sm:p-5 light:border-slate-200">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,rgba(139,92,246,0.22),transparent_40%),radial-gradient(circle_at_88%_8%,rgba(236,72,153,0.18),transparent_34%)]" />
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="relative z-[1]">
               <p className="section-kicker mb-1">Today at a glance</p>
@@ -107,7 +107,7 @@ export default function DashboardPage() {
                 {dynamicGreeting}
               </p>
             </div>
-            <span className="relative z-[1] inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/20 text-teal-200 light:bg-teal-100 light:text-teal-700">
+            <span className="relative z-[1] inline-flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-200 light:bg-violet-100 light:text-violet-700">
               <Sparkles size={18} />
             </span>
           </div>
@@ -115,7 +115,7 @@ export default function DashboardPage() {
           <div className="relative z-[1] mb-4 flex flex-wrap gap-2">
             <Link
               href="/compose"
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-teal-400"
+              className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-violet-400"
             >
               Create post
               <ArrowUpRight size={15} />
@@ -159,9 +159,9 @@ export default function DashboardPage() {
               <Link
                 key={action.label}
                 href={action.href}
-                className="surface-soft group flex items-center gap-3 rounded-xl border border-white/10 p-3 transition hover:-translate-y-0.5 hover:border-teal-300/40 light:border-slate-200"
+                className="surface-soft group flex items-center gap-3 rounded-xl border border-white/10 p-3 transition hover:-translate-y-0.5 hover:border-violet-300/40 light:border-slate-200"
               >
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/15 text-teal-200 light:bg-teal-100 light:text-teal-700">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/15 text-violet-200 light:bg-violet-100 light:text-violet-700">
                   <action.icon size={18} />
                 </span>
                 <div className="flex-1">
@@ -172,7 +172,7 @@ export default function DashboardPage() {
                 </div>
                 <ArrowUpRight
                   size={14}
-                  className="text-slate-500 transition group-hover:text-teal-200 light:group-hover:text-teal-700"
+                  className="text-slate-500 transition group-hover:text-violet-200 light:group-hover:text-violet-700"
                 />
               </Link>
             ))}
@@ -183,7 +183,7 @@ export default function DashboardPage() {
       <motion.section {...fadeUp(0.06)} className="mb-4 grid gap-4 sm:mb-5 lg:grid-cols-2">
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center gap-2">
-            <TrendingUp size={16} className="text-amber-300 light:text-amber-700" />
+            <TrendingUp size={16} className="text-violet-200 light:text-violet-700" />
             <h2 className="text-lg font-bold text-white light:text-slate-900">AI Insights</h2>
           </div>
           <ul className="space-y-2.5">
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                 </p>
                 <div className="mt-1 flex items-center justify-between gap-2">
                   <p className="text-xs text-slate-400 light:text-slate-600">{trend.tag}</p>
-                  <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 light:bg-emerald-100 light:text-emerald-700">
+                  <span className="rounded-md bg-violet-500/10 px-2 py-0.5 text-[11px] font-semibold text-violet-200 light:bg-violet-100 light:text-violet-700">
                     {trend.metric}
                   </span>
                 </div>
@@ -208,7 +208,7 @@ export default function DashboardPage() {
 
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center gap-2">
-            <CalendarClock size={16} className="text-teal-200 light:text-teal-700" />
+            <CalendarClock size={16} className="text-violet-200 light:text-violet-700" />
             <h2 className="text-lg font-bold text-white light:text-slate-900">Recent Posts</h2>
           </div>
           <ul className="space-y-2.5">
@@ -222,7 +222,7 @@ export default function DashboardPage() {
                 </p>
                 <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-400 light:text-slate-600">
                   <span>{post.time}</span>
-                  <span className="rounded-md bg-white/5 px-2 py-0.5 text-[11px] font-medium text-teal-100 light:bg-slate-100 light:text-teal-700">
+                  <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-100 light:bg-violet-100 light:text-violet-700">
                     {post.status}
                   </span>
                 </div>

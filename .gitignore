@@ -27,3 +27,9 @@ venv/
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.vercel
+.env*.local
+
+# Local CLI caches
+.home/
+.npm-cache/
