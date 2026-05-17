@@ -259,11 +259,48 @@ export async function disconnectPlatform(userId: number, platformId: number): Pr
   await apiClient.delete(`/api/v1/platforms/${userId}/${platformId}`);
 }
 
+type ApiErrorDetail =
+  | string
+  | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
+  | { message?: string; detail?: string };
+
+function formatApiErrorDetail(detail: ApiErrorDetail | undefined): string | null {
+  if (typeof detail === "string" && detail.trim().length > 0) {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (!item?.msg) return null;
+        const field = item.loc?.[item.loc.length - 1];
+        if (typeof field === "string" && field !== "body") {
+          return `${field.replace(/_/g, " ")}: ${item.msg}`;
+        }
+        return item.msg;
+      })
+      .filter((message): message is string => Boolean(message));
+
+    return messages.length > 0 ? messages.join(". ") : null;
+  }
+
+  if (detail && typeof detail === "object") {
+    if (typeof detail.message === "string" && detail.message.trim().length > 0) {
+      return detail.message;
+    }
+    if (typeof detail.detail === "string" && detail.detail.trim().length > 0) {
+      return detail.detail;
+    }
+  }
+
+  return null;
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string): string {
-  if (axios.isAxiosError<{ detail?: string }>(error)) {
-    const detail = error.response?.data?.detail;
-    if (typeof detail === "string" && detail.trim().length > 0) {
-      return detail;
+  if (axios.isAxiosError<{ detail?: ApiErrorDetail }>(error)) {
+    const detailMessage = formatApiErrorDetail(error.response?.data?.detail);
+    if (detailMessage) {
+      return detailMessage;
     }
     if (typeof error.message === "string" && error.message.trim().length > 0) {
       return error.message;

@@ -21,19 +21,49 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const validateForm = () => {
+    const trimmedFullName = fullName.trim();
+    const trimmedUsername = username.trim();
+
+    if (trimmedFullName.length < 2) {
+      return "Full name must be at least 2 characters.";
+    }
+
+    if (!/^[a-zA-Z0-9_.-]{3,40}$/.test(trimmedUsername)) {
+      return "Username must be 3 to 40 characters and use only letters, numbers, dots, hyphens, and underscores.";
+    }
+
+    if (password.length < 8 || !/\d/.test(password)) {
+      return "Password must be at least 8 characters and include a number.";
+    }
+
+    if (password !== confirmPassword) {
+      return "Passwords do not match.";
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!agreeTerms) {
       setError("You must agree to the Terms to continue.");
       return;
     }
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const session = await signup({
-        full_name: fullName,
-        username,
-        email,
+        full_name: fullName.trim(),
+        username: username.trim(),
+        email: email.trim(),
         password,
         confirm_password: confirmPassword,
         language: "english",
@@ -120,7 +150,7 @@ export default function SignupPage() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="creator_handle"
+                placeholder="creator.handle"
                 className="xcr8-input"
                 autoComplete="username"
               />

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL ?? process.env.BACKEND_INTERNAL_URL;
+const BACKEND_API_URL =
+  process.env.BACKEND_API_URL ?? process.env.BACKEND_INTERNAL_URL ?? process.env.BACKEND_URL;
 
 function getTargetUrl(path: string[], searchParams: URLSearchParams): URL | null {
   if (!BACKEND_API_URL) {
@@ -25,7 +26,8 @@ async function proxy(request: NextRequest, path: string[]) {
   if (!targetUrl) {
     return Response.json(
       {
-        detail: "Backend API is not configured. Set BACKEND_API_URL in the frontend deployment.",
+        detail:
+          "Backend API is not configured. Set BACKEND_API_URL or use the injected BACKEND_URL service variable.",
       },
       { status: 503 },
     );
