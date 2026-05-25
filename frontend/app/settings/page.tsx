@@ -52,6 +52,7 @@ export default function SettingsPage() {
       setNotice("Platform connected.");
       setError(null);
       void queryClient.invalidateQueries({ queryKey: ["platform-connections", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
     },
     onError: (err) => {
       setError(getApiErrorMessage(err, "Could not connect platform."));
@@ -64,6 +65,7 @@ export default function SettingsPage() {
       setNotice("Platform disconnected.");
       setError(null);
       void queryClient.invalidateQueries({ queryKey: ["platform-connections", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
     },
     onError: (err) => {
       setError(getApiErrorMessage(err, "Could not disconnect platform."));
@@ -162,7 +164,11 @@ export default function SettingsPage() {
                 </span>
                 {connections?.find((c) => c.platform === p.id && c.active) ? (
                   <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Connected
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    {connections?.find((c) => c.platform === p.id && c.active)?.sync_status ===
+                    "syncing"
+                      ? "Syncing"
+                      : "Synced"}
                     <button
                       type="button"
                       className="ml-2 text-[11px] text-rose-400 hover:underline"

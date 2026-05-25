@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
@@ -63,6 +64,7 @@ function getUploadUrl(payload: unknown): string {
 
 export default function ComposePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const userId = useCreatorStore((s) => s.userId);
   const setDistributionDraft = useCreatorStore((s) => s.setDistributionDraft);
   const distributionDraft = useCreatorStore((s) => s.distributionDraft);
@@ -151,7 +153,10 @@ export default function ComposePage() {
         memory_value: caption,
         confidence_score: 0.78,
       });
-      setNotice("Adaptations generated. Review variants below and approve when ready.");
+      await queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
+      setNotice(
+        "Draft saved and adaptations generated. Review variants below and approve when ready.",
+      );
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not generate adaptations. Please try again."));
     } finally {
@@ -184,6 +189,10 @@ export default function ComposePage() {
           });
         }
       }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dashboard", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["calendar", userId] }),
+      ]);
       setNotice("Approved and queued successfully. Redirecting to calendar...");
       router.push("/calendar");
     } catch (err) {

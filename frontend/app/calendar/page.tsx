@@ -47,6 +47,8 @@ export default function CalendarPage() {
     queryKey: ["calendar", userId],
     queryFn: () => getCalendar(userId as number),
     enabled: Boolean(userId),
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
   if (!userId) return null;

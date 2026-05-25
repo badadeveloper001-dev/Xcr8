@@ -14,9 +14,11 @@ from app.db.models import AuthCredential, CreatorProfile, User
 from app.schemas.mvp import (
     AuthLoginRequest,
     AuthSessionResponse,
+    PasswordResetConfirmRequest,
     AuthSignupRequest,
     OnboardingRequest,
     PasswordResetRequest,
+    PasswordResetRequestResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -183,8 +185,13 @@ def onboarding(payload: OnboardingRequest, db: Session = Depends(get_db)) -> Aut
     return _session_payload(user, credential)
 
 
-@router.post("/password-reset/request")
-def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+@router.post("/password-reset/request", response_model=PasswordResetRequestResponse)
+def request_password_reset(
+    payload: PasswordResetRequest,
+    db: Session = Depends(get_db),
+) -> PasswordResetRequestResponse:
+    reset_url: str | None = None
+
     user = db.scalar(select(User).where(User.email == payload.email))
     if user:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
@@ -195,7 +202,44 @@ def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(
             credential.password_reset_expires_at = datetime.now(tz=UTC) + timedelta(hours=1)
             db.commit()
 
-    return {"message": "If the email exists, a reset link has been sent."}
+            if settings.environment == "development":
+                reset_url = f"/auth/reset-password?token={raw_token}"
+
+    return PasswordResetRequestResponse(
+        message="If the email exists, a reset link has been sent.",
+        reset_url=reset_url,
+    )
+
+
+@router.post("/password-reset/confirm")
+def confirm_password_reset(
+    payload: PasswordResetConfirmRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match.")
+
+    if len(payload.new_password) < 8 or not any(ch.isdigit() for ch in payload.new_password):
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters and include a number.")
+
+    token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
+    credential = db.scalar(
+        select(AuthCredential).where(AuthCredential.password_reset_token_hash == token_hash)
+    )
+    if not credential:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+
+    if not credential.password_reset_expires_at or credential.password_reset_expires_at < datetime.now(tz=UTC):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+
+    salt, password_hash = _hash_password(payload.new_password)
+    credential.password_salt = salt
+    credential.password_hash = password_hash
+    credential.password_reset_token_hash = None
+    credential.password_reset_expires_at = None
+    db.commit()
+
+    return {"message": "Password reset successful. You can now log in."}
 
 
 @router.get("/supabase-config")

@@ -29,7 +29,7 @@ def create_distribution_draft(
         master_caption=payload.master_caption,
         primary_language=payload.primary_language,
         selected_platforms=payload.selected_platforms,
-        status=PostStatus.pending_approval,
+        status=PostStatus.draft,
         content_meta={"target_languages": payload.target_languages},
     )
     db.add(post)
@@ -123,7 +123,7 @@ def approve_variants(payload: ApprovalRequest, db: Session = Depends(get_db)) ->
         if approved:
             approved_count += 1
 
-    post.status = PostStatus.approved if approved_count else PostStatus.pending_approval
+    post.status = PostStatus.approved if approved_count else PostStatus.draft
     db.commit()
 
     return {

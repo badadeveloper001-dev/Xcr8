@@ -11,7 +11,7 @@ type MobileShellProps = {
 
 export function MobileShell({ children, title, subtitle, hideHeader = false }: MobileShellProps) {
   return (
-    <div className="relative mx-auto min-h-screen w-full max-w-6xl px-4 pb-32 pt-6 sm:px-6 lg:px-10">
+    <div className="relative mx-auto min-h-screen w-full max-w-6xl overflow-x-clip px-4 pb-32 pt-6 sm:px-6 lg:px-10">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-violet-600 focus:px-3 focus:py-2 focus:text-white"

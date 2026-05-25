@@ -20,6 +20,7 @@ def list_platforms(user_id: int, db: Session = Depends(get_db)) -> dict:
                 "platform": row.platform.value,
                 "handle": row.account_handle,
                 "active": row.is_active,
+                "sync_status": "synced" if row.is_active else "disconnected",
             }
             for row in rows
         ]
@@ -43,7 +44,13 @@ def connect_platform(user_id: int, platform: str, handle: str, db: Session = Dep
         existing.account_handle = handle
         existing.is_active = True
         db.commit()
-        return {"id": existing.id, "platform": existing.platform.value, "handle": existing.account_handle}
+        return {
+            "id": existing.id,
+            "platform": existing.platform.value,
+            "handle": existing.account_handle,
+            "active": existing.is_active,
+            "sync_status": "synced",
+        }
 
     row = ConnectedPlatform(
         user_id=user_id,
@@ -54,7 +61,13 @@ def connect_platform(user_id: int, platform: str, handle: str, db: Session = Dep
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {"id": row.id, "platform": row.platform.value, "handle": row.account_handle}
+    return {
+        "id": row.id,
+        "platform": row.platform.value,
+        "handle": row.account_handle,
+        "active": row.is_active,
+        "sync_status": "synced",
+    }
 
 
 @router.delete("/{user_id}/{platform_id}")
@@ -64,4 +77,4 @@ def disconnect_platform(user_id: int, platform_id: int, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Platform connection not found.")
     row.is_active = False
     db.commit()
-    return {"disconnected": True}
+    return {"disconnected": True, "sync_status": "disconnected"}

@@ -35,6 +35,12 @@ export type PasswordResetPayload = {
   email: string;
 };
 
+export type PasswordResetConfirmPayload = {
+  token: string;
+  new_password: string;
+  confirm_password: string;
+};
+
 export type OnboardingPayload = {
   user_id: number;
   creator_type: string;
@@ -142,9 +148,19 @@ export async function login(payload: LoginPayload): Promise<SessionPayload> {
 
 export async function requestPasswordReset(
   payload: PasswordResetPayload,
+): Promise<{ message: string; reset_url?: string | null }> {
+  const { data } = await apiClient.post<{ message: string; reset_url?: string | null }>(
+    "/api/v1/auth/password-reset/request",
+    payload,
+  );
+  return data;
+}
+
+export async function confirmPasswordReset(
+  payload: PasswordResetConfirmPayload,
 ): Promise<{ message: string }> {
   const { data } = await apiClient.post<{ message: string }>(
-    "/api/v1/auth/password-reset/request",
+    "/api/v1/auth/password-reset/confirm",
     payload,
   );
   return data;
@@ -229,6 +245,7 @@ export type PlatformConnection = {
   platform: string;
   handle: string;
   active: boolean;
+  sync_status?: "synced" | "syncing" | "disconnected";
 };
 
 type PlatformListResponse = {

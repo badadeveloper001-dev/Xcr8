@@ -11,7 +11,6 @@ import {
   Mic,
   Paintbrush,
   Radio,
-  Sparkles,
   TrendingUp,
   Upload,
   Wand2,
@@ -36,7 +35,7 @@ const quickActions = [
   { label: "Plan a Live Session", href: "/calendar?mode=live", icon: Radio },
 ] as const;
 
-const trendRadar = [
+const fallbackTrendRadar = [
   { title: "Afrobeats challenge clips", metric: "Rising 34%", tag: "Trending sound" },
   { title: "POV mini-story format", metric: "Rising 22%", tag: "Viral format" },
   { title: "#WeekendVibesNG", metric: "Rising 41%", tag: "Hashtag" },
@@ -46,12 +45,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const userId = useCreatorStore((s) => s.userId);
   const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
-  const calendarPreview = [
-    { id: "t1", label: "IG Reel", time: "5:00 PM", status: "Scheduled" },
-    { id: "t2", label: "TikTok Clip", time: "7:30 PM", status: "AI Recommended" },
-    { id: "t3", label: "X Thread", time: "9:00 PM", status: "Draft" },
-  ];
-
   useEffect(() => {
     if (!userId) router.replace("/auth/login");
   }, [router, userId]);
@@ -60,6 +53,8 @@ export default function DashboardPage() {
     queryKey: ["dashboard", userId],
     queryFn: () => getDashboardOverview(userId as number),
     enabled: Boolean(userId),
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
   });
 
   const dynamicGreeting = useMemo(() => {
@@ -90,60 +85,93 @@ export default function DashboardPage() {
     [data?.drafts, data?.platforms_connected, data?.scheduled],
   );
 
+  const insightCards = useMemo(
+    () =>
+      data?.ai_insights?.length
+        ? data.ai_insights.map((item, index) => ({
+            title: item.title,
+            metric: `Signal ${index + 1}`,
+            tag: item.description,
+          }))
+        : fallbackTrendRadar,
+    [data?.ai_insights],
+  );
+
+  const recentPosts = useMemo(() => {
+    if (data?.recent_posts?.length) {
+      return data.recent_posts.map((post) => ({
+        id: String(post.post_id),
+        label: post.title,
+        time: "Recently",
+        status: post.status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+      }));
+    }
+
+    return [
+      { id: "t1", label: "IG Reel", time: "5:00 PM", status: "Scheduled" },
+      { id: "t2", label: "TikTok Clip", time: "7:30 PM", status: "AI Recommended" },
+      { id: "t3", label: "X Thread", time: "9:00 PM", status: "Draft" },
+    ];
+  }, [data?.recent_posts]);
+
   if (!userId) return null;
 
   return (
     <MobileShell hideHeader>
-      <motion.section {...fadeUp(0)} className="mb-4 sm:mb-5">
-        <div className="surface-luxe relative overflow-hidden rounded-[24px] border border-white/10 p-4 shadow-[0_18px_55px_-30px_rgba(139,92,246,0.7)] sm:p-5 light:border-slate-200">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,rgba(139,92,246,0.22),transparent_40%),radial-gradient(circle_at_88%_8%,rgba(236,72,153,0.18),transparent_34%)]" />
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div className="relative z-[1]">
-              <p className="section-kicker mb-1">Today at a glance</p>
-              <h1 className="text-2xl font-bold tracking-tight text-white light:text-slate-900 sm:text-3xl">
+      <motion.section {...fadeUp(0)} className="-mx-4 mb-4 sm:mx-0 sm:mb-5">
+        <div className="relative w-full rounded-[28px] border border-violet-400/25 bg-gradient-to-br from-violet-900/80 via-violet-700/80 to-fuchsia-700/80 p-[1px] shadow-[0_18px_55px_-30px_rgba(139,92,246,0.7)] before:absolute before:inset-0 before:-z-10 before:animate-pulse before:bg-[radial-gradient(circle_at_60%_10%,rgba(236,72,153,0.18),transparent_40%),radial-gradient(circle_at_20%_80%,rgba(139,92,246,0.22),transparent_40%)] sm:mx-auto sm:max-w-2xl sm:rounded-[28px] sm:border-2 sm:border-transparent sm:p-[2px]">
+          <div className="rounded-[26px] bg-gradient-to-br from-violet-950/90 via-violet-900/80 to-fuchsia-900/80 px-4 py-5 sm:rounded-[26px] sm:p-8 light:from-white light:via-violet-50 light:to-fuchsia-50">
+            <div className="mb-4 flex flex-col items-center justify-center gap-2 text-center">
+              <img
+                src="/XCR8.svg"
+                alt="Xcr8 logo"
+                className="mb-1 h-auto w-52 max-w-full sm:w-64 light:brightness-0 light:contrast-125"
+                draggable={false}
+              />
+              <p className="section-kicker mb-1 mt-2 text-violet-300 light:text-violet-700">
+                Today at a glance
+              </p>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_8px_rgba(139,92,246,0.25)] light:text-slate-900">
                 Welcome back, {displayName}
               </h1>
-              <p className="mt-1.5 max-w-[38ch] text-sm text-slate-400 light:text-slate-600">
+              <p className="mt-2 max-w-[38ch] text-base text-slate-300 light:text-slate-600">
                 {dynamicGreeting}
               </p>
             </div>
-            <span className="relative z-[1] inline-flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-200 light:bg-violet-100 light:text-violet-700">
-              <Sparkles size={18} />
-            </span>
-          </div>
 
-          <div className="relative z-[1] mb-4 flex flex-wrap gap-2">
-            <Link
-              href="/compose"
-              className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-violet-400"
-            >
-              Create post
-              <ArrowUpRight size={15} />
-            </Link>
-            <Link
-              href="/calendar"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-medium text-slate-200 transition hover:border-amber-300/30 hover:bg-amber-400/10 light:border-slate-200 light:bg-white light:text-slate-700 light:hover:border-amber-200 light:hover:bg-amber-50"
-            >
-              View schedule
-              <CalendarClock size={15} />
-            </Link>
-          </div>
-
-          <div className="relative z-[1] grid gap-2.5 sm:grid-cols-3">
-            {snapshotCards.map((card) => (
-              <div
-                key={card.label}
-                className="surface-soft rounded-xl border border-white/10 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] light:border-slate-200"
+            <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
+              <Link
+                href="/compose"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 px-4 py-2 text-base font-bold text-white shadow-md transition hover:scale-105 hover:from-fuchsia-400 hover:to-violet-400 light:from-fuchsia-400 light:via-violet-300 light:to-indigo-300"
               >
-                <p className="text-[11px] uppercase tracking-[0.13em] text-slate-500">
-                  {card.label}
-                </p>
-                <p className="mt-1 text-xl font-semibold text-white light:text-slate-900">
-                  {card.value}
-                </p>
-                <p className="text-xs text-slate-400 light:text-slate-600">{card.note}</p>
-              </div>
-            ))}
+                Create post
+                <ArrowUpRight size={17} />
+              </Link>
+              <Link
+                href="/calendar"
+                className="inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-white/10 px-4 py-2 text-base font-semibold text-violet-100 shadow-md transition hover:border-amber-300/40 hover:bg-amber-400/10 hover:text-amber-200 light:border-violet-200 light:bg-white light:text-violet-700 light:hover:border-amber-200 light:hover:bg-amber-50"
+              >
+                View schedule
+                <CalendarClock size={17} />
+              </Link>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {snapshotCards.map((card) => (
+                <div
+                  key={card.label}
+                  className="surface-soft rounded-xl border border-violet-400/20 bg-violet-900/40 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md light:border-violet-200 light:bg-white/80"
+                >
+                  <p className="text-[11px] uppercase tracking-[0.13em] text-violet-300 light:text-violet-700">
+                    {card.label}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-white light:text-slate-900">
+                    {card.value}
+                  </p>
+                  <p className="text-xs text-violet-200 light:text-violet-700">{card.note}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </motion.section>
@@ -187,7 +215,7 @@ export default function DashboardPage() {
             <h2 className="text-lg font-bold text-white light:text-slate-900">AI Insights</h2>
           </div>
           <ul className="space-y-2.5">
-            {trendRadar.map((trend) => (
+            {insightCards.map((trend) => (
               <li
                 key={trend.title}
                 className="surface-soft rounded-xl border border-white/10 px-3 py-2.5 light:border-slate-200"
@@ -212,7 +240,7 @@ export default function DashboardPage() {
             <h2 className="text-lg font-bold text-white light:text-slate-900">Recent Posts</h2>
           </div>
           <ul className="space-y-2.5">
-            {calendarPreview.map((post) => (
+            {recentPosts.map((post) => (
               <li
                 key={post.id}
                 className="surface-soft rounded-xl border border-white/10 px-3 py-2.5 light:border-slate-200"

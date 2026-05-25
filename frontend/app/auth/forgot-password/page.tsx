@@ -10,16 +10,19 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resetUrl, setResetUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setNotice(null);
+    setResetUrl(null);
     setError(null);
     try {
       const result = await requestPasswordReset({ email });
       setNotice(result.message);
+      setResetUrl(result.reset_url ?? null);
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not send reset link. Please try again."));
     } finally {
@@ -87,6 +90,14 @@ export default function ForgotPasswordPage() {
           {notice ? (
             <p className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-300 light:text-emerald-700">
               {notice}
+            </p>
+          ) : null}
+          {resetUrl ? (
+            <p className="mt-3 rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-2.5 text-sm text-violet-200 light:text-violet-700">
+              Development reset link:{" "}
+              <Link href={resetUrl} className="font-semibold underline">
+                Open reset page
+              </Link>
             </p>
           ) : null}
           {error ? (

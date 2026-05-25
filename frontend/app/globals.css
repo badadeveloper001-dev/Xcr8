@@ -50,6 +50,12 @@ body {
   letter-spacing: 0.01em;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 /* ─── Backgrounds ────────────────────────────────── */
 .dark body {
   background-image:

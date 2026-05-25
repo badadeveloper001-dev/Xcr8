@@ -1,5 +1,4 @@
-import os
-
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,10 +6,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "sqlite:////tmp/xcr8.db" if os.getenv("VERCEL") else "sqlite:///./xcr8.db",
-    )
+    database_url: str = ""
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
@@ -19,6 +15,10 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""
+    supabase_db_password: str = ""
+    supabase_db_project_ref: str = ""
+    supabase_db_host: str = ""
+    supabase_db_port: int = 5432
     google_oauth_enabled: bool = True
 
     ai_service_url: str = "http://localhost:8100"
@@ -31,7 +31,23 @@ class Settings(BaseSettings):
     storage_secret_access_key: str = ""
     storage_endpoint_url: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
+
+    @model_validator(mode="after")
+    def _ensure_database_url(self) -> "Settings":
+        if self.database_url:
+            return self
+
+        if self.supabase_db_project_ref and self.supabase_db_password:
+            resolved_host = self.supabase_db_host or f"db.{self.supabase_db_project_ref}.supabase.co"
+            self.database_url = (
+                "postgresql+psycopg2://postgres:"
+                f"{self.supabase_db_password}@{resolved_host}:{self.supabase_db_port}/postgres?sslmode=require"
+            )
+            return self
+
+        self.database_url = "postgresql+psycopg2://postgres:postgres@localhost:5432/xcr8"
+        return self
 
 
 settings = Settings()
