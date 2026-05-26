@@ -1,3 +1,5 @@
+import os
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -46,7 +48,7 @@ class Settings(BaseSettings):
             )
             return self
 
-        self.database_url = "postgresql+psycopg2://postgres:postgres@localhost:5432/xcr8"
+        self.database_url = f"sqlite:///{os.getcwd()}/../xcr8.dev.db"
         return self
 
 
