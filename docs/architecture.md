@@ -12,6 +12,9 @@
 - frontend: Next.js application for creator workspace
 - backend: FastAPI API gateway and business logic
 - ai-services: FastAPI AI adaptation and memory intelligence
+  - caption adaptation uses OpenAI chat completions with platform-aware constraints
+  - returns structured output (caption, hook, hashtags) plus model/latency/usage metadata
+  - falls back to deterministic local adaptation when provider calls fail
 - worker: Celery workers for queue-driven automation
 - infra: PostgreSQL and Redis via Docker Compose or managed cloud
 
@@ -20,6 +23,8 @@
 - PostgreSQL-compatible schema, ready for Supabase Postgres
 - Supabase Auth-ready integration points via service-role client
 - pgvector-compatible dependency path for semantic memory
+- AI generation records persist prompt template version, latency, token usage, and model metadata
+- backend analytics exposes `/api/v1/analytics/ai-usage/{user_id}` for AI ops visibility in dashboard
 
 ## Storage
 

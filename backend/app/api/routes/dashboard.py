@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
-from app.db.models import ConnectedPlatform, ContentPost, PostStatus, ScheduledPost, User
+from app.db.models import AIGeneration, ConnectedPlatform, ContentPost, PostStatus, ScheduledPost, User
 from app.schemas.mvp import DashboardOverview, PlatformConnection
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -50,6 +50,45 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id).limit(8)
     )
 
+    ai_rows = list(
+        db.scalars(
+            select(AIGeneration)
+            .join(ContentPost, AIGeneration.post_id == ContentPost.id)
+            .where(ContentPost.user_id == user_id)
+            .order_by(AIGeneration.created_at.desc())
+            .limit(200)
+        )
+    )
+    total_generations = len(ai_rows)
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    total_latency_ms = 0
+    latency_count = 0
+    template_versions: dict[str, int] = {}
+
+    for row in ai_rows:
+        payload = row.output_payload or {}
+        usage = payload.get("usage") if isinstance(payload, dict) else {}
+        if not isinstance(usage, dict):
+            usage = {}
+
+        total_prompt_tokens += int(usage.get("prompt_tokens") or 0)
+        total_completion_tokens += int(usage.get("completion_tokens") or 0)
+
+        latency_ms = payload.get("latency_ms") if isinstance(payload, dict) else None
+        if isinstance(latency_ms, int) and latency_ms >= 0:
+            total_latency_ms += latency_ms
+            latency_count += 1
+
+        template = payload.get("prompt_template_version") if isinstance(payload, dict) else None
+        if isinstance(template, str) and template:
+            template_versions[template] = template_versions.get(template, 0) + 1
+
+    average_latency_ms = int(total_latency_ms / latency_count) if latency_count else 0
+    most_used_template = (
+        max(template_versions.items(), key=lambda item: item[1])[0] if template_versions else "unknown"
+    )
+
     return DashboardOverview(
         greeting="Good evening" if datetime.utcnow().hour >= 12 else "Good morning",
         creator_name=user.display_name,
@@ -78,4 +117,11 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
                 select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id).limit(8)
             )
         ],
+        ai_ops={
+            "total_generations": total_generations,
+            "total_prompt_tokens": total_prompt_tokens,
+            "total_completion_tokens": total_completion_tokens,
+            "average_latency_ms": average_latency_ms,
+            "most_used_template": most_used_template,
+        },
     )

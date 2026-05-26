@@ -73,7 +73,7 @@ export type SchedulePayload = {
   recurring_rule?: string | null;
 };
 
-type DashboardOverviewResponse = {
+export type DashboardOverviewPayload = {
   greeting: string;
   creator_name: string;
   platforms_connected: number;
@@ -83,6 +83,13 @@ type DashboardOverviewResponse = {
   recent_posts: Array<{ post_id: number; title: string; status: string; media_url: string }>;
   ai_insights: Array<{ title: string; description: string }>;
   connected_platforms: Array<{ platform: string; account_handle: string; is_active: boolean }>;
+  ai_ops?: {
+    total_generations: number;
+    total_prompt_tokens: number;
+    total_completion_tokens: number;
+    average_latency_ms: number;
+    most_used_template: string;
+  };
 };
 
 type DistributionDraftResponse = {
@@ -136,6 +143,17 @@ type MemoryProfileResponse = {
   vector_memory: { provider: string; index_name: string; embedding_model: string };
 };
 
+export type AiUsageSummaryResponse = {
+  total_generations: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  average_latency_ms: number;
+  estimated_cost_usd: number;
+  models: Record<string, number>;
+  template_versions: Record<string, number>;
+  most_used_template: string;
+};
+
 export async function signup(payload: SignupPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup", payload);
   return data;
@@ -176,18 +194,8 @@ export async function completeOnboarding(payload: OnboardingPayload): Promise<Se
   return data;
 }
 
-export async function getDashboardOverview(userId: number): Promise<{
-  greeting: string;
-  creator_name: string;
-  platforms_connected: number;
-  drafts: number;
-  scheduled: number;
-  ai_suggestions: number;
-  recent_posts: Array<{ post_id: number; title: string; status: string; media_url: string }>;
-  ai_insights: Array<{ title: string; description: string }>;
-  connected_platforms: Array<{ platform: string; account_handle: string; is_active: boolean }>;
-}> {
-  const { data } = await apiClient.get<DashboardOverviewResponse>(
+export async function getDashboardOverview(userId: number): Promise<DashboardOverviewPayload> {
+  const { data } = await apiClient.get<DashboardOverviewPayload>(
     `/api/v1/dashboard/overview/${userId}`,
   );
   return data;
@@ -237,6 +245,13 @@ export async function writeMemory(payload: {
 
 export async function getMemoryProfile(userId: number): Promise<MemoryProfileResponse> {
   const { data } = await apiClient.get<MemoryProfileResponse>(`/api/v1/memory/profile/${userId}`);
+  return data;
+}
+
+export async function getAiUsageSummary(userId: number): Promise<AiUsageSummaryResponse> {
+  const { data } = await apiClient.get<AiUsageSummaryResponse>(
+    `/api/v1/analytics/ai-usage/${userId}`,
+  );
   return data;
 }
 

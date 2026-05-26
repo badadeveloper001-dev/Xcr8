@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { MobileShell } from "@/components/mobile-shell";
-import { getDashboardOverview } from "@/lib/api";
+import { getDashboardOverview, type DashboardOverviewPayload } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 const fadeUp = (delay = 0) => ({
@@ -49,7 +49,7 @@ export default function DashboardPage() {
     if (!userId) router.replace("/auth/login");
   }, [router, userId]);
 
-  const { data } = useQuery({
+  const { data } = useQuery<DashboardOverviewPayload, Error>({
     queryKey: ["dashboard", userId],
     queryFn: () => getDashboardOverview(userId as number),
     enabled: Boolean(userId),
@@ -81,9 +81,33 @@ export default function DashboardPage() {
         value: data?.platforms_connected ?? 3,
         note: "active channels",
       },
+      {
+        label: "AI generations",
+        value: data?.ai_ops?.total_generations ?? 0,
+        note:
+          data?.ai_ops?.average_latency_ms != null
+            ? `avg ${data.ai_ops.average_latency_ms}ms`
+            : "awaiting runs",
+      },
     ],
-    [data?.drafts, data?.platforms_connected, data?.scheduled],
+    [
+      data?.ai_ops?.average_latency_ms,
+      data?.ai_ops?.total_generations,
+      data?.drafts,
+      data?.platforms_connected,
+      data?.scheduled,
+    ],
   );
+
+  const aiOpsSummary = useMemo(() => {
+    const template = data?.ai_ops?.most_used_template ?? "unknown";
+    const promptTokens = data?.ai_ops?.total_prompt_tokens ?? 0;
+    const completionTokens = data?.ai_ops?.total_completion_tokens ?? 0;
+    return {
+      template,
+      tokenLabel: `${promptTokens.toLocaleString()} / ${completionTokens.toLocaleString()}`,
+    };
+  }, [data?.ai_ops]);
 
   const insightCards = useMemo(
     () =>
@@ -156,7 +180,7 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {snapshotCards.map((card) => (
                 <div
                   key={card.label}
@@ -171,6 +195,13 @@ export default function DashboardPage() {
                   <p className="text-xs text-violet-200 light:text-violet-700">{card.note}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-violet-400/20 bg-violet-900/30 px-4 py-3 text-sm text-violet-100 light:border-violet-200 light:bg-white/70 light:text-violet-800">
+              <p className="font-semibold">AI Ops</p>
+              <p className="mt-1 text-xs text-violet-200 light:text-violet-700">
+                Template {aiOpsSummary.template} • Tokens P/C {aiOpsSummary.tokenLabel}
+              </p>
             </div>
           </div>
         </div>

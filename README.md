@@ -106,6 +106,8 @@ pnpm format
 # API readiness checks
 curl http://localhost:8000/api/v1/health
 curl http://localhost:8000/api/v1/health/db
+curl http://localhost:8100/health
+curl http://localhost:8100/health/provider
 
 # End-to-end API smoke test
 ./scripts/smoke-api.sh http://localhost:8000/api/v1

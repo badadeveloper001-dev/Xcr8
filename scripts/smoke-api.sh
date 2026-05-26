@@ -50,7 +50,7 @@ DRAFT="$(curl -fsS -X POST "${API_BASE_URL}/distribution/draft" -H 'content-type
 POST_ID="$(echo "${DRAFT}" | /workspaces/Xcr8/.venv/bin/python -c 'import json,sys; d=json.load(sys.stdin); print(d["post_id"])')"
 echo "post_id=${POST_ID}"
 
-echo "[6/6] Schedule and dashboard"
+echo "[6/7] Schedule and dashboard"
 SCHEDULED_FOR="$(/workspaces/Xcr8/.venv/bin/python -c 'from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc)+timedelta(hours=2)).isoformat())')"
 SCHEDULE_PAYLOAD=$(cat <<JSON
 {"user_id":${USER_ID},"post_id":${POST_ID},"platform":"instagram","scheduled_for":"${SCHEDULED_FOR}","timezone":"Africa/Lagos"}
@@ -59,5 +59,9 @@ JSON
 curl -fsS -X POST "${API_BASE_URL}/scheduling/queue" -H 'content-type: application/json' --data "${SCHEDULE_PAYLOAD}" >/dev/null
 DASHBOARD="$(curl -fsS "${API_BASE_URL}/dashboard/overview/${USER_ID}")"
 echo "${DASHBOARD}" | /workspaces/Xcr8/.venv/bin/python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("drafts",0) >= 0; assert d.get("scheduled",0) >= 1; print("dashboard=ok")'
+
+echo "[7/7] AI usage analytics"
+AI_USAGE="$(curl -fsS "${API_BASE_URL}/analytics/ai-usage/${USER_ID}")"
+echo "${AI_USAGE}" | /workspaces/Xcr8/.venv/bin/python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("total_generations",0) >= 1; assert "most_used_template" in d; print("ai_usage=ok")'
 
 echo "Smoke test completed successfully."

@@ -12,6 +12,16 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "ai-services"}
 
 
+@app.get("/health/provider")
+def health_provider() -> dict[str, str | bool]:
+    return {
+        "status": "ok",
+        "service": "ai-services",
+        "provider_configured": bool(settings.openai_api_key),
+        "model": settings.openai_model,
+    }
+
+
 @app.post("/caption/adapt", response_model=AdaptCaptionResponse)
 def caption_adapt(payload: AdaptCaptionRequest) -> AdaptCaptionResponse:
     result = adapt_caption(
@@ -20,5 +30,5 @@ def caption_adapt(payload: AdaptCaptionRequest) -> AdaptCaptionResponse:
         language=payload.language,
         creator_memory=payload.creator_memory,
     )
-    return AdaptCaptionResponse(model=settings.openai_model, **result)
+    return AdaptCaptionResponse(**result)
 

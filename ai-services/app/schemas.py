@@ -13,3 +13,6 @@ class AdaptCaptionResponse(BaseModel):
     hashtags: list[str]
     hook: str
     model: str
+    prompt_template_version: str
+    latency_ms: int = 0
+    usage: dict = Field(default_factory=dict)

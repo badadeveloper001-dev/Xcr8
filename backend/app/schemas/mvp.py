@@ -74,6 +74,7 @@ class DashboardOverview(BaseModel):
     recent_posts: list[dict]
     ai_insights: list[dict]
     connected_platforms: list[PlatformConnection]
+    ai_ops: dict | None = None
 
 
 class DistributionCreateRequest(BaseModel):
