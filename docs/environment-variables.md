@@ -15,11 +15,16 @@
 
 - `API_HOST`: backend bind host
 - `API_PORT`: backend bind port
-- `DATABASE_URL`: SQLAlchemy connection URL
+- `DATABASE_URL`: SQLAlchemy connection URL (if omitted, backend can derive from Supabase DB vars)
+- `SUPABASE_DB_PROJECT_REF`: Supabase project ref used to derive database host
+- `SUPABASE_DB_PASSWORD`: Supabase Postgres password used for derived connection
+- `SUPABASE_DB_HOST`: optional override for Supabase DB host or pooler endpoint
+- `SUPABASE_DB_PORT`: optional override for DB port (default `5432`)
 - `REDIS_URL`: cache and pub/sub Redis URL
 - `CELERY_BROKER_URL`: Celery broker URL
 - `CELERY_RESULT_BACKEND`: Celery result backend
 - `SUPABASE_URL`: Supabase project URL
+- `SUPABASE_ANON_KEY`: Supabase anon key
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
 - `SUPABASE_JWT_SECRET`: Supabase JWT secret
 

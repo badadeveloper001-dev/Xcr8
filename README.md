@@ -102,6 +102,13 @@ pnpm dev:workers
 pnpm lint
 pnpm typecheck
 pnpm format
+
+# API readiness checks
+curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v1/health/db
+
+# End-to-end API smoke test
+./scripts/smoke-api.sh http://localhost:8000/api/v1
 ```
 
 ## Codespaces and Devcontainer
