@@ -1,7 +1,7 @@
 import os
 import socket
 import tempfile
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,9 +38,34 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
+    @staticmethod
+    def _inject_ipv4_hostaddr_if_possible(database_url: str) -> str:
+        if not database_url.startswith("postgresql") or "hostaddr=" in database_url:
+            return database_url
+
+        try:
+            parsed = urlsplit(database_url)
+            hostname = parsed.hostname
+            if not hostname:
+                return database_url
+
+            ipv4_info = socket.getaddrinfo(hostname, None, socket.AF_INET)
+            if not ipv4_info:
+                return database_url
+
+            hostaddr = ipv4_info[0][4][0]
+            query_pairs = dict(parse_qsl(parsed.query, keep_blank_values=True))
+            query_pairs.setdefault("sslmode", "require")
+            query_pairs["hostaddr"] = hostaddr
+            new_query = urlencode(query_pairs)
+            return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment))
+        except OSError:
+            return database_url
+
     @model_validator(mode="after")
     def _ensure_database_url(self) -> "Settings":
         if self.database_url:
+            self.database_url = self._inject_ipv4_hostaddr_if_possible(self.database_url)
             return self
 
         if self.supabase_db_project_ref and self.supabase_db_password:
@@ -60,6 +85,7 @@ class Settings(BaseSettings):
                 "postgresql+psycopg2://postgres:"
                 f"{self.supabase_db_password}@{resolved_host}:{self.supabase_db_port}/postgres?{query_string}"
             )
+            self.database_url = self._inject_ipv4_hostaddr_if_possible(self.database_url)
             return self
 
         # In serverless runtimes (e.g. Vercel), writeable storage is limited to /tmp.
