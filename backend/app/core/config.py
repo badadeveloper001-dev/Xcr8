@@ -1,5 +1,7 @@
 import os
+import socket
 import tempfile
+from urllib.parse import urlencode
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,9 +45,20 @@ class Settings(BaseSettings):
 
         if self.supabase_db_project_ref and self.supabase_db_password:
             resolved_host = self.supabase_db_host or f"db.{self.supabase_db_project_ref}.supabase.co"
+            query_params: dict[str, str] = {"sslmode": "require"}
+
+            try:
+                ipv4_info = socket.getaddrinfo(resolved_host, None, socket.AF_INET)
+                if ipv4_info:
+                    query_params["hostaddr"] = ipv4_info[0][4][0]
+            except OSError:
+                # If IPv4 resolution fails, keep default hostname-based connection behavior.
+                pass
+
+            query_string = urlencode(query_params)
             self.database_url = (
                 "postgresql+psycopg2://postgres:"
-                f"{self.supabase_db_password}@{resolved_host}:{self.supabase_db_port}/postgres?sslmode=require"
+                f"{self.supabase_db_password}@{resolved_host}:{self.supabase_db_port}/postgres?{query_string}"
             )
             return self
 
