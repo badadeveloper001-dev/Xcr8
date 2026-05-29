@@ -3,6 +3,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -19,6 +20,12 @@ from app.schemas.mvp import (
     OnboardingRequest,
     PasswordResetRequest,
     PasswordResetRequestResponse,
+)
+from app.services.auth import (
+    supabase_request_password_reset,
+    supabase_sign_in,
+    supabase_sign_up,
+    supabase_update_password,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -48,6 +55,24 @@ def _session_payload(user: User, credential: AuthCredential | None = None) -> Au
     )
 
 
+def _safe_username_seed(value: str) -> str:
+    seed = re.sub(r"[^a-zA-Z0-9_.-]", "", value.strip().lower())
+    if not seed:
+        seed = "creator"
+    return seed[:32]
+
+
+def _ensure_unique_username(db: Session, base: str) -> str:
+    candidate = _safe_username_seed(base)
+    suffix = 0
+    while True:
+        username = candidate if suffix == 0 else f"{candidate[:28]}{suffix:04d}"
+        existing = db.scalar(select(AuthCredential).where(AuthCredential.username == username))
+        if not existing:
+            return username
+        suffix += 1
+
+
 @router.post("/signup", response_model=AuthSessionResponse)
 def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
     if payload.password != payload.confirm_password:
@@ -56,16 +81,28 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
     if len(payload.password) < 8 or not any(ch.isdigit() for ch in payload.password):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters and include a number.")
 
+    try:
+        supabase_sign_up(
+            email=payload.email,
+            password=payload.password,
+            metadata={"full_name": payload.full_name, "username": payload.username},
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 409 if "already" in message.lower() else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
     existing = db.scalar(select(User).where(User.email == payload.email))
     if existing:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing.id))
-        if credential and credential.username != payload.username:
-            username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == payload.username))
+        desired_username = payload.username
+        if credential and credential.username != desired_username:
+            username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == desired_username))
             if username_taken and username_taken.user_id != existing.id:
-                raise HTTPException(status_code=409, detail="Username is already taken.")
+                desired_username = _ensure_unique_username(db, desired_username)
         salt, password_hash = _hash_password(payload.password)
         if credential:
-            credential.username = payload.username
+            credential.username = desired_username
             credential.full_name = payload.full_name
             credential.password_salt = salt
             credential.password_hash = password_hash
@@ -74,7 +111,7 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
             db.add(
                 AuthCredential(
                     user_id=existing.id,
-                    username=payload.username,
+                    username=desired_username,
                     full_name=payload.full_name,
                     password_salt=salt,
                     password_hash=password_hash,
@@ -91,7 +128,9 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
 
     username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == payload.username))
     if username_taken:
-        raise HTTPException(status_code=409, detail="Username is already taken.")
+        local_username = _ensure_unique_username(db, payload.username)
+    else:
+        local_username = payload.username
 
     user = User(
         email=payload.email,
@@ -106,7 +145,7 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
     db.add(
         AuthCredential(
             user_id=user.id,
-            username=payload.username,
+            username=local_username,
             full_name=payload.full_name,
             password_salt=salt,
             password_hash=password_hash,
@@ -128,13 +167,60 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
 
 @router.post("/login", response_model=AuthSessionResponse)
 def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    try:
+        auth_payload = supabase_sign_in(payload.email, payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
     user = db.scalar(select(User).where(User.email == payload.email))
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
+        auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
+        user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
+        display_name = payload.email.split("@")[0]
+        if isinstance(user_meta, dict):
+            display_name = str(user_meta.get("full_name") or display_name)
+
+        user = User(
+            email=payload.email,
+            display_name=display_name,
+        )
+        db.add(user)
+        db.flush()
+
+        username_seed = payload.email.split("@")[0]
+        if isinstance(user_meta, dict):
+            username_seed = str(user_meta.get("username") or username_seed)
+
+        placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
+        db.add(
+            AuthCredential(
+                user_id=user.id,
+                username=_ensure_unique_username(db, username_seed),
+                full_name=display_name,
+                password_salt=placeholder_salt,
+                password_hash=placeholder_hash,
+                remember_me_default=payload.remember_me,
+            )
+        )
+
+        profile = CreatorProfile(
+            user_id=user.id,
+            multilingual_profile=[user.language],
+        )
+        db.add(profile)
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    if not credential or not _verify_password(payload.password, credential.password_salt, credential.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if not credential:
+        placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
+        credential = AuthCredential(
+            user_id=user.id,
+            username=_ensure_unique_username(db, payload.email.split("@")[0]),
+            full_name=user.display_name,
+            password_salt=placeholder_salt,
+            password_hash=placeholder_hash,
+            remember_me_default=payload.remember_me,
+        )
+        db.add(credential)
 
     credential.remember_me_default = payload.remember_me
     db.commit()
@@ -190,24 +276,15 @@ def request_password_reset(
     payload: PasswordResetRequest,
     db: Session = Depends(get_db),
 ) -> PasswordResetRequestResponse:
-    reset_url: str | None = None
-
-    user = db.scalar(select(User).where(User.email == payload.email))
-    if user:
-        credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-        if credential:
-            raw_token = secrets.token_urlsafe(32)
-            token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-            credential.password_reset_token_hash = token_hash
-            credential.password_reset_expires_at = datetime.now(tz=UTC) + timedelta(hours=1)
-            db.commit()
-
-            if settings.environment == "development":
-                reset_url = f"/auth/reset-password?token={raw_token}"
+    try:
+        supabase_request_password_reset(payload.email)
+    except ValueError:
+        # Keep response generic for security and compatibility.
+        pass
 
     return PasswordResetRequestResponse(
         message="If the email exists, a reset link has been sent.",
-        reset_url=reset_url,
+        reset_url=None,
     )
 
 
@@ -222,22 +299,10 @@ def confirm_password_reset(
     if len(payload.new_password) < 8 or not any(ch.isdigit() for ch in payload.new_password):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters and include a number.")
 
-    token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
-    credential = db.scalar(
-        select(AuthCredential).where(AuthCredential.password_reset_token_hash == token_hash)
-    )
-    if not credential:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
-
-    if not credential.password_reset_expires_at or credential.password_reset_expires_at < datetime.now(tz=UTC):
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
-
-    salt, password_hash = _hash_password(payload.new_password)
-    credential.password_salt = salt
-    credential.password_hash = password_hash
-    credential.password_reset_token_hash = None
-    credential.password_reset_expires_at = None
-    db.commit()
+    try:
+        supabase_update_password(payload.token, payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"message": "Password reset successful. You can now log in."}
 
