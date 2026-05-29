@@ -4,15 +4,7 @@ import { FormEvent, useEffect, useMemo, useState, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import {
-  CheckCircle2,
-  ChevronRight,
-  Globe2,
-  LayoutGrid,
-  Link2,
-  Pencil,
-  Sparkles,
-} from "lucide-react";
+import { CheckCircle2, ChevronRight, LayoutGrid, Link2, Pencil, Sparkles } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   getApiErrorMessage,
@@ -31,13 +23,6 @@ const platformOptions = [
   { id: "facebook", label: "Facebook", cls: "badge-fb" },
   { id: "youtube_shorts", label: "YouTube Shorts", cls: "badge-yt" },
   { id: "threads", label: "Threads", cls: "badge-th" },
-];
-
-const languageOptions = [
-  { id: "english", label: "English", flag: "🇬🇧" },
-  { id: "nigerian_pidgin", label: "Nigerian Pidgin", flag: "🇳🇬" },
-  { id: "yoruba", label: "Yoruba", flag: "🌍" },
-  { id: "code_switch", label: "Code-switch", flag: "⚡" },
 ];
 
 const steps = [
@@ -74,10 +59,6 @@ export default function ComposePage() {
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["instagram", "x"]);
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([
-    "english",
-    "nigerian_pidgin",
-  ]);
   const [scheduleAt, setScheduleAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -116,11 +97,6 @@ export default function ComposePage() {
       setError("Select at least one platform.");
       return;
     }
-    if (!selectedLanguages.length) {
-      setError("Select at least one language.");
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -133,7 +109,6 @@ export default function ComposePage() {
         master_caption: caption,
         primary_language: "english",
         selected_platforms: selectedPlatforms,
-        target_languages: selectedLanguages,
       });
       setDistributionDraft({
         postId: draft.post_id,
@@ -357,32 +332,6 @@ export default function ComposePage() {
             </div>
           </div>
 
-          {/* Language selector */}
-          <div className="surface-card rounded-2xl p-4">
-            <label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <Globe2 size={11} className="mr-1 inline" /> Languages
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {languageOptions.map((l) => {
-                const active = selectedLanguages.includes(l.id);
-                return (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onClick={() => toggleItem(l.id, selectedLanguages, setSelectedLanguages)}
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
-                      active
-                        ? "bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40 light:bg-indigo-100 light:text-indigo-700 light:ring-indigo-300"
-                        : "surface-soft text-slate-400 hover:text-slate-300 light:hover:text-slate-600"
-                    }`}
-                  >
-                    <span className="text-base">{l.flag}</span> {l.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
@@ -424,6 +373,10 @@ export default function ComposePage() {
               Xcr8 learns your tone, emoji usage, and slang to keep every adaptation sounding like{" "}
               <em>you</em>.
             </p>
+            <div className="mt-3 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-xs text-indigo-300 light:text-indigo-700">
+              Language is auto-detected from your master caption. No manual language selection
+              needed.
+            </div>
             <div className="mt-3 rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-xs text-violet-300 light:text-violet-700">
               Pro tip: Start with a strong hook in your master caption. AI keeps that energy per
               platform.

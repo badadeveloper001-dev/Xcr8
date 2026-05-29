@@ -3,12 +3,8 @@ import { NextRequest } from "next/server";
 const BACKEND_API_URL =
   process.env.BACKEND_API_URL ?? process.env.BACKEND_INTERNAL_URL ?? process.env.BACKEND_URL;
 
-function getTargetUrl(path: string[], searchParams: URLSearchParams): URL | null {
-  if (!BACKEND_API_URL) {
-    return null;
-  }
-
-  const base = BACKEND_API_URL.replace(/\/$/, "");
+function buildTargetUrl(baseUrl: string, path: string[], searchParams: URLSearchParams): URL {
+  const base = baseUrl.replace(/\/$/, "");
   const suffix = path.join("/");
   const url = new URL(`${base}/api/v1/${suffix}`);
   const search = searchParams.toString();
@@ -20,10 +16,32 @@ function getTargetUrl(path: string[], searchParams: URLSearchParams): URL | null
   return url;
 }
 
-async function proxy(request: NextRequest, path: string[]) {
-  const targetUrl = getTargetUrl(path, request.nextUrl.searchParams);
+function getTargetCandidates(request: NextRequest, path: string[]): URL[] {
+  const candidates: URL[] = [];
 
-  if (!targetUrl) {
+  if (BACKEND_API_URL) {
+    candidates.push(buildTargetUrl(BACKEND_API_URL, path, request.nextUrl.searchParams));
+  }
+
+  // On Vercel services deployments, backend is commonly exposed at this route prefix.
+  const sameOriginBackendBase = `${request.nextUrl.origin}/_/backend`;
+  const sameOriginCandidate = buildTargetUrl(
+    sameOriginBackendBase,
+    path,
+    request.nextUrl.searchParams,
+  );
+
+  if (!candidates.some((url) => url.toString() === sameOriginCandidate.toString())) {
+    candidates.push(sameOriginCandidate);
+  }
+
+  return candidates;
+}
+
+async function proxy(request: NextRequest, path: string[]) {
+  const targetCandidates = getTargetCandidates(request, path);
+
+  if (targetCandidates.length === 0) {
     return Response.json(
       {
         detail:
@@ -43,10 +61,52 @@ async function proxy(request: NextRequest, path: string[]) {
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = await request.text();
+    const rawBody = await request.arrayBuffer();
+    if (rawBody.byteLength > 0) {
+      init.body = rawBody;
+    }
   }
 
-  const upstreamResponse = await fetch(targetUrl, init);
+  let upstreamResponse: Response | null = null;
+  let sawNetworkFailure = false;
+
+  for (const targetUrl of targetCandidates) {
+    try {
+      const response = await fetch(targetUrl, init);
+
+      // Retry with the next candidate when the upstream gateway blocks this route.
+      if (response.status === 402) {
+        upstreamResponse = response;
+        continue;
+      }
+
+      upstreamResponse = response;
+      break;
+    } catch {
+      sawNetworkFailure = true;
+    }
+  }
+
+  if (!upstreamResponse) {
+    return Response.json(
+      {
+        detail:
+          "Unable to reach backend API from proxy. Verify BACKEND_API_URL and ensure backend is running.",
+      },
+      { status: 502 },
+    );
+  }
+
+  if (upstreamResponse.status === 402 && sawNetworkFailure) {
+    return Response.json(
+      {
+        detail:
+          "Backend API routing failed. Verify BACKEND_API_URL or use deployment route /_/backend.",
+      },
+      { status: 502 },
+    );
+  }
+
   const responseHeaders = new Headers(upstreamResponse.headers);
   responseHeaders.delete("content-encoding");
   responseHeaders.delete("transfer-encoding");

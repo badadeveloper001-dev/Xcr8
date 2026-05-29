@@ -98,6 +98,52 @@ def _local_adapt(text: str, platform: str, language: str, creator_memory: dict) 
     }
 
 
+def _local_detect_language(text: str) -> dict:
+    lowered = f" {text.lower()} "
+
+    yoruba_strong = [" oya", " shey", " awon"]
+    yoruba_weak = [" e ", " ni ", " mo ", " wa ", " je ", " se "]
+    pidgin_strong = [" abeg", " wahala", " no dey", " we dey", " una ", " sabi", " no wahala"]
+    pidgin_weak = [" na "]
+
+    yoruba_score = 0
+    pidgin_score = 0
+    for marker in yoruba_strong:
+        if marker in lowered:
+            yoruba_score += 2
+    for marker in yoruba_weak:
+        if marker in lowered:
+            yoruba_score += 1
+    for marker in pidgin_strong:
+        if marker in lowered:
+            pidgin_score += 2
+    for marker in pidgin_weak:
+        if marker in lowered:
+            pidgin_score += 1
+
+    if yoruba_score >= 2 and pidgin_score >= 2:
+        language = "code_switch"
+    elif yoruba_score >= 2:
+        language = "yoruba"
+    elif pidgin_score >= 2:
+        language = "nigerian_pidgin"
+    else:
+        language = "english"
+
+    segment_confidence = 0.8 if language != "english" else 0.65
+    segments = [{"text": text, "language": language, "confidence": segment_confidence}]
+
+    return {
+        "language": language,
+        "confidence": 0.65,
+        "method": "heuristic",
+        "model": "backend-rule-fallback",
+        "secondary_language": None,
+        "is_mixed": False,
+        "segments": segments,
+    }
+
+
 # ─── Public interface ───────────────────────────────────────
 
 def generate_adaptation(
@@ -122,4 +168,34 @@ def generate_adaptation(
     except Exception as exc:
         logger.warning("AI service unavailable (%s); using local fallback.", exc)
         return _local_adapt(text, platform, language, creator_memory)
+
+
+def detect_caption_language(text: str) -> dict:
+    cleaned = text.strip()
+    if not cleaned:
+        return {
+            "language": "english",
+            "confidence": 0.0,
+            "method": "heuristic",
+            "model": "backend-rule-empty-text",
+            "secondary_language": None,
+            "is_mixed": False,
+            "segments": [],
+        }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(
+                f"{settings.ai_service_url}/caption/detect-language",
+                json={"text": cleaned},
+            )
+            response.raise_for_status()
+            data = response.json()
+            language = str(data.get("language", "english")).lower()
+            if language not in {"english", "nigerian_pidgin", "yoruba", "code_switch"}:
+                return _local_detect_language(cleaned)
+            return data
+    except Exception as exc:
+        logger.warning("AI language detection unavailable (%s); using local fallback.", exc)
+        return _local_detect_language(cleaned)
 

@@ -7,7 +7,9 @@
 
 ## Frontend
 
-- `NEXT_PUBLIC_API_URL`: backend API base URL
+- `NEXT_PUBLIC_API_URL`: frontend API base URL. Keep this as `/` so browser calls go through Next.js proxy routes.
+- `BACKEND_API_URL`: backend base URL used by Next.js server-side API proxy (for local dev use `http://127.0.0.1:8000`).
+- `NEXT_PUBLIC_USE_DIRECT_API`: optional flag (`true`) to bypass proxy and call `NEXT_PUBLIC_API_URL` directly from browser.
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase public anon key
 

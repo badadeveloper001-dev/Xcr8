@@ -1,8 +1,13 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.schemas import AdaptCaptionRequest, AdaptCaptionResponse
-from app.services.caption_adapter import adapt_caption
+from app.schemas import (
+    AdaptCaptionRequest,
+    AdaptCaptionResponse,
+    DetectLanguageRequest,
+    DetectLanguageResponse,
+)
+from app.services.caption_adapter import adapt_caption, detect_caption_language
 
 app = FastAPI(title="Xcr8 AI Services", version="0.1.0")
 
@@ -31,4 +36,10 @@ def caption_adapt(payload: AdaptCaptionRequest) -> AdaptCaptionResponse:
         creator_memory=payload.creator_memory,
     )
     return AdaptCaptionResponse(**result)
+
+
+@app.post("/caption/detect-language", response_model=DetectLanguageResponse)
+def caption_detect_language(payload: DetectLanguageRequest) -> DetectLanguageResponse:
+    result = detect_caption_language(payload.text)
+    return DetectLanguageResponse(**result)
 

@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     pinecone_environment: str = "us-east-1-aws"
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/xcr8"
 
-    model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=("ai-services/.env", "ai-services/.env.local", ".env", ".env.local"),
+        extra="ignore",
+    )
 
 
 settings = Settings()

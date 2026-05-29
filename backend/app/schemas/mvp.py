@@ -85,7 +85,7 @@ class DistributionCreateRequest(BaseModel):
     master_caption: str
     primary_language: str = "english"
     selected_platforms: list[str]
-    target_languages: list[str] = ["english"]
+    target_languages: list[str] | None = None
 
 
 class AdaptedVariant(BaseModel):

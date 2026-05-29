@@ -1,13 +1,22 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
-from app.db.models import AIGeneration, ContentPost, CreatorProfile, Platform, PostStatus, PostVariant, User
+from app.db.models import (
+    AIGeneration,
+    ContentPost,
+    CreatorMemory,
+    CreatorProfile,
+    Platform,
+    PostStatus,
+    PostVariant,
+    User,
+)
 from app.schemas.mvp import ApprovalRequest, DistributionCreateRequest, DistributionDraftResponse
-from app.services.ai_adapter import generate_adaptation
+from app.services.ai_adapter import detect_caption_language, generate_adaptation
 
 router = APIRouter(prefix="/distribution", tags=["distribution"])
 
@@ -21,31 +30,68 @@ def create_distribution_draft(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    language_detection = detect_caption_language(payload.master_caption)
+    detected_language = str(language_detection.get("language", "english"))
+
     post = ContentPost(
         user_id=payload.user_id,
         title=payload.title,
         media_url=payload.media_url,
         media_type=payload.media_type,
         master_caption=payload.master_caption,
-        primary_language=payload.primary_language,
+        primary_language=detected_language,
         selected_platforms=payload.selected_platforms,
         status=PostStatus.draft,
-        content_meta={"target_languages": payload.target_languages},
+        content_meta={
+            "target_languages": [detected_language],
+            "detected_language": detected_language,
+            "language_detection": language_detection,
+        },
     )
     db.add(post)
     db.flush()
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
+    recent_memories = list(
+        db.scalars(
+            select(CreatorMemory)
+            .where(CreatorMemory.user_id == payload.user_id)
+            .order_by(
+                desc(CreatorMemory.confidence_score),
+                desc(CreatorMemory.last_used_at),
+                desc(CreatorMemory.created_at),
+            )
+            .limit(6)
+        )
+    )
+    memory_facts = [
+        f"{memory.memory_key}: {memory.memory_value}"
+        for memory in recent_memories
+        if memory.memory_key and memory.memory_value
+    ]
+
     creator_memory = {
         "tone": profile.tone if profile else "confident",
         "emoji_style": profile.emoji_style if profile else "🔥",
         "slang_profile": profile.slang_profile if profile else "light",
-        "multilingual_profile": profile.multilingual_profile if profile else [payload.primary_language],
+        "multilingual_profile": profile.multilingual_profile if profile else [detected_language],
+        "memory_facts": memory_facts,
+        "language_profile": {
+            "primary": detected_language,
+            "secondary": language_detection.get("secondary_language"),
+            "is_mixed": bool(language_detection.get("is_mixed")),
+            "segments": language_detection.get("segments", []),
+        },
     }
 
+    now = datetime.utcnow()
+    for memory in recent_memories:
+        memory.last_used_at = now
+
     variants: list[PostVariant] = []
+    target_languages = [detected_language]
     for platform in payload.selected_platforms:
-        for language in payload.target_languages:
+        for language in target_languages:
             result = generate_adaptation(
                 text=payload.master_caption,
                 platform=platform,

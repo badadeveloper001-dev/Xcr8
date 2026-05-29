@@ -1,7 +1,13 @@
 import axios from "axios";
 
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const useDirectApi = process.env.NEXT_PUBLIC_USE_DIRECT_API === "true";
+
+// Default to same-origin proxy to avoid calling protected upstream URLs from the browser.
+const apiBaseUrl = useDirectApi && configuredApiUrl ? configuredApiUrl : "/";
+
 export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "/",
+  baseURL: apiBaseUrl,
   timeout: 10_000,
 });
 
@@ -61,7 +67,7 @@ export type DistributionDraftPayload = {
   master_caption: string;
   primary_language: string;
   selected_platforms: string[];
-  target_languages: string[];
+  target_languages?: string[];
 };
 
 export type SchedulePayload = {
@@ -330,6 +336,10 @@ function formatApiErrorDetail(detail: ApiErrorDetail | undefined): string | null
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError<{ detail?: ApiErrorDetail }>(error)) {
+    if (error.response?.status === 402) {
+      return "Request was rejected by an upstream gateway. Use proxy mode by setting NEXT_PUBLIC_API_URL=/ and configure BACKEND_API_URL for the frontend server.";
+    }
+
     const detailMessage = formatApiErrorDetail(error.response?.data?.detail);
     if (detailMessage) {
       return detailMessage;
