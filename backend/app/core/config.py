@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -48,7 +49,10 @@ class Settings(BaseSettings):
             )
             return self
 
-        self.database_url = f"sqlite:///{os.getcwd()}/../xcr8.dev.db"
+        # In serverless runtimes (e.g. Vercel), writeable storage is limited to /tmp.
+        # Use a temp-backed SQLite fallback when managed DB credentials are not configured.
+        fallback_db_path = os.path.join(tempfile.gettempdir(), "xcr8.dev.db")
+        self.database_url = f"sqlite:///{fallback_db_path}"
         return self
 
 
