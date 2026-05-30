@@ -1,14 +1,14 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { Copy, ImagePlus, RefreshCw } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Download, ImagePlus, RefreshCw } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 
 type GeneratedImage = {
+  id: string;
   title: string;
-  prompt: string;
-  imageUrls: string[];
-  imageIndex: number;
+  src: string;
+  downloadName: string;
 };
 
 const styleNotes: Record<string, string> = {
@@ -38,14 +38,13 @@ function buildCandidateUrls(
 
 export default function ImageGeneratorPage() {
   const [subject, setSubject] = useState("Creator building a weekly content system at a desk");
-  const [platform, setPlatform] = useState("instagram");
   const [style, setStyle] = useState<keyof typeof styleNotes>("cinematic");
   const [mood, setMood] = useState("confident and practical");
   const [ratio, setRatio] = useState("4:5");
   const [palette, setPalette] = useState("warm orange, cream, deep charcoal");
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [generating, setGenerating] = useState(false);
-  const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const canGenerate = subject.trim().length > 4;
 
@@ -54,18 +53,53 @@ export default function ImageGeneratorPage() {
     [],
   );
 
+  useEffect(() => {
+    return () => {
+      for (const image of images) {
+        URL.revokeObjectURL(image.src);
+      }
+    };
+  }, [images]);
+
   const handleStyleChange = (value: string) => {
     if (isStyleKey(value)) {
       setStyle(value);
     }
   };
 
-  const handleGenerate = (event: FormEvent<HTMLFormElement>) => {
+  const resolveImageBlobUrl = async (
+    prompt: string,
+    width: number,
+    height: number,
+    seed: number,
+  ): Promise<string> => {
+    const candidates = buildCandidateUrls(prompt, width, height, seed);
+    for (const url of candidates) {
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) continue;
+        const blob = await response.blob();
+        if (!blob.type.startsWith("image/")) continue;
+        return URL.createObjectURL(blob);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("failed");
+  };
+
+  const handleGenerate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanSubject = subject.trim();
     if (!cleanSubject) return;
 
     setGenerating(true);
+    setError(null);
+
+    for (const image of images) {
+      URL.revokeObjectURL(image.src);
+    }
+    setImages([]);
 
     const dimensions =
       ratio === "1:1"
@@ -74,39 +108,44 @@ export default function ImageGeneratorPage() {
           ? { width: 1344, height: 768 }
           : { width: 1024, height: 1280 };
 
-    const built = baseIdeas.map((idea, index) => {
-      const direction = `${idea} for ${platform} in a ${mood} mood with ${palette} palette`;
-      const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, creator economy visual style, realistic skin, realistic hands, realistic reflections`;
-      const seed = Date.now() + index * 37;
+    try {
+      const built = await Promise.all(
+        baseIdeas.map(async (idea, index) => {
+          const direction = `${idea} in a ${mood} mood with ${palette} palette`;
+          const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, realistic skin, realistic hands, realistic reflections`;
+          const seed = Date.now() + index * 37;
+          const src = await resolveImageBlobUrl(prompt, dimensions.width, dimensions.height, seed);
 
-      return {
-        title: `${idea} ${index + 1}`,
-        prompt,
-        imageUrls: buildCandidateUrls(prompt, dimensions.width, dimensions.height, seed),
-        imageIndex: 0,
-      };
-    });
+          return {
+            id: `${seed}-${index}`,
+            title: `${idea} ${index + 1}`,
+            src,
+            downloadName: `xcr8-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
+          };
+        }),
+      );
 
-    setImages(built);
-    setCopiedPrompt(null);
-    setGenerating(false);
+      setImages(built);
+    } catch {
+      setError("Could not generate images right now. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  const copyPrompt = async (prompt: string) => {
-    await navigator.clipboard.writeText(prompt);
-    setCopiedPrompt(prompt);
+  const handleImageDownload = (src: string, fileName: string) => {
+    const anchor = document.createElement("a");
+    anchor.href = src;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   };
 
-  const handleImageError = (index: number) => {
-    setImages((current) => {
-      const next = [...current];
-      const target = next[index];
-      if (!target) return current;
-      if (target.imageIndex < target.imageUrls.length - 1) {
-        next[index] = { ...target, imageIndex: target.imageIndex + 1 };
-      }
-      return next;
-    });
+  const handleRatioChange = (value: string) => {
+    if (value === "4:5" || value === "1:1" || value === "16:9") {
+      setRatio(value);
+    }
   };
 
   return (
@@ -117,7 +156,7 @@ export default function ImageGeneratorPage() {
       showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-        <form onSubmit={(e) => handleGenerate(e)} className="space-y-3.5">
+        <form onSubmit={(e) => void handleGenerate(e)} className="space-y-3.5">
           <div className="surface-soft rounded-2xl p-4">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               What should the image show?
@@ -132,22 +171,22 @@ export default function ImageGeneratorPage() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
+              value={style}
+              onChange={(e) => handleStyleChange(e.target.value)}
               className="xcr8-input"
             >
-              {["instagram", "linkedin", "tiktok", "youtube_shorts"].map((item) => (
+              {Object.keys(styleNotes).map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
               ))}
             </select>
             <select
-              value={style}
-              onChange={(e) => handleStyleChange(e.target.value)}
+              value={ratio}
+              onChange={(e) => handleRatioChange(e.target.value)}
               className="xcr8-input"
             >
-              {Object.keys(styleNotes).map((item) => (
+              {["4:5", "1:1", "16:9"].map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
@@ -163,19 +202,12 @@ export default function ImageGeneratorPage() {
               placeholder="Mood"
             />
             <input
-              value={ratio}
-              onChange={(e) => setRatio(e.target.value)}
+              value={palette}
+              onChange={(e) => setPalette(e.target.value)}
               className="xcr8-input"
-              placeholder="Aspect ratio (e.g. 4:5, 1:1, 16:9)"
+              placeholder="Color palette"
             />
           </div>
-
-          <input
-            value={palette}
-            onChange={(e) => setPalette(e.target.value)}
-            className="xcr8-input"
-            placeholder="Color palette"
-          />
 
           <button
             type="submit"
@@ -183,50 +215,53 @@ export default function ImageGeneratorPage() {
             className="cta-btn inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold disabled:opacity-60"
           >
             <RefreshCw size={16} />
-            {generating ? "Generating images..." : "Generate real images"}
+            {generating ? "Generating images..." : "Generate images"}
           </button>
 
+          {error ? (
+            <p
+              role="status"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-400"
+            >
+              {error}
+            </p>
+          ) : null}
+
           <p className="text-xs text-slate-500">
-            Every output is forced toward ultrarealistic photography. If an image URL fails, the app
-            automatically falls back to alternate generation URLs.
+            Ultrarealistic mode is always enabled. Generated images are loaded as downloadable files
+            to reduce broken renders.
           </p>
         </form>
 
         <div className="space-y-3.5">
           {images.length ? (
-            images.map((image, index) => (
-              <article key={image.title} className="surface-card rounded-2xl p-4">
+            images.map((image) => (
+              <article key={image.id} className="surface-card rounded-2xl p-4">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                   <ImagePlus size={11} />
                   {image.title}
                 </div>
 
                 <img
-                  src={image.imageUrls[image.imageIndex]}
-                  alt={image.prompt}
+                  src={image.src}
+                  alt={image.title}
                   loading="lazy"
-                  onError={() => handleImageError(index)}
                   className="h-auto w-full rounded-xl border border-white/10 bg-black/20 object-cover"
                 />
 
-                <div className="mt-3 rounded-xl bg-black/20 p-3 light:bg-slate-50">
-                  <p className="text-xs leading-6 text-slate-200 light:text-slate-800">
-                    {image.prompt}
-                  </p>
-                </div>
                 <button
                   type="button"
-                  onClick={() => void copyPrompt(image.prompt)}
+                  onClick={() => handleImageDownload(image.src, image.downloadName)}
                   className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
                 >
-                  <Copy size={12} />
-                  {copiedPrompt === image.prompt ? "Copied" : "Copy prompt"}
+                  <Download size={12} />
+                  Download image
                 </button>
               </article>
             ))
           ) : (
             <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
-              Generate images to see real visual outputs from your prompt instantly.
+              Generated images will appear here with one-click download.
             </div>
           )}
         </div>
