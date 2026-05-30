@@ -191,11 +191,21 @@ export default function ComposePage() {
           method: "POST",
           body: formData,
         });
-        if (!res.ok) throw new Error("Upload failed");
         const data: unknown = await res.json();
+        if (!res.ok) {
+          const uploadError = getUploadUrl(data) ||
+            (typeof data === "object" && data && "detail" in data && typeof data.detail === "string"
+              ? data.detail
+              : "Upload failed. Please try again.");
+          throw new Error(uploadError);
+        }
         setMediaUrl(getUploadUrl(data));
-      } catch {
-        setError("Upload failed. Please try again.");
+      } catch (err) {
+        if (err instanceof Error && err.message.trim().length > 0) {
+          setError(err.message);
+        } else {
+          setError("Upload failed. Please try again.");
+        }
       } finally {
         setUploading(false);
       }
