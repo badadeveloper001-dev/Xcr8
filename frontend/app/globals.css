@@ -68,6 +68,12 @@ body {
   overflow-x: hidden;
 }
 
+@media (max-width: 640px) {
+  html {
+    font-size: 15px;
+  }
+}
+
 /* ─── Backgrounds ────────────────────────────────── */
 .dark body {
   background-image:
