@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Space_Grotesk } from "next/font/google";
+import { DM_Sans, Playfair_Display } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
+const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
   title: "Xcr8",
@@ -36,7 +37,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={spaceGrotesk.className}>
+      <body className={`${dmSans.variable} ${playfair.variable} ${dmSans.className}`}>
         <Providers>{children}</Providers>
       </body>
     </html>

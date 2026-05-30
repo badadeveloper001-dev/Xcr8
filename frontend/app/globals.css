@@ -4,42 +4,42 @@
 
 /* ─── Design tokens ──────────────────────────────── */
 :root {
-  --background: 218 34% 97%;
-  --foreground: 224 28% 12%;
-  --primary: 255 84% 58%;
+  --background: 36 28% 96%;
+  --foreground: 224 32% 10%;
+  --primary: 194 92% 42%;
   --primary-foreground: 0 0% 100%;
-  --border: 224 22% 87%;
-  --input: 222 28% 94%;
-  --ring: 194 90% 48%;
+  --border: 38 24% 82%;
+  --input: 36 24% 92%;
+  --ring: 40 86% 46%;
   --radius: 0.875rem;
 
   /* Surface tokens – light */
-  --surface-card-bg: rgba(255, 255, 255, 0.9);
-  --surface-card-border: rgba(17, 24, 39, 0.1);
+  --surface-card-bg: rgba(255, 251, 242, 0.88);
+  --surface-card-border: rgba(51, 42, 25, 0.12);
   --surface-card-shadow:
-    0 18px 44px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --surface-soft-bg: rgba(245, 248, 255, 0.82);
-  --surface-soft-border: rgba(17, 24, 39, 0.09);
+    0 18px 40px rgba(63, 44, 18, 0.14), 0 6px 16px rgba(17, 24, 39, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  --surface-soft-bg: rgba(255, 250, 238, 0.78);
+  --surface-soft-border: rgba(51, 42, 25, 0.11);
 }
 
 .dark {
-  --background: 228 46% 7%;
-  --foreground: 210 38% 96%;
-  --primary: 255 84% 60%;
+  --background: 222 38% 8%;
+  --foreground: 44 22% 92%;
+  --primary: 190 92% 54%;
   --primary-foreground: 0 0% 100%;
-  --border: 230 24% 22%;
-  --input: 229 26% 14%;
-  --ring: 194 90% 54%;
+  --border: 40 18% 28%;
+  --input: 222 20% 14%;
+  --ring: 40 82% 58%;
 
   /* Surface tokens – dark */
-  --surface-card-bg: rgba(15, 22, 43, 0.84);
-  --surface-card-border: rgba(148, 163, 184, 0.2);
+  --surface-card-bg: rgba(16, 21, 31, 0.86);
+  --surface-card-border: rgba(226, 193, 123, 0.2);
   --surface-card-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.5), 0 8px 20px rgba(8, 15, 38, 0.4),
+    0 26px 62px rgba(0, 0, 0, 0.58), 0 8px 22px rgba(7, 16, 26, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  --surface-soft-bg: rgba(12, 18, 36, 0.72);
-  --surface-soft-border: rgba(148, 163, 184, 0.2);
+  --surface-soft-bg: rgba(17, 23, 35, 0.74);
+  --surface-soft-border: rgba(226, 193, 123, 0.2);
 }
 
 /* ─── Base reset ─────────────────────────────────── */
@@ -49,9 +49,17 @@
 
 body {
   @apply bg-background text-foreground antialiased;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-body), "DM Sans", sans-serif;
   min-height: 100vh;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
+}
+
+h1,
+h2,
+h3,
+h4,
+.section-kicker {
+  font-family: var(--font-display), "Playfair Display", serif;
 }
 
 html,
@@ -63,18 +71,18 @@ body {
 /* ─── Backgrounds ────────────────────────────────── */
 .dark body {
   background-image:
-    radial-gradient(ellipse at 8% 8%, rgba(99, 102, 241, 0.28), transparent 36%),
-    radial-gradient(ellipse at 92% 12%, rgba(56, 189, 248, 0.2), transparent 34%),
-    radial-gradient(ellipse at 50% 96%, rgba(244, 114, 182, 0.12), transparent 42%),
-    linear-gradient(165deg, #060a19 0%, #0a1026 52%, #050913 100%);
+    radial-gradient(ellipse at 10% 8%, rgba(34, 211, 238, 0.18), transparent 36%),
+    radial-gradient(ellipse at 90% 12%, rgba(234, 179, 8, 0.15), transparent 34%),
+    radial-gradient(ellipse at 48% 100%, rgba(244, 114, 182, 0.08), transparent 42%),
+    linear-gradient(165deg, #0a0f18 0%, #101826 52%, #070d16 100%);
 }
 
 html:not(.dark) body {
   background-image:
-    radial-gradient(ellipse at 12% 8%, rgba(99, 102, 241, 0.13), transparent 36%),
-    radial-gradient(ellipse at 88% 6%, rgba(56, 189, 248, 0.12), transparent 34%),
-    radial-gradient(ellipse at 48% 100%, rgba(244, 114, 182, 0.09), transparent 42%),
-    linear-gradient(180deg, #f7faff 0%, #eef3fb 100%);
+    radial-gradient(ellipse at 12% 8%, rgba(34, 211, 238, 0.12), transparent 36%),
+    radial-gradient(ellipse at 88% 6%, rgba(234, 179, 8, 0.14), transparent 34%),
+    radial-gradient(ellipse at 48% 100%, rgba(244, 114, 182, 0.07), transparent 42%),
+    linear-gradient(180deg, #fff8eb 0%, #f8f1e4 100%);
 }
 
 /* ─── Reusable surface classes ───────────────────── */
@@ -92,13 +100,13 @@ html:not(.dark) body {
 
 .surface-luxe {
   background:
-    radial-gradient(circle at 14% 12%, rgba(99, 102, 241, 0.24), transparent 36%),
-    radial-gradient(circle at 85% 84%, rgba(56, 189, 248, 0.16), transparent 34%),
-    radial-gradient(circle at 72% 16%, rgba(244, 114, 182, 0.12), transparent 28%),
+    radial-gradient(circle at 14% 12%, rgba(34, 211, 238, 0.2), transparent 36%),
+    radial-gradient(circle at 85% 84%, rgba(234, 179, 8, 0.16), transparent 34%),
+    radial-gradient(circle at 72% 16%, rgba(244, 114, 182, 0.1), transparent 28%),
     var(--surface-card-bg);
-  border: 1px solid color-mix(in srgb, var(--surface-card-border) 70%, rgba(99, 102, 241, 0.46));
+  border: 1px solid color-mix(in srgb, var(--surface-card-border) 74%, rgba(234, 179, 8, 0.34));
   box-shadow:
-    0 20px 44px rgba(32, 45, 92, 0.28),
+    0 22px 46px rgba(57, 38, 10, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
@@ -165,11 +173,11 @@ html:not(.dark) .lux-orb-c {
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #6366f1;
+  color: #d97706;
 }
 
 .text-holo {
-  background: linear-gradient(100deg, #eef2ff 0%, #818cf8 36%, #22d3ee 68%, #fb7185 100%);
+  background: linear-gradient(100deg, #fde68a 0%, #f59e0b 34%, #22d3ee 68%, #fb7185 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -194,9 +202,9 @@ html:not(.dark) .lux-orb-c {
 
 .neon-ring {
   box-shadow:
-    0 0 0 1px rgba(99, 102, 241, 0.35),
+    0 0 0 1px rgba(245, 158, 11, 0.35),
     0 0 0 3px rgba(34, 211, 238, 0.14),
-    0 0 28px rgba(99, 102, 241, 0.26);
+    0 0 28px rgba(245, 158, 11, 0.22);
 }
 
 .scanline {
@@ -227,9 +235,9 @@ html:not(.dark) .lux-orb-c {
 
 /* ─── Gradient CTA ───────────────────────────────── */
 .cta-btn {
-  background: linear-gradient(100deg, #4f46e5 0%, #2563eb 44%, #06b6d4 100%);
+  background: linear-gradient(100deg, #d97706 0%, #f59e0b 44%, #22d3ee 100%);
   color: #fff;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.36);
+  box-shadow: 0 12px 30px rgba(217, 119, 6, 0.34);
   transition:
     opacity 0.15s ease,
     transform 0.14s ease,
@@ -237,7 +245,7 @@ html:not(.dark) .lux-orb-c {
 }
 .cta-btn:hover {
   opacity: 0.96;
-  box-shadow: 0 16px 36px rgba(6, 182, 212, 0.34);
+  box-shadow: 0 16px 40px rgba(34, 211, 238, 0.3);
   transform: translateY(-1px);
 }
 .cta-btn:active {
@@ -303,7 +311,15 @@ html:not(.dark) .text-slate-500 {
   color: #717d8e;
 }
 html:not(.dark) .text-violet-300 {
-  color: #4f46e5;
+  color: #b45309;
+}
+
+html:not(.dark) [class*="bg-violet-"] {
+  filter: saturate(0.92) hue-rotate(28deg);
+}
+
+.dark [class*="bg-violet-"] {
+  filter: saturate(0.9) hue-rotate(32deg);
 }
 
 /* ─── Insight icon tints ─────────────────────────── */
