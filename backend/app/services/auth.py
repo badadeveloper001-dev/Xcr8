@@ -7,6 +7,13 @@ from supabase import Client, create_client
 from app.core.config import settings
 
 
+class SupabaseAuthError(ValueError):
+    def __init__(self, detail: str, status_code: int):
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
+
+
 def get_supabase_admin_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
@@ -28,7 +35,7 @@ def _raise_auth_error(response: httpx.Response, fallback: str) -> None:
             detail = message
     except ValueError:
         pass
-    raise ValueError(detail)
+    raise SupabaseAuthError(detail=detail, status_code=response.status_code)
 
 
 def supabase_sign_up(email: str, password: str, metadata: dict | None = None) -> dict:

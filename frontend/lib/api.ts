@@ -340,6 +340,11 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
       return "Request was rejected by an upstream gateway. Use proxy mode by setting NEXT_PUBLIC_API_URL=/ and configure BACKEND_API_URL for the frontend server.";
     }
 
+    if (error.response?.status === 429) {
+      const detailMessage = formatApiErrorDetail(error.response?.data?.detail);
+      return detailMessage ?? "Too many requests right now. Please wait a minute and try again.";
+    }
+
     const detailMessage = formatApiErrorDetail(error.response?.data?.detail);
     if (detailMessage) {
       return detailMessage;

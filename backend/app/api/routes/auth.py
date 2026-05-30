@@ -22,6 +22,7 @@ from app.schemas.mvp import (
     PasswordResetRequestResponse,
 )
 from app.services.auth import (
+    SupabaseAuthError,
     supabase_request_password_reset,
     supabase_sign_in,
     supabase_sign_up,
@@ -29,6 +30,11 @@ from app.services.auth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _is_auth_rate_limited(message: str, status_code: int) -> bool:
+    lowered = message.lower()
+    return status_code == 429 or "rate limit" in lowered or "too many" in lowered
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
@@ -87,9 +93,15 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
             password=payload.password,
             metadata={"full_name": payload.full_name, "username": payload.username},
         )
-    except ValueError as exc:
+    except SupabaseAuthError as exc:
         message = str(exc)
-        status_code = 409 if "already" in message.lower() else 400
+        if _is_auth_rate_limited(message, exc.status_code):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many sign-up attempts right now. Please wait a minute and try again.",
+            ) from exc
+
+        status_code = 409 if "already" in message.lower() else max(400, min(exc.status_code, 499))
         raise HTTPException(status_code=status_code, detail=message) from exc
 
     existing = db.scalar(select(User).where(User.email == payload.email))
@@ -169,8 +181,14 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
 def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
     try:
         auth_payload = supabase_sign_in(payload.email, payload.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except SupabaseAuthError as exc:
+        message = str(exc)
+        if _is_auth_rate_limited(message, exc.status_code):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many login attempts right now. Please wait a minute and try again.",
+            ) from exc
+        raise HTTPException(status_code=401, detail=message) from exc
 
     user = db.scalar(select(User).where(User.email == payload.email))
     if not user:
@@ -278,7 +296,7 @@ def request_password_reset(
 ) -> PasswordResetRequestResponse:
     try:
         supabase_request_password_reset(payload.email)
-    except ValueError:
+    except SupabaseAuthError:
         # Keep response generic for security and compatibility.
         pass
 
@@ -301,7 +319,12 @@ def confirm_password_reset(
 
     try:
         supabase_update_password(payload.token, payload.new_password)
-    except ValueError as exc:
+    except SupabaseAuthError as exc:
+        if _is_auth_rate_limited(str(exc), exc.status_code):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many reset attempts right now. Please wait a minute and try again.",
+            ) from exc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"message": "Password reset successful. You can now log in."}
