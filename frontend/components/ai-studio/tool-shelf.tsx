@@ -1,4 +1,6 @@
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
 import { studioTools, toolStatusLabel, type StudioToolId } from "@/lib/ai-studio-tools";
 
 type ToolShelfProps = {
@@ -6,6 +8,8 @@ type ToolShelfProps = {
 };
 
 export function ToolShelf({ activeToolId }: ToolShelfProps) {
+  const router = useRouter();
+
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {studioTools.map((tool) => {
@@ -13,14 +17,16 @@ export function ToolShelf({ activeToolId }: ToolShelfProps) {
         const isActive = activeToolId === tool.id;
 
         return (
-          <Link
+          <button
             key={tool.id}
-            href={tool.href}
+            type="button"
+            onClick={() => router.push(tool.href)}
+            aria-label={`Open ${tool.name}`}
             className={`rounded-2xl border p-4 text-left transition ${
               isActive
                 ? "border-violet-400/40 bg-violet-500/12 shadow-[0_0_0_1px_rgba(167,139,250,0.25)]"
                 : "border-white/10 bg-white/5 hover:bg-white/10"
-            }`}
+            } cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60`}
           >
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/20 text-violet-300 light:bg-violet-50 light:text-violet-700">
@@ -44,7 +50,7 @@ export function ToolShelf({ activeToolId }: ToolShelfProps) {
             <p className="mt-2 text-xs leading-5 text-slate-400 light:text-slate-600">
               {tool.description}
             </p>
-          </Link>
+          </button>
         );
       })}
     </div>
