@@ -23,15 +23,18 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
       <div className="pointer-events-none absolute left-[-48px] top-[38%] -z-10 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl light:bg-indigo-200/35" />
       <div className="mx-auto w-full max-w-[460px] lg:max-w-[1120px]">
         {!hideHeader ? (
-          <header className="mb-6 flex items-start justify-between" aria-label="Page header">
-            <div>
+          <header
+            className="mb-6 flex items-start justify-between rounded-2xl border border-white/10 bg-black/10 p-3 backdrop-blur-sm light:border-slate-200 light:bg-white/70"
+            aria-label="Page header"
+          >
+            <div className="pr-3">
               {title ? (
-                <h1 className="text-4xl font-semibold tracking-tight text-white dark:text-white light:text-[#111827]">
+                <h1 className="text-3xl font-semibold tracking-tight text-white dark:text-white light:text-[#111827] sm:text-4xl">
                   {title}
                 </h1>
               ) : null}
               {subtitle ? (
-                <p className="mt-2 text-sm text-slate-400 dark:text-slate-400 light:text-slate-600">
+                <p className="mt-1.5 text-sm text-slate-300 dark:text-slate-300 light:text-slate-600">
                   {subtitle}
                 </p>
               ) : null}
