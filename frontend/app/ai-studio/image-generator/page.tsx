@@ -19,7 +19,10 @@ const styleNotes: Record<string, string> = {
 };
 
 const ultraRealismDirectives =
-  "ultrarealistic photo, photorealistic, real human skin texture, natural shadows, DSLR quality, 85mm lens look, high dynamic range, detailed lighting";
+  "ultrarealistic photo, photorealistic, real human skin texture, natural shadows, realistic hands, realistic reflections, DSLR quality, 85mm lens look, cinematic color science, high dynamic range, physically accurate lighting, high detail";
+
+const qualityNegativeDirectives =
+  "blurry, low resolution, cartoon, painting, illustration, cgi, wax skin, deformed face, extra fingers, extra limbs, text overlay, watermark, logo";
 
 const isStyleKey = (value: string): value is keyof typeof styleNotes => value in styleNotes;
 
@@ -35,10 +38,7 @@ export default function ImageGeneratorPage() {
 
   const canGenerate = subject.trim().length > 4;
 
-  const baseIdeas = useMemo(
-    () => ["Hero shot", "Behind-the-scenes", "Step-by-step frame", "CTA cover visual"],
-    [],
-  );
+  const variationLabels = useMemo(() => ["Variation 1", "Variation 2", "Variation 3"], []);
 
   useEffect(() => {
     return () => {
@@ -94,21 +94,21 @@ export default function ImageGeneratorPage() {
 
     const dimensions =
       ratio === "1:1"
-        ? { width: 1024, height: 1024 }
+        ? { width: 1280, height: 1280 }
         : ratio === "16:9"
-          ? { width: 1344, height: 768 }
-          : { width: 1024, height: 1280 };
+          ? { width: 1536, height: 864 }
+          : { width: 1280, height: 1600 };
 
     const settled = await Promise.allSettled(
-      baseIdeas.map(async (idea, index) => {
-        const direction = `${idea} in a ${mood} mood with ${palette} palette`;
-        const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, realistic skin, realistic hands, realistic reflections`;
+      variationLabels.map(async (label, index) => {
+        const direction = `subject mood ${mood}, color palette ${palette}, aspect ratio ${ratio}`;
+        const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, no text overlay, ${qualityNegativeDirectives}`;
         const seed = Date.now() + index * 37;
         const src = await resolveImageBlobUrl(prompt, dimensions.width, dimensions.height, seed);
 
         return {
           id: `${seed}-${index}`,
-          title: `${idea} ${index + 1}`,
+          title: label,
           src,
           downloadName: `xcr8-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
         };
@@ -123,9 +123,9 @@ export default function ImageGeneratorPage() {
       setError("Could not generate images right now. Please try again.");
     } else {
       setImages(built);
-      if (built.length < baseIdeas.length) {
+      if (built.length < variationLabels.length) {
         setError(
-          `Generated ${built.length} of ${baseIdeas.length} images. Please regenerate for more.`,
+          `Generated ${built.length} of ${variationLabels.length} images. Please regenerate for more.`,
         );
       }
     }
