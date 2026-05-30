@@ -9,6 +9,7 @@ export default function VoiceoverPage() {
       title="AI Studio"
       subtitle="Voiceover now opens as its own page from the tool shelf."
       activeToolId="voiceover"
+      showToolShelf={false}
     >
       <div className="surface-soft rounded-2xl p-6">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300 light:border-amber-500/20 light:bg-amber-50 light:text-amber-700">

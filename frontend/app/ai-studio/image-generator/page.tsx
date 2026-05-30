@@ -7,17 +7,34 @@ import { StudioShell } from "@/components/ai-studio/studio-shell";
 type GeneratedImage = {
   title: string;
   prompt: string;
-  imageUrl: string;
+  imageUrls: string[];
+  imageIndex: number;
 };
 
 const styleNotes: Record<string, string> = {
-  cinematic: "high-detail cinematic frame, dramatic lighting, depth of field",
-  editorial: "clean editorial composition, brand-focused product styling",
-  documentary: "natural documentary photography, authentic moment, real-life texture",
-  vibrant: "vibrant pop colors, bold contrast, punchy creative direction",
+  cinematic: "cinematic composition, dramatic natural lighting, rich depth of field",
+  editorial: "editorial photography style, premium brand framing, clean composition",
+  documentary: "documentary realism, authentic moment, natural skin texture",
+  vibrant: "vibrant color grading with realistic materials and lifelike lighting",
 };
 
+const ultraRealismDirectives =
+  "ultrarealistic photo, photorealistic, real human skin texture, natural shadows, DSLR quality, 85mm lens look, high dynamic range, detailed lighting";
+
 const isStyleKey = (value: string): value is keyof typeof styleNotes => value in styleNotes;
+
+function buildCandidateUrls(
+  prompt: string,
+  width: number,
+  height: number,
+  baseSeed: number,
+): string[] {
+  const encodedPrompt = encodeURIComponent(prompt);
+  const fluxPrimary = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=${width}&height=${height}&seed=${baseSeed}&nologo=true&enhance=true`;
+  const fluxFallback = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=${width}&height=${height}&seed=${baseSeed + 97}&nologo=true&enhance=true`;
+  const turboFallback = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&width=${width}&height=${height}&seed=${baseSeed + 211}&nologo=true`;
+  return [fluxPrimary, fluxFallback, turboFallback];
+}
 
 export default function ImageGeneratorPage() {
   const [subject, setSubject] = useState("Creator building a weekly content system at a desk");
@@ -59,14 +76,14 @@ export default function ImageGeneratorPage() {
 
     const built = baseIdeas.map((idea, index) => {
       const direction = `${idea} for ${platform} in a ${mood} mood with ${palette} palette`;
-      const prompt = `${cleanSubject}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, creator economy visual style, high quality`;
-      const seed = Date.now() + index * 17;
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed}&nologo=true`;
+      const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, creator economy visual style, realistic skin, realistic hands, realistic reflections`;
+      const seed = Date.now() + index * 37;
 
       return {
         title: `${idea} ${index + 1}`,
         prompt,
-        imageUrl,
+        imageUrls: buildCandidateUrls(prompt, dimensions.width, dimensions.height, seed),
+        imageIndex: 0,
       };
     });
 
@@ -80,11 +97,24 @@ export default function ImageGeneratorPage() {
     setCopiedPrompt(prompt);
   };
 
+  const handleImageError = (index: number) => {
+    setImages((current) => {
+      const next = [...current];
+      const target = next[index];
+      if (!target) return current;
+      if (target.imageIndex < target.imageUrls.length - 1) {
+        next[index] = { ...target, imageIndex: target.imageIndex + 1 };
+      }
+      return next;
+    });
+  };
+
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Image Generator now creates real images from your prompt, not just concepts."
+      subtitle="Image Generator now creates fresh ultrarealistic images from your prompt."
       activeToolId="image-generator"
+      showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
         <form onSubmit={(e) => handleGenerate(e)} className="space-y-3.5">
@@ -157,13 +187,14 @@ export default function ImageGeneratorPage() {
           </button>
 
           <p className="text-xs text-slate-500">
-            Generated images use a live model endpoint and may take a few seconds to render.
+            Every output is forced toward ultrarealistic photography. If an image URL fails, the app
+            automatically falls back to alternate generation URLs.
           </p>
         </form>
 
         <div className="space-y-3.5">
           {images.length ? (
-            images.map((image) => (
+            images.map((image, index) => (
               <article key={image.title} className="surface-card rounded-2xl p-4">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                   <ImagePlus size={11} />
@@ -171,9 +202,10 @@ export default function ImageGeneratorPage() {
                 </div>
 
                 <img
-                  src={image.imageUrl}
+                  src={image.imageUrls[image.imageIndex]}
                   alt={image.prompt}
                   loading="lazy"
+                  onError={() => handleImageError(index)}
                   className="h-auto w-full rounded-xl border border-white/10 bg-black/20 object-cover"
                 />
 

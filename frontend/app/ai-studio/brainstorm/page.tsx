@@ -59,6 +59,7 @@ export default function BrainstormPage() {
       title="AI Studio"
       subtitle="Brainstorm now has a dedicated page for idea-batch generation."
       activeToolId="brainstorm"
+      showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-3.5">

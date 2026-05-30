@@ -76,6 +76,7 @@ export default function ComposerPage() {
       title="AI Studio"
       subtitle="Composer is now on its own page so you can focus on chat-based creation."
       activeToolId="composer"
+      showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-3.5">
