@@ -108,6 +108,22 @@ def _make_hashtags(topic: str, platform: str, language: str, max_tags: int = 5) 
     return merged
 
 
+def _normalize_hashtags(raw_tags: list[object], *, fallback_topic: str, platform: str, language: str, max_tags: int) -> list[str]:
+    cleaned: list[str] = []
+    for raw_tag in raw_tags:
+        tag = str(raw_tag).strip()
+        if len(tag) <= 1 or not tag.startswith("#"):
+            continue
+        if tag == "#":
+            continue
+        if tag not in cleaned:
+            cleaned.append(tag)
+        if len(cleaned) >= max_tags:
+            return cleaned
+
+    return _make_hashtags(fallback_topic, platform, language, max_tags=max_tags)
+
+
 def _fallback_ideas(topic: str, platform: str, language: str, goal: str, tone: str, creator_memory: dict) -> list[dict]:
     memory_hint = _memory_hint(creator_memory)
     keywords = _extract_keywords(topic, max_items=3)
@@ -211,7 +227,13 @@ def generate_content_ideas(payload: dict) -> dict:
                     "hook": str(item.get("hook", "")).strip(),
                     "caption_seed": str(item.get("caption_seed", "")).strip(),
                     "cta": str(item.get("cta", "")).strip(),
-                    "hashtags": [str(tag).strip() for tag in item.get("hashtags", []) if str(tag).strip().startswith("#")][:5],
+                    "hashtags": _normalize_hashtags(
+                        item.get("hashtags", []),
+                        fallback_topic=topic,
+                        platform=platform,
+                        language=language,
+                        max_tags=5,
+                    ),
                 }
             )
 
@@ -344,7 +366,13 @@ def generate_composed_content(payload: dict) -> dict:
             "intro": str(content_plan.get("intro", "")).strip(),
             "body": [str(part).strip() for part in content_plan.get("body", []) if str(part).strip()],
             "cta": str(content_plan.get("cta", "")).strip(),
-            "hashtags": [str(tag).strip() for tag in content_plan.get("hashtags", []) if str(tag).strip().startswith("#")][:8],
+            "hashtags": _normalize_hashtags(
+                content_plan.get("hashtags", []),
+                fallback_topic=prompt,
+                platform=platform,
+                language=language,
+                max_tags=8,
+            ),
         }
 
         if not normalized_plan["body"]:
