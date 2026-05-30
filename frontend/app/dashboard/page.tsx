@@ -34,14 +34,14 @@ const fallbackTrendRadar = [
     subtitle: "Best Performing Style",
     detail: "vs your average",
     icon: Sparkles,
-    tone: "from-fuchsia-500/20 to-violet-500/10",
+    tone: "from-violet-500/20 to-fuchsia-500/10",
   },
   {
     title: "Your audience is most active at 8PM",
     subtitle: "Best Posting Time",
     detail: "Wednesdays and Fridays",
     icon: Clock3,
-    tone: "from-amber-500/20 to-orange-500/10",
+    tone: "from-violet-500/20 to-indigo-500/10",
   },
   {
     title: "Afrobeats + humor content is trending",
@@ -133,7 +133,7 @@ export default function DashboardPage() {
         image:
           index === 0
             ? "from-fuchsia-500 via-violet-500 to-indigo-500"
-            : "from-amber-400 via-pink-300 to-cyan-300",
+            : "from-violet-400 via-fuchsia-300 to-cyan-300",
         status: post.status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
         channels: ["IG", "FB", "X"],
       }));
@@ -154,7 +154,7 @@ export default function DashboardPage() {
         title: "Old school vibes never die",
         tags: "#Throwback #Classic",
         runtime: "0:30",
-        image: "from-amber-400 via-rose-300 to-cyan-300",
+        image: "from-violet-400 via-fuchsia-300 to-cyan-300",
         status: "Scheduled",
         channels: ["IG", "X"],
       },
