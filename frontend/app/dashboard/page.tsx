@@ -72,10 +72,10 @@ export default function DashboardPage() {
   });
 
   const dynamicGreeting = useMemo(() => {
-    if ((data?.ai_suggestions ?? 0) >= 6) return "Ready to publish your strongest content today?";
-    if ((data?.platforms_connected ?? 0) >= 4) return "All your channels are synced and primed.";
-    if ((data?.scheduled ?? 0) >= 3) return "Your schedule is healthy, now boost engagement.";
-    return "Ready to create something amazing?";
+    if ((data?.ai_suggestions ?? 0) >= 6) return "Your best post is ready.";
+    if ((data?.platforms_connected ?? 0) >= 4) return "All channels are synced.";
+    if ((data?.scheduled ?? 0) >= 3) return "Your schedule looks strong.";
+    return "Let’s create today’s post.";
   }, [data?.ai_suggestions, data?.platforms_connected, data?.scheduled]);
 
   const snapshotCards = useMemo(
@@ -102,11 +102,7 @@ export default function DashboardPage() {
         icon: Zap,
       },
     ],
-    [
-      data?.drafts,
-      data?.ai_suggestions,
-      data?.scheduled,
-    ],
+    [data?.drafts, data?.ai_suggestions, data?.scheduled],
   );
 
   const insightCards = useMemo(
@@ -306,7 +302,7 @@ export default function DashboardPage() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-[2rem] font-semibold leading-tight text-slate-100 light:text-slate-900">
+            <h1 className="text-[1.7rem] font-semibold leading-tight text-slate-100 light:text-slate-900 sm:text-[2rem]">
               Good evening,
               <br />
               <span className="bg-gradient-to-r from-fuchsia-400 via-violet-300 to-cyan-300 bg-clip-text text-transparent light:from-violet-700 light:via-fuchsia-600 light:to-cyan-700">
@@ -344,13 +340,13 @@ export default function DashboardPage() {
           </p>
           <div className="mt-2 grid gap-4 sm:grid-cols-[1.3fr_1fr] sm:items-center">
             <div>
-              <h2 className="text-3xl font-semibold leading-tight text-white light:text-slate-900">
-                What do you want
+              <h2 className="text-2xl font-semibold leading-tight text-white light:text-slate-900 sm:text-3xl">
+                What are you
                 <br />
-                to post today?
+                posting today?
               </h2>
               <p className="mt-2 text-sm text-slate-300 light:text-slate-600">
-                Upload your content, write a caption and let AI adapt it for every platform.
+                Upload once, caption once, publish everywhere.
               </p>
               <Link
                 href="/compose"
@@ -410,7 +406,10 @@ export default function DashboardPage() {
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white light:text-slate-900">AI Insights</h2>
-            <Link href="/analytics" className="text-sm font-medium text-fuchsia-300 light:text-violet-700">
+            <Link
+              href="/analytics"
+              className="text-sm font-medium text-fuchsia-300 light:text-violet-700"
+            >
               View all
             </Link>
           </div>
@@ -457,7 +456,10 @@ export default function DashboardPage() {
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white light:text-slate-900">Recent Posts</h2>
-            <Link href="/compose" className="text-sm font-medium text-fuchsia-300 light:text-violet-700">
+            <Link
+              href="/compose"
+              className="text-sm font-medium text-fuchsia-300 light:text-violet-700"
+            >
               View all
             </Link>
           </div>
