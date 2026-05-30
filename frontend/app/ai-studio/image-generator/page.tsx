@@ -11,6 +11,8 @@ type GeneratedImage = {
   downloadName: string;
 };
 
+type RealismLevel = "balanced" | "realistic" | "ultra";
+
 const styleNotes: Record<string, string> = {
   cinematic: "cinematic composition, dramatic natural lighting, rich depth of field",
   editorial: "editorial photography style, premium brand framing, clean composition",
@@ -18,8 +20,20 @@ const styleNotes: Record<string, string> = {
   vibrant: "vibrant color grading with realistic materials and lifelike lighting",
 };
 
-const ultraRealismDirectives =
-  "ultrarealistic photo, photorealistic, real human skin texture, natural shadows, realistic hands, realistic reflections, DSLR quality, 85mm lens look, cinematic color science, high dynamic range, physically accurate lighting, high detail";
+const realismDirectives: Record<RealismLevel, string> = {
+  balanced:
+    "real-world photography, natural lighting, realistic materials, believable skin texture, sharp focus",
+  realistic:
+    "photorealistic image, DSLR-grade detail, natural skin pores, physically plausible shadows, accurate reflections",
+  ultra:
+    "ultrarealistic photo, photorealistic, real human skin texture, natural shadows, realistic hands, realistic reflections, DSLR quality, 85mm lens look, cinematic color science, high dynamic range, physically accurate lighting, high detail",
+};
+
+const realismAttempts: Record<RealismLevel, number> = {
+  balanced: 1,
+  realistic: 2,
+  ultra: 3,
+};
 
 const qualityNegativeDirectives =
   "blurry, low resolution, cartoon, painting, illustration, cgi, wax skin, deformed face, extra fingers, extra limbs, text overlay, watermark, logo";
@@ -32,6 +46,7 @@ export default function ImageGeneratorPage() {
   const [mood, setMood] = useState("confident and practical");
   const [ratio, setRatio] = useState("4:5");
   const [palette, setPalette] = useState("warm orange, cream, deep charcoal");
+  const [realism, setRealism] = useState<RealismLevel>("ultra");
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +74,14 @@ export default function ImageGeneratorPage() {
     width: number,
     height: number,
     seed: number,
+    attempts: number,
   ): Promise<string> => {
     const params = new URLSearchParams({
       prompt,
       width: String(width),
       height: String(height),
       seed: String(seed),
+      attempts: String(attempts),
     });
 
     const response = await fetch(`/api/image/generate?${params.toString()}`, { cache: "no-store" });
@@ -102,9 +119,15 @@ export default function ImageGeneratorPage() {
     const settled = await Promise.allSettled(
       variationLabels.map(async (label, index) => {
         const direction = `subject mood ${mood}, color palette ${palette}, aspect ratio ${ratio}`;
-        const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, no text overlay, ${qualityNegativeDirectives}`;
+        const prompt = `${cleanSubject}, ${realismDirectives[realism]}, ${styleNotes[style]}, ${direction}, no text overlay, ${qualityNegativeDirectives}`;
         const seed = Date.now() + index * 37;
-        const src = await resolveImageBlobUrl(prompt, dimensions.width, dimensions.height, seed);
+        const src = await resolveImageBlobUrl(
+          prompt,
+          dimensions.width,
+          dimensions.height,
+          seed,
+          realismAttempts[realism],
+        );
 
         return {
           id: `${seed}-${index}`,
@@ -194,6 +217,16 @@ export default function ImageGeneratorPage() {
             </select>
           </div>
 
+          <select
+            value={realism}
+            onChange={(e) => setRealism(e.target.value as RealismLevel)}
+            className="xcr8-input"
+          >
+            <option value="balanced">Photorealism: Balanced</option>
+            <option value="realistic">Photorealism: Realistic</option>
+            <option value="ultra">Photorealism: Ultra</option>
+          </select>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <input
               value={mood}
@@ -228,8 +261,8 @@ export default function ImageGeneratorPage() {
           ) : null}
 
           <p className="text-xs text-slate-500">
-            Ultrarealistic mode is always enabled. Generated images are loaded as downloadable files
-            to reduce broken renders.
+            Photorealism mode controls strictness and internal rerolls. Generated images are loaded
+            as downloadable files to reduce broken renders.
           </p>
         </form>
 
