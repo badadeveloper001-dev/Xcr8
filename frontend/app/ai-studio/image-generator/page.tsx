@@ -23,19 +23,6 @@ const ultraRealismDirectives =
 
 const isStyleKey = (value: string): value is keyof typeof styleNotes => value in styleNotes;
 
-function buildCandidateUrls(
-  prompt: string,
-  width: number,
-  height: number,
-  baseSeed: number,
-): string[] {
-  const encodedPrompt = encodeURIComponent(prompt);
-  const fluxPrimary = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=${width}&height=${height}&seed=${baseSeed}&nologo=true&enhance=true`;
-  const fluxFallback = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=${width}&height=${height}&seed=${baseSeed + 97}&nologo=true&enhance=true`;
-  const turboFallback = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&width=${width}&height=${height}&seed=${baseSeed + 211}&nologo=true`;
-  return [fluxPrimary, fluxFallback, turboFallback];
-}
-
 export default function ImageGeneratorPage() {
   const [subject, setSubject] = useState("Creator building a weekly content system at a desk");
   const [style, setStyle] = useState<keyof typeof styleNotes>("cinematic");
@@ -73,19 +60,23 @@ export default function ImageGeneratorPage() {
     height: number,
     seed: number,
   ): Promise<string> => {
-    const candidates = buildCandidateUrls(prompt, width, height, seed);
-    for (const url of candidates) {
-      try {
-        const response = await fetch(url, { cache: "no-store" });
-        if (!response.ok) continue;
-        const blob = await response.blob();
-        if (!blob.type.startsWith("image/")) continue;
-        return URL.createObjectURL(blob);
-      } catch {
-        continue;
-      }
+    const params = new URLSearchParams({
+      prompt,
+      width: String(width),
+      height: String(height),
+      seed: String(seed),
+    });
+
+    const response = await fetch(`/api/image/generate?${params.toString()}`, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("generation_failed");
     }
-    throw new Error("failed");
+
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) {
+      throw new Error("invalid_blob");
+    }
+    return URL.createObjectURL(blob);
   };
 
   const handleGenerate = async (event: FormEvent<HTMLFormElement>) => {
@@ -108,29 +99,38 @@ export default function ImageGeneratorPage() {
           ? { width: 1344, height: 768 }
           : { width: 1024, height: 1280 };
 
-    try {
-      const built = await Promise.all(
-        baseIdeas.map(async (idea, index) => {
-          const direction = `${idea} in a ${mood} mood with ${palette} palette`;
-          const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, realistic skin, realistic hands, realistic reflections`;
-          const seed = Date.now() + index * 37;
-          const src = await resolveImageBlobUrl(prompt, dimensions.width, dimensions.height, seed);
+    const settled = await Promise.allSettled(
+      baseIdeas.map(async (idea, index) => {
+        const direction = `${idea} in a ${mood} mood with ${palette} palette`;
+        const prompt = `${cleanSubject}, ${ultraRealismDirectives}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, realistic skin, realistic hands, realistic reflections`;
+        const seed = Date.now() + index * 37;
+        const src = await resolveImageBlobUrl(prompt, dimensions.width, dimensions.height, seed);
 
-          return {
-            id: `${seed}-${index}`,
-            title: `${idea} ${index + 1}`,
-            src,
-            downloadName: `xcr8-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
-          };
-        }),
-      );
+        return {
+          id: `${seed}-${index}`,
+          title: `${idea} ${index + 1}`,
+          src,
+          downloadName: `xcr8-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
+        };
+      }),
+    );
 
-      setImages(built);
-    } catch {
+    const built = settled
+      .filter((item): item is PromiseFulfilledResult<GeneratedImage> => item.status === "fulfilled")
+      .map((item) => item.value);
+
+    if (built.length === 0) {
       setError("Could not generate images right now. Please try again.");
-    } finally {
-      setGenerating(false);
+    } else {
+      setImages(built);
+      if (built.length < baseIdeas.length) {
+        setError(
+          `Generated ${built.length} of ${baseIdeas.length} images. Please regenerate for more.`,
+        );
+      }
     }
+
+    setGenerating(false);
   };
 
   const handleImageDownload = (src: string, fileName: string) => {
