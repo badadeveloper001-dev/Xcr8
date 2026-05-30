@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import httpx
 
@@ -35,27 +36,69 @@ def _language_transform(text: str, language: str) -> str:
 def _platform_style(text: str, platform: str) -> tuple[str, str]:
     p = platform.lower()
     if p == "linkedin":
-        styled = f"{text}\n\nKey insight:\n→ Consistency builds trust\n→ Document the process\n→ Share the lessons"
-        hook = "Creators who document grow faster. Here's why."
+        styled = f"{text}\n\nTry this structure:\n1) Show your process\n2) Share one proof point\n3) End with one next step"
+        hook = "If you're building in public, this workflow is worth trying this week."
     elif p == "x":
-        styled = f"{text}\n\n(what do you think? 👇)"
-        hook = "Hot take: this one shift changes everything."
+        styled = f"{text}\n\nReply with your current workflow and I'll share a tighter version."
+        hook = "Quick take: small systems beat random motivation."
     elif p == "instagram":
-        styled = f"{text}\n.\n.\n.\nSave this for your next content sprint. 📌"
-        hook = "Stop scrolling — this changes your creator trajectory. 📈"
+        styled = f"{text}\n\nSave this and test it on your next content day."
+        hook = "Before your next post, apply this 1-step tweak first."
     elif p == "tiktok":
         styled = f"POV: {text}"
-        hook = "3 seconds in and your audience should already be hooked. Here's how."
+        hook = "Use this opening line and watch retention in the first 3 seconds."
     elif p == "youtube_shorts":
         styled = text
-        hook = "Watch to the end — this one insight is worth 1000 posts."
+        hook = "Keep this short and concrete so viewers stay till the last second."
     elif p == "threads":
-        styled = f"{text}\n\nWho else is testing this? 👀"
-        hook = "Threads rewards raw, honest takes. Here's mine."
+        styled = f"{text}\n\nTesting this all week. I'll report the results here."
+        hook = "Trying this in real-time. Join the experiment."
     else:
         styled = text
-        hook = "Lead with value. Always."
+        hook = "Use a concrete example and invite one specific reply."
     return styled, hook
+
+
+def _extract_keywords(text: str, max_items: int = 3) -> list[str]:
+    tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9_]{3,}", text.lower())
+    stop_words = {
+        "this",
+        "that",
+        "with",
+        "from",
+        "your",
+        "have",
+        "will",
+        "they",
+        "their",
+        "about",
+        "just",
+        "into",
+        "when",
+        "then",
+        "than",
+        "what",
+        "where",
+        "while",
+    }
+    result: list[str] = []
+    for token in tokens:
+        if token in stop_words:
+            continue
+        if token not in result:
+            result.append(token)
+        if len(result) >= max_items:
+            break
+    return result
+
+
+def _memory_hint(creator_memory: dict) -> str:
+    facts = creator_memory.get("memory_facts", [])
+    if isinstance(facts, list) and facts:
+        first = str(facts[0]).strip()
+        if first:
+            return first
+    return ""
 
 
 def _hashtags(platform: str, language: str) -> list[str]:
@@ -78,21 +121,30 @@ def _hashtags(platform: str, language: str) -> list[str]:
     return [ptag, ltag, *base]
 
 
+def _contextual_hashtags(text: str, platform: str, language: str) -> list[str]:
+    dynamic = [f"#{token}" for token in _extract_keywords(text, max_items=3)]
+    merged: list[str] = []
+    for tag in [*dynamic, *_hashtags(platform, language)]:
+        if tag not in merged:
+            merged.append(tag)
+    return merged[:8]
+
+
 def _local_adapt(text: str, platform: str, language: str, creator_memory: dict) -> dict:
     """Lightweight deterministic fallback when AI service is unavailable."""
     lang_text = _language_transform(text.strip(), language)
     styled, hook = _platform_style(lang_text, platform)
 
-    tone = creator_memory.get("tone", "confident")
-    emoji = creator_memory.get("emoji_style", "🔥")
     adapted = styled.strip()
-    if tone and emoji:
-        adapted = f"{adapted}"
+
+    memory_hint = _memory_hint(creator_memory)
+    if memory_hint:
+        adapted = f"{adapted}\n\nCreator note: {memory_hint}"
 
     limit = _LIMITS.get(platform, 2200)
     return {
         "adapted_caption": adapted[:limit],
-        "hashtags": _hashtags(platform, language),
+        "hashtags": _contextual_hashtags(text, platform, language),
         "hook": hook,
         "model": "local-fallback",
     }
