@@ -213,6 +213,9 @@ export async function createDistributionDraft(
   const { data } = await apiClient.post<DistributionDraftResponse>(
     "/api/v1/distribution/draft",
     payload,
+    {
+      timeout: 60_000,
+    },
   );
   return data;
 }
