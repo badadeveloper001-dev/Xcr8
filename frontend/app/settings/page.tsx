@@ -76,7 +76,7 @@ export default function SettingsPage() {
 
   return (
     <MobileShell title="Settings" subtitle="Profile, accounts & preferences.">
-      <div className="surface-card cyber-grid neon-ring space-y-3.5 rounded-2xl p-4">
+      <div className="space-y-4">
         {notice ? (
           <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 light:text-emerald-700">
             {notice}
@@ -91,50 +91,82 @@ export default function SettingsPage() {
           </p>
         ) : null}
 
-        {/* Profile card */}
         <motion.article
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
           className="surface-luxe rounded-2xl p-4"
         >
-          <p className="section-kicker mb-3">Identity</p>
-          <div className="flex items-center gap-4">
-            <div className="relative h-16 w-16 overflow-hidden rounded-2xl bg-violet-500/20 ring-2 ring-violet-500/30">
-              <Image
-                src="/avatar-placeholder.svg"
-                alt="avatar"
-                width={64}
-                height={64}
-                className="h-full w-full object-cover"
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-lg font-bold text-white light:text-slate-900">
-                {displayName ?? "Creator"}
-              </p>
-              <p className="text-sm text-slate-400 light:text-slate-500">
-                {email ?? "user@xcr8.app"}
-              </p>
-              <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-400 light:bg-violet-50 light:text-violet-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Creator plan
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="relative h-16 w-16 overflow-hidden rounded-2xl bg-violet-500/20 ring-2 ring-violet-500/30">
+                <Image
+                  src="/avatar-placeholder.svg"
+                  alt="avatar"
+                  width={64}
+                  height={64}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="section-kicker mb-2">Identity</p>
+                <p className="text-lg font-bold text-white light:text-slate-900">
+                  {displayName ?? "Creator"}
+                </p>
+                <p className="text-sm text-slate-400 light:text-slate-500">
+                  {email ?? "user@xcr8.app"}
+                </p>
               </div>
             </div>
-            <button
-              type="button"
-              className="shrink-0 grid h-9 w-9 place-items-center rounded-xl surface-soft text-slate-400 hover:text-slate-200 light:hover:text-slate-700"
-            >
-              <User2 size={16} />
-            </button>
+            <ThemeToggle />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[
+              { label: "Plan", value: "Creator" },
+              { label: "Status", value: "Active" },
+              { label: "Security", value: "Protected" },
+            ].map((chip) => (
+              <div key={chip.label} className="surface-soft rounded-xl px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  {chip.label}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
+                  {chip.value}
+                </p>
+              </div>
+            ))}
           </div>
         </motion.article>
 
-        {/* Connected platforms */}
         <motion.article
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.05 }}
+          className="surface-card rounded-2xl p-4"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <p className="section-kicker">Identity details</p>
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-xl surface-soft text-slate-400 hover:text-slate-200 light:hover:text-slate-700"
+            >
+              <User2 size={16} />
+            </button>
+          </div>
+          <div className="surface-soft rounded-2xl p-3.5">
+            <p className="text-sm font-semibold text-white light:text-slate-900">
+              Creator profile connected
+            </p>
+            <p className="mt-1 text-xs text-slate-500 light:text-slate-600">
+              Your identity and account settings are synced across the workspace.
+            </p>
+          </div>
+        </motion.article>
+
+        <motion.article
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.08 }}
           className="surface-card rounded-2xl p-4"
         >
           <p className="section-kicker mb-2">Distribution control</p>
@@ -142,17 +174,17 @@ export default function SettingsPage() {
             <Globe2 size={15} className="text-violet-400 light:text-violet-600" />
             Connected Platforms
           </p>
-          {isLoading && (
+          {isLoading ? (
             <div className="mb-2 space-y-2" aria-hidden="true">
               <div className="skeleton h-10 rounded-xl" />
               <div className="skeleton h-10 rounded-xl" />
             </div>
-          )}
+          ) : null}
           <div className="space-y-2">
             {platforms.map((p) => (
               <div
                 key={p.id}
-                className="surface-soft flex items-center gap-3 rounded-xl px-3 py-2.5"
+                className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
               >
                 <span
                   className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${p.cls}`}
@@ -163,15 +195,17 @@ export default function SettingsPage() {
                   {p.label}
                 </span>
                 {connections?.find((c) => c.platform === p.id && c.active) ? (
-                  <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    {connections?.find((c) => c.platform === p.id && c.active)?.sync_status ===
-                    "syncing"
-                      ? "Syncing"
-                      : "Synced"}
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      {connections?.find((c) => c.platform === p.id && c.active)?.sync_status ===
+                      "syncing"
+                        ? "Syncing"
+                        : "Synced"}
+                    </span>
                     <button
                       type="button"
-                      className="ml-2 text-[11px] text-rose-400 hover:underline"
+                      className="text-[11px] font-medium text-rose-400 hover:underline"
                       onClick={() => {
                         const row = connections?.find((c) => c.platform === p.id && c.active);
                         if (row) void disconnectMutation.mutate(row.id);
@@ -179,13 +213,13 @@ export default function SettingsPage() {
                     >
                       Disconnect
                     </button>
-                  </span>
+                  </div>
                 ) : (
                   <button
                     type="button"
                     disabled={connectMutation.isPending}
                     onClick={() => void connectMutation.mutate(p.id)}
-                    className="text-xs font-medium text-violet-400 hover:underline disabled:opacity-60 light:text-violet-600"
+                    className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-400 hover:bg-violet-500/15 disabled:opacity-60 light:text-violet-600"
                   >
                     Connect
                   </button>
@@ -195,11 +229,10 @@ export default function SettingsPage() {
           </div>
         </motion.article>
 
-        {/* Appearance */}
         <motion.article
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.08 }}
+          transition={{ duration: 0.35, delay: 0.11 }}
           className="surface-card flex items-center justify-between rounded-2xl p-4"
         >
           <p className="sr-only">Appearance preferences</p>
@@ -215,11 +248,10 @@ export default function SettingsPage() {
           <ThemeToggle />
         </motion.article>
 
-        {/* Notifications */}
         <motion.article
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.11 }}
+          transition={{ duration: 0.35, delay: 0.14 }}
           className="surface-card rounded-2xl overflow-hidden"
         >
           <div className="border-b border-white/6 px-4 py-2 light:border-slate-100">
@@ -255,11 +287,10 @@ export default function SettingsPage() {
           ))}
         </motion.article>
 
-        {/* Logout */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.14 }}
+          transition={{ duration: 0.35, delay: 0.17 }}
         >
           <button
             type="button"

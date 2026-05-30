@@ -199,7 +199,7 @@ export default function DashboardPage() {
               Good evening,
               <br />
               <span className="bg-gradient-to-r from-fuchsia-400 via-violet-300 to-cyan-300 bg-clip-text text-transparent light:from-violet-700 light:via-fuchsia-600 light:to-cyan-700">
-                {displayName} 👋
+                {displayName}
               </span>
             </h1>
             <p className="mt-2 text-sm text-slate-300 light:text-slate-600">{dynamicGreeting}</p>

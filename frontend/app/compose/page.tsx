@@ -228,19 +228,58 @@ export default function ComposePage() {
         </p>
       ) : null}
 
+      <motion.section
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.38 }}
+        className="mb-5"
+      >
+        <div className="surface-luxe rounded-[28px] p-4 sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="section-kicker mb-2">Composer Studio</p>
+              <h1 className="text-3xl font-semibold leading-tight text-white light:text-slate-900">
+                Build one post, ship it everywhere.
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm text-slate-300 light:text-slate-600">
+                Write a master caption once, generate platform-specific versions, then approve and
+                schedule without leaving the page.
+              </p>
+            </div>
+            <div className="grid min-w-[180px] grid-cols-2 gap-2.5">
+              {[
+                { label: "Platforms", value: `${selectedPlatforms.length}` },
+                { label: "Memory", value: "On" },
+                { label: "AI Variants", value: distributionDraft ? "Ready" : "Pending" },
+                { label: "Queue", value: scheduleAt ? "Set" : "Open" },
+              ].map((item) => (
+                <div key={item.label} className="surface-soft rounded-xl p-3 text-left">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500 light:text-slate-600">
+                    {item.label}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
+                    {item.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </motion.section>
+
       {/* Workflow steps indicator */}
-      <div className="surface-soft neon-ring sticky top-2 z-20 mb-5 flex items-center gap-0 overflow-x-auto rounded-2xl px-2 py-2 backdrop-blur">
+      <div className="surface-soft neon-ring sticky top-2 z-20 mb-5 flex flex-wrap items-center gap-2 rounded-2xl px-2.5 py-2.5 backdrop-blur-xl">
         {steps.map((step, idx) => (
           <div key={step.n} className="flex items-center">
             <div
-              className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium transition ${
+              className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition ${
                 step.n <= (distributionDraft ? 4 : 1)
-                  ? "bg-violet-500/20 text-violet-300 light:bg-violet-100 light:text-violet-700"
-                  : "text-slate-600"
+                  ? "bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/30 light:bg-violet-100 light:text-violet-700"
+                  : "text-slate-500 light:text-slate-600"
               }`}
             >
               {step.icon}
-              <span className="hidden sm:inline">{step.label}</span>
+              <span>{step.label}</span>
             </div>
             {idx < steps.length - 1 && (
               <ChevronRight size={13} className="mx-0.5 text-slate-700 light:text-slate-300" />
@@ -249,13 +288,13 @@ export default function ComposePage() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
         {/* ── LEFT: Form ────────────────────────────── */}
-        <form className="space-y-3.5" onSubmit={(e) => void createDraft(e)}>
+        <form className="space-y-4" onSubmit={(e) => void createDraft(e)}>
           {/* Title */}
-          <div className="surface-card cyber-grid rounded-2xl p-4">
+          <div className="surface-card rounded-2xl p-5">
             <p className="section-kicker mb-2">Post foundation</p>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               Post title
             </label>
             <input
@@ -267,8 +306,8 @@ export default function ComposePage() {
           </div>
 
           {/* Media URL */}
-          <div className="surface-card cyber-grid rounded-2xl p-4">
-            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="surface-card rounded-2xl p-5">
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               <Link2 size={11} /> Media Upload
             </label>
             <input
@@ -297,8 +336,8 @@ export default function ComposePage() {
           </div>
 
           {/* Master caption */}
-          <div className="surface-card cyber-grid rounded-2xl p-4">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="surface-card rounded-2xl p-5">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               Master caption
             </label>
             <textarea
@@ -311,9 +350,9 @@ export default function ComposePage() {
           </div>
 
           {/* Platform selector */}
-          <div className="surface-card rounded-2xl p-4">
+          <div className="surface-card rounded-2xl p-5">
             <p className="section-kicker mb-2">Distribution map</p>
-            <label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               <LayoutGrid size={11} className="mr-1 inline" /> Platforms
             </label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
@@ -324,9 +363,9 @@ export default function ComposePage() {
                     key={p.id}
                     type="button"
                     onClick={() => toggleItem(p.id, selectedPlatforms, setSelectedPlatforms)}
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                    className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                       active
-                        ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40 light:bg-violet-100 light:text-violet-700 light:ring-violet-300"
+                        ? "bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/40 light:bg-violet-100 light:text-violet-700 light:ring-violet-300"
                         : "surface-soft text-slate-400 hover:text-slate-300 light:hover:text-slate-600"
                     }`}
                   >
@@ -352,8 +391,8 @@ export default function ComposePage() {
         </form>
 
         {/* ── RIGHT: Workflow guide / variants ──────── */}
-        <aside className="space-y-3.5 lg:sticky lg:top-20 lg:self-start">
-          <div className="surface-luxe cyber-grid scanline rounded-2xl p-4">
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <div className="surface-luxe scanline rounded-2xl p-4">
             <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-white light:text-slate-900">
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-500/20 text-violet-400 light:bg-violet-100 light:text-violet-600">
                 <Sparkles size={15} />
@@ -401,7 +440,7 @@ export default function ComposePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="surface-card mt-5 rounded-2xl p-4"
+          className="surface-card mt-5 rounded-2xl p-5"
         >
           <p className="section-kicker mb-2">Approval desk</p>
           <h2 className="text-holo mb-4 flex items-center gap-2 text-lg font-bold">
