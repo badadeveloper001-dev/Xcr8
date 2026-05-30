@@ -299,8 +299,7 @@ export default function AnalyticsPage() {
     <MobileShell title="Analytics Intelligence" subtitle="AI strategist for creator growth.">
       {usingDemoData ? (
         <div className="mb-4 rounded-xl border border-violet-500/20 bg-violet-500/10 p-3 text-xs text-violet-300 light:text-violet-700">
-          Analytics engine is in warm-up mode. Using calibrated demo intelligence until your next
-          live cycle completes.
+          Analytics is warming up. Demo insights are shown until your next live cycle completes.
         </div>
       ) : null}
 
@@ -310,16 +309,15 @@ export default function AnalyticsPage() {
             <div>
               <p className="section-kicker mb-2">Analytics Home</p>
               <h2 className="text-holo text-3xl font-bold tracking-tight sm:text-4xl">
-                Creator Intelligence Engine
+                Creator Insights
               </h2>
               <p className="mt-2 max-w-2xl text-sm text-slate-400 light:text-slate-500">
-                Strategic pulse for {displayName}. Predictive and behavior-aware recommendations are
-                active.
+                Live performance view for {displayName}. Smart recommendations are active.
               </p>
             </div>
             <div className="surface-soft rounded-2xl px-3 py-2 text-xs text-slate-400 light:text-slate-600">
               <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-400" />
-              AI strategist online
+              AI insights online
             </div>
           </div>
 

@@ -40,7 +40,7 @@ export default function WelcomePage() {
       >
         <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-300/30 bg-violet-300/10 px-3.5 py-1.5 text-xs font-medium text-violet-200 light:border-violet-300 light:bg-violet-100 light:text-violet-700">
           <Sparkles size={12} />
-          AI Powered Platform For Content Creators
+          AI platform for content creators
         </div>
 
         <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-white light:text-slate-900 md:text-6xl">
@@ -52,8 +52,7 @@ export default function WelcomePage() {
         </h1>
 
         <p className="mx-auto mt-5 max-w-2xl text-base text-slate-400 light:text-slate-500 md:text-lg">
-          XCR8 adapts your content for every platform and audience, keeps your voice consistent, and
-          helps you grow with AI-assisted workflows.
+          XCR8 adapts every post per platform, keeps your voice consistent, and helps you grow.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -81,8 +80,8 @@ export default function WelcomePage() {
         <div className="mt-8 grid gap-3 sm:grid-cols-3">
           {[
             { title: "Unified workspace", text: "Plan, create, and publish in one flow." },
-            { title: "AI adaptation", text: "Every post is tailored for each platform." },
-            { title: "Premium control", text: "A polished interface built for repeat use." },
+            { title: "AI adaptation", text: "Each post is tuned for every platform." },
+            { title: "Premium control", text: "A polished workspace built for daily use." },
           ].map((item) => (
             <div key={item.title} className="surface-soft rounded-2xl p-4 text-left">
               <p className="text-sm font-semibold text-white light:text-slate-900">{item.title}</p>

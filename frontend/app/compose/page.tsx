@@ -193,7 +193,8 @@ export default function ComposePage() {
         });
         const data: unknown = await res.json();
         if (!res.ok) {
-          const uploadError = getUploadUrl(data) ||
+          const uploadError =
+            getUploadUrl(data) ||
             (typeof data === "object" && data && "detail" in data && typeof data.detail === "string"
               ? data.detail
               : "Upload failed. Please try again.");
@@ -239,11 +240,10 @@ export default function ComposePage() {
             <div>
               <p className="section-kicker mb-2">Composer Studio</p>
               <h1 className="text-3xl font-semibold leading-tight text-white light:text-slate-900">
-                Build one post, ship it everywhere.
+                Create once. Publish everywhere.
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-300 light:text-slate-600">
-                Write a master caption once, generate platform-specific versions, then approve and
-                schedule without leaving the page.
+                Write one master caption, generate channel versions, then approve and schedule.
               </p>
             </div>
             <div className="grid min-w-[180px] grid-cols-2 gap-2.5">
@@ -344,7 +344,7 @@ export default function ComposePage() {
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               className="xcr8-input h-32 resize-none"
-              placeholder="Write one great caption — Xcr8 AI adapts it for every platform…"
+              placeholder="Write one caption. Xcr8 adapts it for each platform."
             />
             <p className="mt-1.5 text-right text-[11px] text-slate-600">{caption.length} chars</p>
           </div>

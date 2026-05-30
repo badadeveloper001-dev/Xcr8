@@ -8,7 +8,7 @@ export default tseslint.config(
   },
   js.configs.recommended,
   {
-    files: ["frontend/**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx}"],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -18,7 +18,7 @@ export default tseslint.config(
     },
     settings: {
       next: {
-        rootDir: "frontend",
+        rootDir: import.meta.dirname,
       },
     },
     plugins: {
@@ -31,7 +31,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["frontend/next-env.d.ts"],
+    files: ["next-env.d.ts"],
     rules: {
       "@typescript-eslint/triple-slash-reference": "off",
     },

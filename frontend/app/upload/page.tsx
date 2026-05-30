@@ -71,7 +71,10 @@ export default function UploadPage() {
       <div className="lux-orb-c" />
 
       <div className="mb-8 flex items-center justify-between">
-        <Link href="/" className="text-sm font-medium text-slate-300 hover:text-white light:text-slate-600 light:hover:text-slate-900">
+        <Link
+          href="/"
+          className="text-sm font-medium text-slate-300 hover:text-white light:text-slate-600 light:hover:text-slate-900"
+        >
           Back to home
         </Link>
         <p className="section-kicker">Upload Studio</p>
@@ -81,11 +84,10 @@ export default function UploadPage() {
         <div className="surface-luxe lux-panel cyber-grid rounded-[28px] p-5 sm:p-6">
           <p className="section-kicker mb-2">Public image upload</p>
           <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900 sm:text-4xl">
-            Drop a visual asset into your workflow.
+            Drop an image into your workflow.
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-slate-400 light:text-slate-500">
-            Upload an image to publish it at a public URL, then reuse it across chat, scheduling, or
-            content generation flows.
+            Upload once, get a public URL, and reuse it across chat, scheduling, and creation.
           </p>
 
           <label
@@ -110,7 +112,7 @@ export default function UploadPage() {
               Drag and drop an image here
             </p>
             <p className="mt-1 text-sm text-slate-400 light:text-slate-600">
-              or click to browse files up to 10MB
+              or click to choose a file up to 10MB
             </p>
             <input
               ref={inputRef}
@@ -174,8 +176,8 @@ export default function UploadPage() {
             <p className="section-kicker mb-2">Workflow hints</p>
             <div className="space-y-3 text-sm text-slate-300 light:text-slate-600">
               <p>1. Upload once, then reuse the URL across the workspace.</p>
-              <p>2. Keep your image crop clean for carousel and story assets.</p>
-              <p>3. Paste the URL into compose or AI Studio for instant reuse.</p>
+              <p>2. Keep crops clean for feed, story, and carousel formats.</p>
+              <p>3. Paste the URL into Compose or AI Studio to reuse instantly.</p>
             </div>
           </div>
 
@@ -184,8 +186,12 @@ export default function UploadPage() {
             <div className="aspect-[4/3] rounded-[22px] border border-white/10 bg-gradient-to-br from-violet-500/20 via-fuchsia-500/10 to-cyan-500/10 p-4 light:border-slate-200">
               <div className="flex h-full items-end justify-between">
                 <div>
-                  <p className="text-lg font-semibold text-white light:text-slate-900">Ready to upload</p>
-                  <p className="mt-1 text-sm text-slate-300 light:text-slate-600">Your image will appear here after upload.</p>
+                  <p className="text-lg font-semibold text-white light:text-slate-900">
+                    Ready to upload
+                  </p>
+                  <p className="mt-1 text-sm text-slate-300 light:text-slate-600">
+                    Your preview appears here after upload.
+                  </p>
                 </div>
                 <div className="h-16 w-16 rounded-2xl bg-white/10" />
               </div>
