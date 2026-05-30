@@ -4,10 +4,10 @@ import { FormEvent, useMemo, useState } from "react";
 import { Copy, ImagePlus, RefreshCw } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 
-type ImageConcept = {
+type GeneratedImage = {
   title: string;
-  direction: string;
   prompt: string;
+  imageUrl: string;
 };
 
 const styleNotes: Record<string, string> = {
@@ -26,7 +26,8 @@ export default function ImageGeneratorPage() {
   const [mood, setMood] = useState("confident and practical");
   const [ratio, setRatio] = useState("4:5");
   const [palette, setPalette] = useState("warm orange, cream, deep charcoal");
-  const [concepts, setConcepts] = useState<ImageConcept[]>([]);
+  const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [generating, setGenerating] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null);
 
   const canGenerate = subject.trim().length > 4;
@@ -47,18 +48,31 @@ export default function ImageGeneratorPage() {
     const cleanSubject = subject.trim();
     if (!cleanSubject) return;
 
+    setGenerating(true);
+
+    const dimensions =
+      ratio === "1:1"
+        ? { width: 1024, height: 1024 }
+        : ratio === "16:9"
+          ? { width: 1344, height: 768 }
+          : { width: 1024, height: 1280 };
+
     const built = baseIdeas.map((idea, index) => {
-      const direction = `${idea} for ${platform} in a ${mood} mood with ${palette} palette.`;
+      const direction = `${idea} for ${platform} in a ${mood} mood with ${palette} palette`;
       const prompt = `${cleanSubject}, ${styleNotes[style]}, ${direction}, aspect ratio ${ratio}, no text overlay, creator economy visual style, high quality`;
+      const seed = Date.now() + index * 17;
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed}&nologo=true`;
+
       return {
         title: `${idea} ${index + 1}`,
-        direction,
         prompt,
+        imageUrl,
       };
     });
 
-    setConcepts(built);
+    setImages(built);
     setCopiedPrompt(null);
+    setGenerating(false);
   };
 
   const copyPrompt = async (prompt: string) => {
@@ -69,7 +83,7 @@ export default function ImageGeneratorPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Image Generator now has its own workspace for prompt-to-visual concept generation."
+      subtitle="Image Generator now creates real images from your prompt, not just concepts."
       activeToolId="image-generator"
     >
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
@@ -122,7 +136,7 @@ export default function ImageGeneratorPage() {
               value={ratio}
               onChange={(e) => setRatio(e.target.value)}
               className="xcr8-input"
-              placeholder="Aspect ratio"
+              placeholder="Aspect ratio (e.g. 4:5, 1:1, 16:9)"
             />
           </div>
 
@@ -135,41 +149,52 @@ export default function ImageGeneratorPage() {
 
           <button
             type="submit"
-            disabled={!canGenerate}
+            disabled={!canGenerate || generating}
             className="cta-btn inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold disabled:opacity-60"
           >
             <RefreshCw size={16} />
-            Generate image concepts
+            {generating ? "Generating images..." : "Generate real images"}
           </button>
+
+          <p className="text-xs text-slate-500">
+            Generated images use a live model endpoint and may take a few seconds to render.
+          </p>
         </form>
 
         <div className="space-y-3.5">
-          {concepts.length ? (
-            concepts.map((concept) => (
-              <article key={concept.title} className="surface-card rounded-2xl p-4">
+          {images.length ? (
+            images.map((image) => (
+              <article key={image.title} className="surface-card rounded-2xl p-4">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                   <ImagePlus size={11} />
-                  {concept.title}
+                  {image.title}
                 </div>
-                <p className="text-sm text-slate-300 light:text-slate-700">{concept.direction}</p>
+
+                <img
+                  src={image.imageUrl}
+                  alt={image.prompt}
+                  loading="lazy"
+                  className="h-auto w-full rounded-xl border border-white/10 bg-black/20 object-cover"
+                />
+
                 <div className="mt-3 rounded-xl bg-black/20 p-3 light:bg-slate-50">
                   <p className="text-xs leading-6 text-slate-200 light:text-slate-800">
-                    {concept.prompt}
+                    {image.prompt}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => void copyPrompt(concept.prompt)}
+                  onClick={() => void copyPrompt(image.prompt)}
                   className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
                 >
                   <Copy size={12} />
-                  {copiedPrompt === concept.prompt ? "Copied" : "Copy prompt"}
+                  {copiedPrompt === image.prompt ? "Copied" : "Copy prompt"}
                 </button>
               </article>
             ))
           ) : (
             <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
-              Generate concepts to get ready-to-use prompts for your preferred image model.
+              Generate images to see real visual outputs from your prompt instantly.
             </div>
           )}
         </div>
