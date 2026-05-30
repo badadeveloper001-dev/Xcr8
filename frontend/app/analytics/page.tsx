@@ -298,32 +298,32 @@ export default function AnalyticsPage() {
   return (
     <MobileShell title="Analytics Intelligence" subtitle="AI strategist for creator growth.">
       {usingDemoData ? (
-        <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300 light:text-amber-700">
+        <div className="mb-4 rounded-xl border border-violet-500/20 bg-violet-500/10 p-3 text-xs text-violet-300 light:text-violet-700">
           Analytics engine is in warm-up mode. Using calibrated demo intelligence until your next
           live cycle completes.
         </div>
       ) : null}
 
-      <motion.section {...fadeUp(0)} className="mb-5">
-        <div className="surface-luxe cyber-grid scanline neon-ring rounded-2xl p-4">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+      <motion.section {...fadeUp(0)} className="mb-5 space-y-4">
+        <div className="surface-luxe scanline neon-ring rounded-[28px] p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="section-kicker mb-2">Analytics Home Screen</p>
-              <h2 className="text-holo text-2xl font-bold tracking-tight sm:text-3xl">
-                AI Creator Intelligence Engine
+              <p className="section-kicker mb-2">Analytics Home</p>
+              <h2 className="text-holo text-3xl font-bold tracking-tight sm:text-4xl">
+                Creator Intelligence Engine
               </h2>
-              <p className="mt-1.5 text-sm text-slate-400 light:text-slate-500">
+              <p className="mt-2 max-w-2xl text-sm text-slate-400 light:text-slate-500">
                 Strategic pulse for {displayName}. Predictive and behavior-aware recommendations are
                 active.
               </p>
             </div>
-            <div className="surface-soft rounded-xl px-3 py-2 text-xs text-slate-400 light:text-slate-600">
+            <div className="surface-soft rounded-2xl px-3 py-2 text-xs text-slate-400 light:text-slate-600">
               <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-400" />
               AI strategist online
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
             {[
               { label: "Total Reach", value: totals.totalReach.toLocaleString() },
               { label: "Engagement", value: `${totals.engagementGrowth.toFixed(1)}%` },
@@ -345,7 +345,7 @@ export default function AnalyticsPage() {
             ))}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-4 flex flex-wrap gap-2">
             {[
               { id: "home", label: "Analytics Home" },
               { id: "audience", label: "Audience Intelligence" },
@@ -367,7 +367,7 @@ export default function AnalyticsPage() {
             ))}
           </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-4">
             <button type="button" className="cta-btn rounded-xl px-3 py-2 text-sm font-semibold">
               View Deep Analytics
             </button>
@@ -417,7 +417,7 @@ export default function AnalyticsPage() {
         </div>
       </motion.section>
 
-      <motion.section {...fadeUp(0.05)} className="mb-5">
+      <motion.section {...fadeUp(0.05)} className="mb-5 grid gap-4 sm:grid-cols-2">
         <div className="surface-card rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
@@ -429,7 +429,7 @@ export default function AnalyticsPage() {
             <span className="text-xs text-slate-500">Continuous strategic learning</span>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2.5 sm:grid-cols-2">
             {[
               "Your audience prefers emotionally driven storytelling.",
               "Retention increases when subtitles appear in the first 3 seconds.",
@@ -445,15 +445,9 @@ export default function AnalyticsPage() {
             ))}
           </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button type="button" className="cta-btn rounded-xl px-3 py-2 text-sm font-semibold">
               Optimize Strategy
-            </button>
-            <button
-              type="button"
-              className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
-            >
-              Generate Action Plan
             </button>
             <button
               type="button"
@@ -462,11 +456,40 @@ export default function AnalyticsPage() {
             >
               Ask AI Assistant
             </button>
+          </div>
+        </div>
+
+        <div className="surface-card rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
+              <LineChart size={16} className="text-violet-400" /> Content Performance Lab
+            </h3>
+            <span className="text-xs text-slate-500">Hook, pacing, emotion diagnostics</span>
+          </div>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {[
+              "Watch time curve: strongest in first 18s",
+              "Drop-off point detected at 0:25",
+              "Replay spike at product reveal",
+              "Emotional peak detected at CTA transition",
+            ].map((line) => (
+              <article
+                key={line}
+                className="surface-soft rounded-xl p-3 text-xs text-slate-300 light:text-slate-700"
+              >
+                {line}
+              </article>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button type="button" className="cta-btn rounded-xl px-3 py-2 text-sm font-semibold">
+              Improve Content
+            </button>
             <button
               type="button"
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
-              Improve Weak Areas
+              Generate Follow-Up
             </button>
           </div>
         </div>

@@ -377,7 +377,7 @@ export default function OnboardingPage() {
                         onClick={() => selectOne(item, tone, setTone)}
                         className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
                           tone === item
-                            ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40"
+                            ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40"
                             : "surface-soft text-slate-300 light:text-slate-700"
                         }`}
                       >

@@ -44,7 +44,7 @@ export function ToolShelf({ activeToolId }: ToolShelfProps) {
                   tool.status === "live"
                     ? "bg-emerald-500/15 text-emerald-300 light:bg-emerald-100 light:text-emerald-700"
                     : tool.status === "next"
-                      ? "bg-amber-500/15 text-amber-300 light:bg-amber-100 light:text-amber-700"
+                      ? "bg-violet-500/15 text-violet-300 light:bg-violet-100 light:text-violet-700"
                       : "bg-white/10 text-slate-400 light:bg-slate-100 light:text-slate-600"
                 }`}
               >
