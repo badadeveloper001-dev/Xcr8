@@ -191,6 +191,7 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
         raise HTTPException(status_code=401, detail=message) from exc
 
     user = db.scalar(select(User).where(User.email == payload.email))
+    credential: AuthCredential | None = None
     if not user:
         auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
         user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
@@ -210,16 +211,15 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
             username_seed = str(user_meta.get("username") or username_seed)
 
         placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
-        db.add(
-            AuthCredential(
-                user_id=user.id,
-                username=_ensure_unique_username(db, username_seed),
-                full_name=display_name,
-                password_salt=placeholder_salt,
-                password_hash=placeholder_hash,
-                remember_me_default=payload.remember_me,
-            )
+        credential = AuthCredential(
+            user_id=user.id,
+            username=_ensure_unique_username(db, username_seed),
+            full_name=display_name,
+            password_salt=placeholder_salt,
+            password_hash=placeholder_hash,
+            remember_me_default=payload.remember_me,
         )
+        db.add(credential)
 
         profile = CreatorProfile(
             user_id=user.id,
@@ -227,7 +227,8 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
         )
         db.add(profile)
 
-    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+    if credential is None:
+        credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     if not credential:
         placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
         credential = AuthCredential(
