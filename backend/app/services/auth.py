@@ -26,6 +26,19 @@ def _auth_headers() -> dict[str, str]:
     }
 
 
+def _admin_headers() -> dict[str, str]:
+    return {
+        "apikey": settings.supabase_service_role_key,
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "Content-Type": "application/json",
+    }
+
+
+def _is_rate_limited(message: str, status_code: int) -> bool:
+    lowered = message.lower()
+    return status_code == 429 or "rate limit" in lowered or "too many" in lowered
+
+
 def _raise_auth_error(response: httpx.Response, fallback: str) -> None:
     detail = fallback
     try:
@@ -39,16 +52,42 @@ def _raise_auth_error(response: httpx.Response, fallback: str) -> None:
 
 
 def supabase_sign_up(email: str, password: str, metadata: dict | None = None) -> dict:
+    metadata_payload = metadata or {}
     with httpx.Client(timeout=15.0) as client:
         response = client.post(
             f"{settings.supabase_url}/auth/v1/signup",
             headers=_auth_headers(),
-            json={"email": email, "password": password, "data": metadata or {}},
+            json={"email": email, "password": password, "data": metadata_payload},
         )
 
-    if response.status_code >= 400:
-        _raise_auth_error(response, "Supabase signup failed")
-    return response.json()
+        if response.status_code < 400:
+            return response.json()
+
+        fallback_message = "Supabase signup failed"
+        try:
+            payload = response.json()
+            message = payload.get("msg") or payload.get("message") or payload.get("error_description")
+            if isinstance(message, str) and message.strip():
+                fallback_message = message
+        except ValueError:
+            pass
+
+        if _is_rate_limited(fallback_message, response.status_code):
+            admin_response = client.post(
+                f"{settings.supabase_url}/auth/v1/admin/users",
+                headers=_admin_headers(),
+                json={
+                    "email": email,
+                    "password": password,
+                    "user_metadata": metadata_payload,
+                    "email_confirm": True,
+                },
+            )
+            if admin_response.status_code < 400:
+                return admin_response.json()
+            _raise_auth_error(admin_response, "Supabase signup failed")
+
+    _raise_auth_error(response, "Supabase signup failed")
 
 
 def supabase_sign_in(email: str, password: str) -> dict:
