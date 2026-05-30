@@ -11,7 +11,7 @@ from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
-PROMPT_TEMPLATE_VERSION = "caption-v1"
+PROMPT_TEMPLATE_VERSION = "caption-v2"
 DETECT_TEMPLATE_VERSION = "detect-lang-v1"
 
 SUPPORTED_LANGUAGES = {"english", "nigerian_pidgin", "yoruba", "code_switch"}
@@ -32,7 +32,9 @@ SYSTEM_PROMPT = (
     "intent intact. Return strict JSON with keys: adapted_caption (string), hashtags (array of strings), hook (string). "
     "Do not include markdown fences. Keep hashtags relevant and concise. If creator memory facts are provided, "
     "use them as personalization hints without inventing details. For mixed-language captions, preserve language shifts "
-    "sentence by sentence while keeping flow natural."
+    "sentence by sentence while keeping flow natural. Avoid generic creator clichés like 'consistency beats perfection', "
+    "'stop scrolling', 'what do you think?', or empty motivation lines. Prefer concrete details, specific actions, and "
+    "a distinct voice. Use at least one content clue from source_caption and one relevant creator memory fact when available."
 )
 
 DETECT_SYSTEM_PROMPT = (
@@ -275,6 +277,86 @@ def _generate_hashtags(platform: str, language: str) -> list[str]:
     return [platform_tag, language_tag, *base]
 
 
+def _extract_keywords(text: str, max_items: int = 4) -> list[str]:
+    tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9_]{3,}", text.lower())
+    stop_words = {
+        "this",
+        "that",
+        "with",
+        "from",
+        "your",
+        "have",
+        "will",
+        "they",
+        "their",
+        "about",
+        "just",
+        "into",
+        "when",
+        "then",
+        "than",
+        "what",
+        "where",
+        "while",
+        "because",
+        "really",
+        "very",
+        "more",
+    }
+    deduped: list[str] = []
+    for token in tokens:
+        if token in stop_words:
+            continue
+        if token not in deduped:
+            deduped.append(token)
+        if len(deduped) >= max_items:
+            break
+    return deduped
+
+
+def _build_dynamic_hook(source_text: str, platform: str) -> str:
+    keywords = _extract_keywords(source_text, max_items=2)
+    if keywords:
+        if platform.lower() == "linkedin":
+            return f"If you're working on {keywords[0]}, this framework is worth stealing."
+        if platform.lower() == "x":
+            return f"Quick take on {keywords[0]}: this is where most creators miss it."
+        return f"Before your next post on {keywords[0]}, try this shift first."
+    return "Use this in your next post and compare the results."
+
+
+def _looks_generic(text: str) -> bool:
+    lowered = text.lower()
+    generic_markers = [
+        "consistency beats perfection",
+        "stop scrolling",
+        "what do you think",
+        "lead with value",
+        "who else is testing",
+        "grow faster",
+        "changes everything",
+    ]
+    return any(marker in lowered for marker in generic_markers)
+
+
+def _memory_hint(memory_facts: list[str]) -> str:
+    if not memory_facts:
+        return ""
+    # Use one concrete memory line to keep captions distinct without bloating output.
+    return memory_facts[0].strip()
+
+
+def _build_contextual_hashtags(source_text: str, platform: str, language: str) -> list[str]:
+    base = _generate_hashtags(platform, language)
+    keywords = _extract_keywords(source_text, max_items=3)
+    dynamic = [f"#{keyword}" for keyword in keywords if keyword.isascii()]
+    merged: list[str] = []
+    for tag in [*dynamic, *base]:
+        if tag not in merged:
+            merged.append(tag)
+    return merged[:8]
+
+
 def adapt_caption(text: str, platform: str, language: str, creator_memory: dict) -> dict:
     if not settings.openai_api_key:
         fallback = _fallback_caption(text, platform, language, creator_memory)
@@ -331,7 +413,20 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
                 hashtags = []
             hashtags = [str(tag).strip() for tag in hashtags if str(tag).strip().startswith("#")]
             if not hashtags:
-                hashtags = _generate_hashtags(platform, language)
+                hashtags = _build_contextual_hashtags(text, platform, language)
+
+            if _looks_generic(adapted_caption):
+                memory_hint = _memory_hint(creator_memory.get("memory_facts", []))
+                keywords = _extract_keywords(text, max_items=2)
+                detail_line = ""
+                if memory_hint:
+                    detail_line = f"\n\nCreator note: {memory_hint}"
+                elif keywords:
+                    detail_line = f"\n\nFocus on: {', '.join(keywords)}"
+                adapted_caption = f"{text.strip()}{detail_line}".strip()
+
+            if _looks_generic(hook):
+                hook = _build_dynamic_hook(text, platform)
 
             return {
                 "adapted_caption": adapted_caption[: PLATFORM_LIMITS.get(platform, 2200)],
@@ -367,17 +462,18 @@ def _fallback_caption(text: str, platform: str, language: str, creator_memory: d
     language_mapped = _language_transform(text.strip(), language)
     platform_caption, hook = _platform_style(language_mapped, platform)
 
-    tone = creator_memory.get("tone", "confident")
-    emoji_style = creator_memory.get("emoji_style", "🔥")
-    styled_caption = f"{platform_caption}\n\nTone: {tone} {emoji_style}".strip()
+    memory_hint = _memory_hint(creator_memory.get("memory_facts", []))
+    styled_caption = platform_caption.strip()
+    if memory_hint:
+        styled_caption = f"{styled_caption}\n\nCreator note: {memory_hint}"
 
     limit = PLATFORM_LIMITS.get(platform, 2200)
     adapted_caption = styled_caption[:limit]
 
     return {
         "adapted_caption": adapted_caption,
-        "hashtags": _generate_hashtags(platform, language),
-        "hook": hook,
+        "hashtags": _build_contextual_hashtags(text, platform, language),
+        "hook": _build_dynamic_hook(text, platform) if _looks_generic(hook) else hook,
         "prompt_template_version": PROMPT_TEMPLATE_VERSION,
         "latency_ms": 0,
         "usage": {"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},

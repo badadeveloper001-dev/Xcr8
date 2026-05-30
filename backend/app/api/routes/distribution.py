@@ -74,6 +74,10 @@ def create_distribution_draft(
         "tone": profile.tone if profile else "confident",
         "emoji_style": profile.emoji_style if profile else "🔥",
         "slang_profile": profile.slang_profile if profile else "light",
+        "niche": profile.niche if profile else "creator",
+        "preferred_caption_length": profile.preferred_caption_length if profile else 120,
+        "personality": (profile.preferences or {}).get("personality") if profile else None,
+        "audience_location": (profile.preferences or {}).get("audience_location") if profile else None,
         "multilingual_profile": profile.multilingual_profile if profile else [detected_language],
         "memory_facts": memory_facts,
         "language_profile": {
