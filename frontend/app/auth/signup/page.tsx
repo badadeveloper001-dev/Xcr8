@@ -104,7 +104,33 @@ export default function SignupPage() {
       <div className="lux-orb-b" />
       <div className="lux-orb-c" />
 
-      <div className="relative w-full max-w-[440px]">
+      <div className="relative grid w-full max-w-5xl gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+        <div className="hidden lg:block">
+          <div className="surface-luxe lux-panel cyber-grid rounded-[32px] p-8">
+            <p className="section-kicker mb-3">Creator onboarding</p>
+            <h2 className="text-4xl font-semibold leading-tight text-white light:text-slate-900">
+              Start with a sharp profile and a workspace that feels premium.
+            </h2>
+            <p className="mt-4 max-w-lg text-sm text-slate-400 light:text-slate-500">
+              Set up your identity, connect your channels, and let XCR8 adapt your content voice
+              from the first session.
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              {[
+                "Identity tuned for creators",
+                "AI memory that learns your tone",
+                "Cross-platform publishing ready",
+                "Built for mobile-first workflows",
+              ].map((item) => (
+                <div key={item} className="surface-soft rounded-2xl p-3 text-sm text-slate-200 light:text-slate-700">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative w-full max-w-[440px] justify-self-center">
         {/* Brand header */}
 
         <div className="relative mb-8 flex justify-center">
@@ -250,6 +276,7 @@ export default function SignupPage() {
               Sign in
             </Link>
           </p>
+        </div>
         </div>
       </div>
     </main>

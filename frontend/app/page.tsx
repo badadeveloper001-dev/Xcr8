@@ -42,7 +42,7 @@ export default function SplashPage() {
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-12">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.2),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(34,211,238,0.14),transparent_34%)] dark:bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.26),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(34,211,238,0.18),transparent_34%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(139,92,246,0.2),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(34,211,238,0.14),transparent_34%)] dark:bg-[radial-gradient(circle_at_50%_20%,rgba(139,92,246,0.26),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(34,211,238,0.18),transparent_34%)]" />
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}

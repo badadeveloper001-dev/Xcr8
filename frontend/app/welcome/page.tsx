@@ -36,9 +36,9 @@ export default function WelcomePage() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55 }}
-        className="surface-luxe lux-panel cyber-grid neon-ring rounded-[30px] px-6 py-12 text-center sm:px-10"
+        className="surface-luxe lux-panel cyber-grid neon-ring rounded-[30px] px-6 py-10 text-center sm:px-10"
       >
-        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3.5 py-1.5 text-xs font-medium text-cyan-200 light:border-cyan-300 light:bg-cyan-100 light:text-cyan-700">
+        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-300/30 bg-violet-300/10 px-3.5 py-1.5 text-xs font-medium text-violet-200 light:border-violet-300 light:bg-violet-100 light:text-violet-700">
           <Sparkles size={12} />
           AI Powered Platform For Content Creators
         </div>
@@ -46,7 +46,9 @@ export default function WelcomePage() {
         <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-white light:text-slate-900 md:text-6xl">
           Build once.
           <br />
-          <span className="text-holo">Publish everywhere.</span>
+          <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent light:from-violet-700 light:via-fuchsia-600 light:to-cyan-700">
+            Publish everywhere.
+          </span>
         </h1>
 
         <p className="mx-auto mt-5 max-w-2xl text-base text-slate-400 light:text-slate-500 md:text-lg">
@@ -74,6 +76,19 @@ export default function WelcomePage() {
           >
             Log In
           </Link>
+        </div>
+
+        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+          {[
+            { title: "Unified workspace", text: "Plan, create, and publish in one flow." },
+            { title: "AI adaptation", text: "Every post is tailored for each platform." },
+            { title: "Premium control", text: "A polished interface built for repeat use." },
+          ].map((item) => (
+            <div key={item.title} className="surface-soft rounded-2xl p-4 text-left">
+              <p className="text-sm font-semibold text-white light:text-slate-900">{item.title}</p>
+              <p className="mt-1 text-xs text-slate-400 light:text-slate-600">{item.text}</p>
+            </div>
+          ))}
         </div>
       </motion.section>
     </main>

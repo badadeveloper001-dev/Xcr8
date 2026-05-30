@@ -107,6 +107,17 @@ export default function ForgotPasswordPage() {
             </p>
           ) : null}
 
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            {[
+              "Reset link is time-limited",
+              "Use the same email as your account",
+            ].map((item) => (
+              <div key={item} className="surface-soft rounded-2xl px-3 py-2 text-xs text-slate-400 light:text-slate-600">
+                {item}
+              </div>
+            ))}
+          </div>
+
           <p className="mt-5 text-center text-sm text-slate-500">
             Back to{" "}
             <Link

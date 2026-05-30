@@ -131,6 +131,17 @@ function ResetPasswordContent() {
             </p>
           ) : null}
 
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            {[
+              "Strong passwords protect your workspace",
+              "A new password signs you in immediately",
+            ].map((item) => (
+              <div key={item} className="surface-soft rounded-2xl px-3 py-2 text-xs text-slate-400 light:text-slate-600">
+                {item}
+              </div>
+            ))}
+          </div>
+
           <p className="mt-5 text-center text-sm text-slate-500">
             Back to{" "}
             <Link
