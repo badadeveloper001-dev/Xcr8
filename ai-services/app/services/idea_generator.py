@@ -124,6 +124,29 @@ def _normalize_hashtags(raw_tags: list[object], *, fallback_topic: str, platform
     return _make_hashtags(fallback_topic, platform, language, max_tags=max_tags)
 
 
+def _normalize_body_sections(raw_body: list[object]) -> list[str]:
+    normalized: list[str] = []
+    for item in raw_body:
+        if isinstance(item, dict):
+            section_title = str(item.get("section_title", "")).strip()
+            content = str(item.get("content", "")).strip()
+            if section_title and content:
+                normalized.append(f"{section_title}: {content}")
+                continue
+            if content:
+                normalized.append(content)
+                continue
+            if section_title:
+                normalized.append(section_title)
+                continue
+
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+
+    return normalized
+
+
 def _fallback_ideas(topic: str, platform: str, language: str, goal: str, tone: str, creator_memory: dict) -> list[dict]:
     memory_hint = _memory_hint(creator_memory)
     keywords = _extract_keywords(topic, max_items=3)
@@ -364,7 +387,7 @@ def generate_composed_content(payload: dict) -> dict:
             "angle": str(content_plan.get("angle", "")).strip(),
             "hook": str(content_plan.get("hook", "")).strip(),
             "intro": str(content_plan.get("intro", "")).strip(),
-            "body": [str(part).strip() for part in content_plan.get("body", []) if str(part).strip()],
+            "body": _normalize_body_sections(content_plan.get("body", [])),
             "cta": str(content_plan.get("cta", "")).strip(),
             "hashtags": _normalize_hashtags(
                 content_plan.get("hashtags", []),
