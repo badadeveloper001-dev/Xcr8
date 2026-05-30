@@ -160,6 +160,35 @@ export type AiUsageSummaryResponse = {
   most_used_template: string;
 };
 
+export type AiBrainstormPayload = {
+  user_id: number;
+  topic: string;
+  platform: string;
+  language: string;
+  goal: string;
+  tone: string;
+  audience_location?: string | null;
+};
+
+export type AiBrainstormResponse = {
+  topic: string;
+  platform: string;
+  language: string;
+  goal: string;
+  model: string;
+  prompt_template_version: string;
+  latency_ms: number;
+  ideas: Array<{
+    title: string;
+    angle: string;
+    hook: string;
+    caption_seed: string;
+    cta: string;
+    hashtags: string[];
+  }>;
+  usage: Record<string, unknown>;
+};
+
 export async function signup(payload: SignupPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup", payload);
   return data;
@@ -261,6 +290,15 @@ export async function getAiUsageSummary(userId: number): Promise<AiUsageSummaryR
   const { data } = await apiClient.get<AiUsageSummaryResponse>(
     `/api/v1/analytics/ai-usage/${userId}`,
   );
+  return data;
+}
+
+export async function generateAiBrainstorm(
+  payload: AiBrainstormPayload,
+): Promise<AiBrainstormResponse> {
+  const { data } = await apiClient.post<AiBrainstormResponse>("/api/v1/ai/brainstorm", payload, {
+    timeout: 60_000,
+  });
   return data;
 }
 

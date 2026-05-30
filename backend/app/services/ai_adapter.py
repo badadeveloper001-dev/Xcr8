@@ -220,6 +220,64 @@ def _local_detect_language(text: str) -> dict:
     }
 
 
+def _local_brainstorm(payload: dict) -> dict:
+    topic = str(payload.get("topic", "content ideas")).strip()
+    platform = str(payload.get("platform", "instagram")).strip().lower()
+    language = str(payload.get("language", "english")).strip().lower()
+    goal = str(payload.get("goal", "grow audience")).strip()
+    tone = str(payload.get("tone", "conversational")).strip()
+    creator_memory = payload.get("creator_memory", {}) if isinstance(payload.get("creator_memory", {}), dict) else {}
+
+    keywords = _extract_keywords(topic, max_items=3)
+    primary = keywords[0] if keywords else topic.split()[0]
+    secondary = keywords[1] if len(keywords) > 1 else primary
+    hashtags = _contextual_hashtags(topic, platform, language)
+    memory_hint = _memory_hint(creator_memory)
+
+    ideas = [
+        {
+            "title": f"{primary.title()} breakdown",
+            "angle": f"Explain the {primary} workflow step by step in a {tone} way for people trying to {goal}.",
+            "hook": f"I tried a simpler {primary} system and the results were better than expected.",
+            "caption_seed": f"Break down your exact {primary} process using one clear example and one practical takeaway.",
+            "cta": "Ask people to share the part they want you to unpack next.",
+            "hashtags": hashtags,
+        },
+        {
+            "title": f"Mistakes around {secondary}",
+            "angle": f"Show the 3 most common mistakes creators make when approaching {secondary}.",
+            "hook": f"Most people get {secondary} wrong because they skip this one step.",
+            "caption_seed": f"Open with the biggest mistake, then show the fix and end with a short checklist.",
+            "cta": "Invite the audience to comment the mistake they’re correcting first.",
+            "hashtags": hashtags,
+        },
+        {
+            "title": f"Behind-the-scenes {primary}",
+            "angle": f"Reveal a behind-the-scenes workflow that helps you stay consistent while building toward {goal}.",
+            "hook": f"Here’s the workflow I use when I need to stay consistent with {primary}.",
+            "caption_seed": f"Describe the routine in a way that feels real and usable today, not aspirational fluff.",
+            "cta": "Tell them to save the post and test the routine this week.",
+            "hashtags": hashtags,
+        },
+    ]
+
+    if memory_hint:
+        for item in ideas:
+            item["caption_seed"] = f"{item['caption_seed']} Creator note: {memory_hint}"
+
+    return {
+        "topic": topic,
+        "platform": platform,
+        "language": language,
+        "goal": goal,
+        "model": "backend-local-brainstorm",
+        "prompt_template_version": "idea-v1",
+        "latency_ms": 0,
+        "ideas": ideas,
+        "usage": {"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
+    }
+
+
 # ─── Public interface ───────────────────────────────────────
 
 def generate_adaptation(
@@ -282,4 +340,22 @@ def detect_caption_language(text: str) -> dict:
 
     logger.warning("AI language detection unavailable (%s); using local fallback.", last_error)
     return _local_detect_language(cleaned)
+
+
+def generate_content_ideas(payload: dict) -> dict:
+    last_error: Exception | None = None
+    for base_url in _ai_service_candidates():
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                response = client.post(
+                    f"{base_url}/ideas/generate",
+                    json=payload,
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            last_error = exc
+
+    logger.warning("AI idea generation unavailable (%s); using local fallback.", last_error)
+    return _local_brainstorm(payload)
 

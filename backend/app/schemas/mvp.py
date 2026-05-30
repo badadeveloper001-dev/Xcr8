@@ -129,3 +129,34 @@ class MemoryVectorHint(BaseModel):
     provider: str
     index_name: str
     embedding_model: str
+
+
+class AIBrainstormRequest(BaseModel):
+    user_id: int
+    topic: str = Field(min_length=3, max_length=180)
+    platform: str = Field(default="instagram", max_length=40)
+    language: str = Field(default="english", max_length=32)
+    goal: str = Field(default="grow audience", max_length=120)
+    tone: str = Field(default="conversational", max_length=80)
+    audience_location: str | None = Field(default=None, max_length=120)
+
+
+class AIBrainstormIdea(BaseModel):
+    title: str
+    angle: str
+    hook: str
+    caption_seed: str
+    cta: str
+    hashtags: list[str] = Field(default_factory=list)
+
+
+class AIBrainstormResponse(BaseModel):
+    topic: str
+    platform: str
+    language: str
+    goal: str
+    model: str
+    prompt_template_version: str
+    latency_ms: int = 0
+    ideas: list[AIBrainstormIdea]
+    usage: dict = Field(default_factory=dict)
