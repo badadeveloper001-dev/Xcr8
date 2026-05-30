@@ -39,6 +39,18 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
     @staticmethod
+    def _resolve_vercel_base_url() -> str | None:
+        raw = os.getenv("VERCEL_PROJECT_PRODUCTION_URL") or os.getenv("VERCEL_URL")
+        if not raw:
+            return None
+        candidate = raw.strip()
+        if not candidate:
+            return None
+        if not candidate.startswith("http://") and not candidate.startswith("https://"):
+            candidate = f"https://{candidate}"
+        return candidate.rstrip("/")
+
+    @staticmethod
     def _inject_ipv4_hostaddr_if_possible(database_url: str) -> str:
         if not database_url.startswith("postgresql") or "hostaddr=" in database_url:
             return database_url
@@ -64,6 +76,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _ensure_database_url(self) -> "Settings":
+        if self.ai_service_url.strip() in {"", "http://localhost:8100"}:
+            vercel_base = self._resolve_vercel_base_url()
+            if vercel_base:
+                self.ai_service_url = f"{vercel_base}/_/ai-services"
+
         if self.database_url:
             self.database_url = self._inject_ipv4_hostaddr_if_possible(self.database_url)
             return self

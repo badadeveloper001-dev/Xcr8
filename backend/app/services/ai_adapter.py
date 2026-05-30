@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 
 import httpx
@@ -19,6 +20,29 @@ _LIMITS: dict[str, int] = {
     "youtube_shorts": 150,
     "threads": 500,
 }
+
+
+def _ai_service_candidates() -> list[str]:
+    urls: list[str] = []
+    configured = settings.ai_service_url.strip()
+    if configured:
+        urls.append(configured.rstrip("/"))
+
+    vercel_host = os.getenv("VERCEL_PROJECT_PRODUCTION_URL") or os.getenv("VERCEL_URL")
+    if vercel_host:
+        host = vercel_host.strip()
+        if host:
+            if not host.startswith("http://") and not host.startswith("https://"):
+                host = f"https://{host}"
+            fallback = f"{host.rstrip('/')}/_/ai-services"
+            if fallback not in urls:
+                urls.append(fallback)
+
+    localhost = "http://localhost:8100"
+    if localhost not in urls:
+        urls.append(localhost)
+
+    return urls
 
 # ─── Local fallback adaptation ──────────────────────────────
 
@@ -204,22 +228,26 @@ def generate_adaptation(
     language: str,
     creator_memory: dict,
 ) -> dict:
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(
-                f"{settings.ai_service_url}/caption/adapt",
-                json={
-                    "text": text,
-                    "platform": platform,
-                    "language": language,
-                    "creator_memory": creator_memory,
-                },
-            )
-            response.raise_for_status()
-            return response.json()
-    except Exception as exc:
-        logger.warning("AI service unavailable (%s); using local fallback.", exc)
-        return _local_adapt(text, platform, language, creator_memory)
+    last_error: Exception | None = None
+    for base_url in _ai_service_candidates():
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(
+                    f"{base_url}/caption/adapt",
+                    json={
+                        "text": text,
+                        "platform": platform,
+                        "language": language,
+                        "creator_memory": creator_memory,
+                    },
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            last_error = exc
+
+    logger.warning("AI service unavailable (%s); using local fallback.", last_error)
+    return _local_adapt(text, platform, language, creator_memory)
 
 
 def detect_caption_language(text: str) -> dict:
@@ -235,19 +263,23 @@ def detect_caption_language(text: str) -> dict:
             "segments": [],
         }
 
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(
-                f"{settings.ai_service_url}/caption/detect-language",
-                json={"text": cleaned},
-            )
-            response.raise_for_status()
-            data = response.json()
-            language = str(data.get("language", "english")).lower()
-            if language not in {"english", "nigerian_pidgin", "yoruba", "code_switch"}:
-                return _local_detect_language(cleaned)
-            return data
-    except Exception as exc:
-        logger.warning("AI language detection unavailable (%s); using local fallback.", exc)
-        return _local_detect_language(cleaned)
+    last_error: Exception | None = None
+    for base_url in _ai_service_candidates():
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(
+                    f"{base_url}/caption/detect-language",
+                    json={"text": cleaned},
+                )
+                response.raise_for_status()
+                data = response.json()
+                language = str(data.get("language", "english")).lower()
+                if language not in {"english", "nigerian_pidgin", "yoruba", "code_switch"}:
+                    return _local_detect_language(cleaned)
+                return data
+        except Exception as exc:
+            last_error = exc
+
+    logger.warning("AI language detection unavailable (%s); using local fallback.", last_error)
+    return _local_detect_language(cleaned)
 

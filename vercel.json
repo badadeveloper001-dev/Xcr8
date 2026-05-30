@@ -13,6 +13,11 @@
       "entrypoint": "backend",
       "framework": "fastapi",
       "routePrefix": "/_/backend"
+    },
+    "ai-services": {
+      "entrypoint": "ai-services",
+      "framework": "fastapi",
+      "routePrefix": "/_/ai-services"
     }
   }
 }
