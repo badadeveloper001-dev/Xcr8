@@ -31,9 +31,10 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center px-5 py-12">
-      <div className="pointer-events-none fixed left-[-120px] top-[-80px] h-[400px] w-[400px] rounded-full bg-violet-600/20 blur-[100px] dark:bg-violet-600/15" />
-      <div className="pointer-events-none fixed bottom-[-100px] right-[-100px] h-[350px] w-[350px] rounded-full bg-fuchsia-600/15 blur-[90px] dark:bg-fuchsia-600/10" />
+    <main className="lux-page flex min-h-screen w-full items-center justify-center px-5 py-12">
+      <div className="lux-orb-a" />
+      <div className="lux-orb-b" />
+      <div className="lux-orb-c" />
 
       <div className="relative w-full max-w-[440px]">
         <div className="mb-8 text-center">
@@ -42,7 +43,7 @@ export default function ForgotPasswordPage() {
           </Link>
         </div>
 
-        <div className="surface-luxe rounded-[28px] p-7 backdrop-blur-xl">
+        <div className="surface-luxe lux-panel rounded-[28px] p-7 backdrop-blur-xl">
           <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-400 light:border-violet-500/20 light:bg-violet-50 light:text-violet-600">
             <Sparkles size={11} />
             Account recovery

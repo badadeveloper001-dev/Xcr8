@@ -45,7 +45,7 @@ export function StudioShell({
       >
         {showToolShelf ? (
           <>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-200 light:border-cyan-300 light:bg-cyan-100 light:text-cyan-700">
               <Sparkles size={12} />
               Creative AI tool shelf
             </div>
@@ -58,7 +58,7 @@ export function StudioShell({
           <div className="mb-4">
             <Link
               href="/ai-studio"
-              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-white/10"
+              className="inline-flex items-center rounded-full border border-indigo-300/20 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-200 transition hover:bg-indigo-500/15 light:border-indigo-300 light:bg-indigo-100 light:text-indigo-700"
             >
               Back to AI tool shelf
             </Link>

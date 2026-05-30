@@ -18,9 +18,9 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
       >
         Skip to content
       </a>
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 rounded-[34px] bg-gradient-to-b from-violet-500/20 via-violet-500/10 to-transparent blur-2xl light:from-violet-200/45" />
-      <div className="pointer-events-none absolute -right-12 top-24 -z-10 h-52 w-52 rounded-full bg-fuchsia-500/15 blur-3xl light:bg-violet-200/30" />
-      <div className="pointer-events-none absolute left-[-48px] top-[38%] -z-10 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl light:bg-indigo-200/35" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 rounded-[34px] bg-gradient-to-b from-indigo-500/24 via-cyan-500/10 to-transparent blur-2xl light:from-indigo-200/55" />
+      <div className="pointer-events-none absolute -right-12 top-24 -z-10 h-52 w-52 rounded-full bg-cyan-400/16 blur-3xl light:bg-cyan-200/35" />
+      <div className="pointer-events-none absolute left-[-48px] top-[38%] -z-10 h-44 w-44 rounded-full bg-rose-400/12 blur-3xl light:bg-rose-200/30" />
       <div className="mx-auto w-full max-w-[460px] lg:max-w-[1120px]">
         {!hideHeader ? (
           <header

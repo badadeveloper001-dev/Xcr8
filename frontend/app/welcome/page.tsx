@@ -13,7 +13,10 @@ export default function WelcomePage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-12 lg:px-10">
+    <main className="lux-page mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-12 lg:px-10">
+      <div className="lux-orb-a" />
+      <div className="lux-orb-b" />
+      <div className="lux-orb-c" />
       <motion.header
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -33,9 +36,9 @@ export default function WelcomePage() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55 }}
-        className="surface-luxe cyber-grid neon-ring rounded-[30px] px-6 py-12 text-center sm:px-10"
+        className="surface-luxe lux-panel cyber-grid neon-ring rounded-[30px] px-6 py-12 text-center sm:px-10"
       >
-        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1.5 text-xs font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
+        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3.5 py-1.5 text-xs font-medium text-cyan-200 light:border-cyan-300 light:bg-cyan-100 light:text-cyan-700">
           <Sparkles size={12} />
           AI Powered Platform For Content Creators
         </div>

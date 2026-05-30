@@ -173,15 +173,16 @@ export default function OnboardingPage() {
   };
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center px-5 py-12">
-      <div className="pointer-events-none fixed left-[-120px] top-[-80px] h-[400px] w-[400px] rounded-full bg-violet-600/20 blur-[100px]" />
-      <div className="pointer-events-none fixed bottom-[-100px] right-[-100px] h-[350px] w-[350px] rounded-full bg-fuchsia-600/15 blur-[90px]" />
+    <main className="lux-page flex min-h-screen w-full items-center justify-center px-5 py-12">
+      <div className="lux-orb-a" />
+      <div className="lux-orb-b" />
+      <div className="lux-orb-c" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="surface-card relative w-full max-w-[720px] overflow-hidden rounded-[28px] p-6 sm:p-8"
+        className="surface-luxe lux-panel relative w-full max-w-[720px] overflow-hidden rounded-[28px] p-6 sm:p-8"
       >
         <div className="mb-5 flex items-center justify-between gap-3">
           <Logo size="md" className="!w-[220px] max-w-full" />
