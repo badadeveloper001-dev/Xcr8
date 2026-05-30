@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
@@ -56,6 +56,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const userId = useCreatorStore((s) => s.userId);
   const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [activePostMenu, setActivePostMenu] = useState<string | null>(null);
   useEffect(() => {
     if (!userId) router.replace("/auth/login");
   }, [router, userId]);
@@ -161,6 +164,39 @@ export default function DashboardPage() {
     ];
   }, [data?.recent_posts]);
 
+  const workspaceLinks = [
+    { label: "Create post", href: "/compose", description: "Open the composer" },
+    { label: "Schedule content", href: "/calendar", description: "Review upcoming posts" },
+    { label: "Analytics", href: "/analytics", description: "Open performance insights" },
+    { label: "AI Studio", href: "/ai-studio", description: "Generate content assets" },
+    { label: "Settings", href: "/settings", description: "Manage profile and accounts" },
+  ] as const;
+
+  const notificationItems = [
+    {
+      title: "3 posts are ready for review",
+      detail: "Open the composer to approve or edit them.",
+      href: "/compose",
+    },
+    {
+      title: "Peak posting window opens at 7:30 PM",
+      detail: "Check the calendar before your next publish.",
+      href: "/calendar",
+    },
+  ] as const;
+
+  const postActions = [
+    { label: "Edit in Composer", href: "/compose" },
+    { label: "Review Analytics", href: "/analytics" },
+    { label: "Schedule in Calendar", href: "/calendar" },
+  ] as const;
+
+  const openWorkspaceLink = (href: string) => {
+    setMenuOpen(false);
+    setNotificationsOpen(false);
+    router.push(href);
+  };
+
   if (!userId) return null;
 
   return (
@@ -169,6 +205,10 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <button
             type="button"
+            onClick={() => {
+              setNotificationsOpen(false);
+              setMenuOpen((current) => !current);
+            }}
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-slate-200 backdrop-blur-md light:border-slate-200 light:bg-white light:text-slate-700"
             aria-label="Open menu"
           >
@@ -178,20 +218,91 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                setNotificationsOpen((current) => !current);
+              }}
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-slate-200 backdrop-blur-md light:border-slate-200 light:bg-white light:text-slate-700"
               aria-label="Notifications"
             >
               <Bell size={18} />
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-fuchsia-500" />
             </button>
-            <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-white/70 bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 shadow-lg light:border-white">
+            <button
+              type="button"
+              onClick={() => openWorkspaceLink("/settings")}
+              className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-white/70 bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 shadow-lg light:border-white"
+              aria-label="Open profile settings"
+            >
               <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-white">
                 AB
               </div>
               <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-black/30 bg-green-400" />
-            </div>
+            </button>
           </div>
         </div>
+
+        {menuOpen ? (
+          <div className="surface-card rounded-[24px] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="section-kicker">Workspace menu</p>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                className="text-xs font-medium text-slate-400 hover:text-white light:hover:text-slate-900"
+              >
+                Close
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {workspaceLinks.map((item) => (
+                <button
+                  key={item.href}
+                  type="button"
+                  onClick={() => openWorkspaceLink(item.href)}
+                  className="surface-soft rounded-2xl px-4 py-3 text-left transition hover:-translate-y-0.5"
+                >
+                  <p className="text-sm font-semibold text-white light:text-slate-900">
+                    {item.label}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
+                    {item.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {notificationsOpen ? (
+          <div className="surface-card rounded-[24px] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="section-kicker">Notifications</p>
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(false)}
+                className="text-xs font-medium text-slate-400 hover:text-white light:hover:text-slate-900"
+              >
+                Close
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              {notificationItems.map((item) => (
+                <button
+                  key={item.title}
+                  type="button"
+                  onClick={() => openWorkspaceLink(item.href)}
+                  className="surface-soft w-full rounded-2xl px-4 py-3 text-left transition hover:-translate-y-0.5"
+                >
+                  <p className="text-sm font-semibold text-white light:text-slate-900">
+                    {item.title}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400 light:text-slate-600">{item.detail}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -260,8 +371,18 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-3 gap-3">
           {snapshotCards.map((card) => (
-            <div
+            <button
               key={card.label}
+              type="button"
+              onClick={() =>
+                openWorkspaceLink(
+                  card.label === "Drafts"
+                    ? "/compose"
+                    : card.label === "Scheduled"
+                      ? "/calendar"
+                      : "/analytics",
+                )
+              }
               className="surface-card rounded-2xl border border-white/10 p-3.5 light:border-slate-200"
             >
               <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500/25 to-violet-500/20 text-fuchsia-200 light:from-violet-100 light:to-fuchsia-100 light:text-violet-700">
@@ -282,7 +403,7 @@ export default function DashboardPage() {
                   <ChevronRight size={14} />
                 </span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -299,12 +420,19 @@ export default function DashboardPage() {
                 key={trend.title}
                 className="surface-soft flex items-center gap-3 rounded-xl border border-white/10 px-3 py-3 light:border-slate-200"
               >
-                <span
+                <button
+                  type="button"
+                  onClick={() => openWorkspaceLink("/analytics")}
                   className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${trend.tone} text-fuchsia-200 light:text-violet-700`}
+                  aria-label={`Open analytics insight ${trend.title}`}
                 >
                   <trend.icon size={18} />
-                </span>
-                <div className="min-w-0 flex-1">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openWorkspaceLink("/analytics")}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="text-xs uppercase tracking-[0.08em] text-slate-400 light:text-slate-500">
                     {trend.subtitle}
                   </p>
@@ -312,8 +440,15 @@ export default function DashboardPage() {
                     {trend.title}
                   </p>
                   <p className="text-sm text-slate-400 light:text-slate-600">{trend.detail}</p>
-                </div>
-                <ChevronRight size={16} className="text-slate-500" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openWorkspaceLink("/analytics")}
+                  className="inline-flex items-center justify-center text-slate-500"
+                  aria-label={`Open ${trend.title}`}
+                >
+                  <ChevronRight size={16} />
+                </button>
               </li>
             ))}
           </ul>
@@ -333,15 +468,22 @@ export default function DashboardPage() {
                 className="surface-soft rounded-xl border border-white/10 px-3 py-2.5 light:border-slate-200"
               >
                 <div className="flex items-center gap-3">
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => openWorkspaceLink("/compose")}
                     className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${post.image}`}
+                    aria-label={`Edit ${post.title} in composer`}
                   >
                     <span className="absolute bottom-1.5 right-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[11px] text-white">
                       {post.runtime}
                     </span>
-                  </div>
+                  </button>
 
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => openWorkspaceLink("/compose")}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <p className="truncate text-base font-semibold text-white light:text-slate-900">
                       {post.title}
                     </p>
@@ -359,16 +501,36 @@ export default function DashboardPage() {
                         {post.status}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
                   <button
                     type="button"
+                    onClick={() =>
+                      setActivePostMenu((current) => (current === post.id ? null : post.id))
+                    }
                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/10 light:hover:bg-slate-100"
-                    aria-label="Post options"
+                    aria-label={`Post options for ${post.title}`}
                   >
                     <MoreVertical size={16} />
                   </button>
                 </div>
+                {activePostMenu === post.id ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    {postActions.map((action) => (
+                      <button
+                        key={action.label}
+                        type="button"
+                        onClick={() => {
+                          setActivePostMenu(null);
+                          router.push(action.href);
+                        }}
+                        className="surface-soft rounded-xl px-3 py-2 text-xs font-medium text-slate-300 light:text-slate-700"
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
