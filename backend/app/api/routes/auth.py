@@ -79,6 +79,17 @@ def _ensure_unique_username(db: Session, base: str) -> str:
         suffix += 1
 
 
+def _extract_onboarding_state(user_meta: dict | None) -> tuple[bool, bool]:
+    if not isinstance(user_meta, dict):
+        return False, True
+
+    if "onboarding_complete" not in user_meta:
+        # Older accounts may not have this metadata; default to complete to avoid onboarding loops.
+        return False, True
+
+    return True, bool(user_meta.get("onboarding_complete"))
+
+
 @router.post("/signup", response_model=AuthSessionResponse)
 def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
     if payload.password != payload.confirm_password:
@@ -91,7 +102,11 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
         supabase_sign_up(
             email=payload.email,
             password=payload.password,
-            metadata={"full_name": payload.full_name, "username": payload.username},
+            metadata={
+                "full_name": payload.full_name,
+                "username": payload.username,
+                "onboarding_complete": False,
+            },
         )
     except SupabaseAuthError as exc:
         message = str(exc)
@@ -190,11 +205,15 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
             ) from exc
         raise HTTPException(status_code=401, detail=message) from exc
 
+    auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
+    user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
+    has_onboarding_flag, onboarding_from_meta = _extract_onboarding_state(
+        user_meta if isinstance(user_meta, dict) else None
+    )
+
     user = db.scalar(select(User).where(User.email == payload.email))
     credential: AuthCredential | None = None
     if not user:
-        auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
-        user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
         display_name = payload.email.split("@")[0]
         if isinstance(user_meta, dict):
             display_name = str(user_meta.get("full_name") or display_name)
@@ -202,6 +221,7 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
         user = User(
             email=payload.email,
             display_name=display_name,
+            onboarding_complete=onboarding_from_meta,
         )
         db.add(user)
         db.flush()
@@ -226,6 +246,12 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
             multilingual_profile=[user.language],
         )
         db.add(profile)
+    else:
+        if has_onboarding_flag:
+            user.onboarding_complete = user.onboarding_complete or onboarding_from_meta
+        elif not user.onboarding_complete:
+            # Accounts without onboarding metadata are treated as already onboarded.
+            user.onboarding_complete = True
 
     if credential is None:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
