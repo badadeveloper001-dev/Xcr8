@@ -359,3 +359,60 @@ def generate_content_ideas(payload: dict) -> dict:
     logger.warning("AI idea generation unavailable (%s); using local fallback.", last_error)
     return _local_brainstorm(payload)
 
+
+def _local_compose(payload: dict) -> dict:
+    topic = str(payload.get("prompt", "content idea")).strip()
+    platform = str(payload.get("platform", "instagram")).strip().lower()
+    language = str(payload.get("language", "english")).strip().lower()
+    tone = str(payload.get("tone", "conversational")).strip()
+    creator_memory = payload.get("creator_memory", {}) if isinstance(payload.get("creator_memory", {}), dict) else {}
+    keywords = _extract_keywords(topic, max_items=4)
+    primary = keywords[0] if keywords else "content"
+    secondary = keywords[1] if len(keywords) > 1 else primary
+    hashtags = _contextual_hashtags(topic, platform, language)
+    memory_hint = _memory_hint(creator_memory)
+
+    content_plan = {
+        "title": f"{primary.title()} content plan",
+        "angle": f"Turn the request into a {tone} post with one clear idea, one example, and one practical takeaway.",
+        "hook": f"I want to show you a simpler way to approach {primary}.",
+        "intro": f"Open with the problem around {primary} in one direct sentence.",
+        "body": [
+            f"Explain the core idea behind {primary} in plain language.",
+            f"Add one real example that makes the idea useful for {secondary}.",
+            "Close with a next step the audience can try today.",
+        ],
+        "cta": "Ask people to reply with their version of the idea.",
+        "hashtags": hashtags,
+    }
+    if memory_hint:
+        content_plan["body"].append(f"Include this creator note naturally: {memory_hint}")
+
+    return {
+        "assistant_message": f"Got it. I turned your prompt into a usable plan: {content_plan['title']}.",
+        "content_plan": content_plan,
+        "follow_up_question": "Do you want it shorter, more bold, or more local?",
+        "model": "backend-local-compose",
+        "prompt_template_version": "compose-v1",
+        "latency_ms": 0,
+        "usage": {"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
+    }
+
+
+def generate_composed_content(payload: dict) -> dict:
+    last_error: Exception | None = None
+    for base_url in _ai_service_candidates():
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    f"{base_url}/compose",
+                    json=payload,
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            last_error = exc
+
+    logger.warning("AI compose unavailable (%s); using local fallback.", last_error)
+    return _local_compose(payload)
+

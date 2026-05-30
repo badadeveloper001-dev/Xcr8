@@ -67,3 +67,39 @@ class ContentIdeaResponse(BaseModel):
     latency_ms: int = 0
     ideas: list[ContentIdea]
     usage: dict = Field(default_factory=dict)
+
+
+class ConversationMessage(BaseModel):
+    role: str = Field(pattern=r"^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=8000)
+
+
+class ComposeRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=2000)
+    platform: str = Field(default="instagram", max_length=40)
+    language: str = Field(default="english", max_length=32)
+    tone: str = Field(default="conversational", max_length=80)
+    audience_location: str | None = None
+    user_id: int | None = None
+    creator_memory: dict = Field(default_factory=dict)
+    messages: list[ConversationMessage] = Field(default_factory=list)
+
+
+class ContentPlan(BaseModel):
+    title: str
+    angle: str
+    hook: str
+    intro: str
+    body: list[str] = Field(default_factory=list)
+    cta: str
+    hashtags: list[str] = Field(default_factory=list)
+
+
+class ComposeResponse(BaseModel):
+    assistant_message: str
+    content_plan: ContentPlan
+    follow_up_question: str
+    model: str
+    prompt_template_version: str
+    latency_ms: int = 0
+    usage: dict = Field(default_factory=dict)

@@ -189,6 +189,39 @@ export type AiBrainstormResponse = {
   usage: Record<string, unknown>;
 };
 
+export type AiConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AiComposePayload = {
+  user_id: number;
+  prompt: string;
+  platform: string;
+  language: string;
+  tone: string;
+  audience_location?: string | null;
+  messages?: AiConversationMessage[];
+};
+
+export type AiComposeResponse = {
+  assistant_message: string;
+  content_plan: {
+    title: string;
+    angle: string;
+    hook: string;
+    intro: string;
+    body: string[];
+    cta: string;
+    hashtags: string[];
+  };
+  follow_up_question: string;
+  model: string;
+  prompt_template_version: string;
+  latency_ms: number;
+  usage: Record<string, unknown>;
+};
+
 export async function signup(payload: SignupPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup", payload);
   return data;
@@ -297,6 +330,13 @@ export async function generateAiBrainstorm(
   payload: AiBrainstormPayload,
 ): Promise<AiBrainstormResponse> {
   const { data } = await apiClient.post<AiBrainstormResponse>("/api/v1/ai/brainstorm", payload, {
+    timeout: 60_000,
+  });
+  return data;
+}
+
+export async function composeAiContent(payload: AiComposePayload): Promise<AiComposeResponse> {
+  const { data } = await apiClient.post<AiComposeResponse>("/api/v1/ai/compose", payload, {
     timeout: 60_000,
   });
   return data;

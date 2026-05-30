@@ -160,3 +160,38 @@ class AIBrainstormResponse(BaseModel):
     latency_ms: int = 0
     ideas: list[AIBrainstormIdea]
     usage: dict = Field(default_factory=dict)
+
+
+class AIConversationMessage(BaseModel):
+    role: str = Field(pattern=r"^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=8000)
+
+
+class AIComposeRequest(BaseModel):
+    user_id: int
+    prompt: str = Field(min_length=3, max_length=2000)
+    platform: str = Field(default="instagram", max_length=40)
+    language: str = Field(default="english", max_length=32)
+    tone: str = Field(default="conversational", max_length=80)
+    audience_location: str | None = None
+    messages: list[AIConversationMessage] = Field(default_factory=list)
+
+
+class AIContentPlan(BaseModel):
+    title: str
+    angle: str
+    hook: str
+    intro: str
+    body: list[str] = Field(default_factory=list)
+    cta: str
+    hashtags: list[str] = Field(default_factory=list)
+
+
+class AIComposeResponse(BaseModel):
+    assistant_message: str
+    content_plan: AIContentPlan
+    follow_up_question: str
+    model: str
+    prompt_template_version: str
+    latency_ms: int = 0
+    usage: dict = Field(default_factory=dict)
