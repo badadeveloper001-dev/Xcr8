@@ -1,16 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight, Bot, MessageSquareQuote, Sparkles, Wand2 } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
-import {
-  composeAiContent,
-  getApiErrorMessage,
-  type AiComposeResponse,
-  type AiConversationMessage,
-} from "@/lib/api";
+import { composeAiContent, getApiErrorMessage, type AiComposeResponse } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 type ChatItem = {
@@ -31,11 +26,6 @@ export default function AIStudioPage() {
     useCreatorStore((state) => state.fullName) ??
     useCreatorStore((state) => state.displayName) ??
     "Creator";
-  const creatorProfile = useCreatorStore((state) => ({
-    platform: state.distributionDraft
-      ? (state.distributionDraft.variants[0]?.platform ?? "instagram")
-      : "instagram",
-  }));
 
   const [messages, setMessages] = useState<ChatItem[]>([
     {
@@ -57,11 +47,6 @@ export default function AIStudioPage() {
   useEffect(() => {
     if (!userId) router.replace("/auth/login");
   }, [router, userId]);
-
-  const conversation = useMemo<AiConversationMessage[]>(
-    () => messages.map((message) => ({ role: message.role, content: message.content })),
-    [messages],
-  );
 
   if (!userId) return null;
 
