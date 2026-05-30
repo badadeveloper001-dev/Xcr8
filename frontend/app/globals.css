@@ -4,38 +4,42 @@
 
 /* ─── Design tokens ──────────────────────────────── */
 :root {
-  --background: 220 30% 97%;
-  --foreground: 226 30% 10%;
-  --primary: 263 86% 57%;
+  --background: 218 34% 97%;
+  --foreground: 224 28% 12%;
+  --primary: 255 84% 58%;
   --primary-foreground: 0 0% 100%;
-  --border: 226 20% 88%;
-  --input: 226 24% 93%;
-  --ring: 263 86% 57%;
+  --border: 224 22% 87%;
+  --input: 222 28% 94%;
+  --ring: 194 90% 48%;
   --radius: 0.875rem;
 
   /* Surface tokens – light */
-  --surface-card-bg: rgba(255, 255, 255, 0.98);
-  --surface-card-border: rgba(18, 24, 38, 0.08);
-  --surface-card-shadow: 0 2px 12px rgba(20, 16, 50, 0.07), 0 1px 3px rgba(20, 16, 50, 0.05);
-  --surface-soft-bg: rgba(246, 247, 255, 0.95);
-  --surface-soft-border: rgba(18, 24, 38, 0.06);
+  --surface-card-bg: rgba(255, 255, 255, 0.9);
+  --surface-card-border: rgba(17, 24, 39, 0.1);
+  --surface-card-shadow:
+    0 18px 44px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --surface-soft-bg: rgba(245, 248, 255, 0.82);
+  --surface-soft-border: rgba(17, 24, 39, 0.09);
 }
 
 .dark {
-  --background: 242 54% 6%;
-  --foreground: 210 40% 98%;
-  --primary: 263 86% 57%;
+  --background: 228 46% 7%;
+  --foreground: 210 38% 96%;
+  --primary: 255 84% 60%;
   --primary-foreground: 0 0% 100%;
-  --border: 242 22% 20%;
-  --input: 242 22% 14%;
-  --ring: 263 86% 57%;
+  --border: 230 24% 22%;
+  --input: 229 26% 14%;
+  --ring: 194 90% 54%;
 
   /* Surface tokens – dark */
-  --surface-card-bg: rgba(14, 17, 38, 0.92);
-  --surface-card-border: rgba(255, 255, 255, 0.09);
-  --surface-card-shadow: 0 4px 24px rgba(0, 0, 10, 0.4);
-  --surface-soft-bg: rgba(10, 13, 28, 0.78);
-  --surface-soft-border: rgba(255, 255, 255, 0.06);
+  --surface-card-bg: rgba(15, 22, 43, 0.84);
+  --surface-card-border: rgba(148, 163, 184, 0.2);
+  --surface-card-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5), 0 8px 20px rgba(8, 15, 38, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --surface-soft-bg: rgba(12, 18, 36, 0.72);
+  --surface-soft-border: rgba(148, 163, 184, 0.2);
 }
 
 /* ─── Base reset ─────────────────────────────────── */
@@ -59,17 +63,18 @@ body {
 /* ─── Backgrounds ────────────────────────────────── */
 .dark body {
   background-image:
-    radial-gradient(ellipse at 8% 10%, rgba(139, 72, 255, 0.22), transparent 38%),
-    radial-gradient(ellipse at 90% 8%, rgba(72, 36, 220, 0.18), transparent 32%),
-    radial-gradient(ellipse at 50% 90%, rgba(90, 20, 180, 0.12), transparent 40%),
-    linear-gradient(160deg, #080320 0%, #090420 50%, #07051a 100%);
+    radial-gradient(ellipse at 8% 8%, rgba(99, 102, 241, 0.28), transparent 36%),
+    radial-gradient(ellipse at 92% 12%, rgba(56, 189, 248, 0.2), transparent 34%),
+    radial-gradient(ellipse at 50% 96%, rgba(244, 114, 182, 0.12), transparent 42%),
+    linear-gradient(165deg, #060a19 0%, #0a1026 52%, #050913 100%);
 }
 
 html:not(.dark) body {
   background-image:
-    radial-gradient(ellipse at 14% 10%, rgba(139, 80, 255, 0.1), transparent 36%),
-    radial-gradient(ellipse at 86% 6%, rgba(108, 60, 250, 0.08), transparent 32%),
-    linear-gradient(180deg, #f8f9ff 0%, #f0f2fb 100%);
+    radial-gradient(ellipse at 12% 8%, rgba(99, 102, 241, 0.13), transparent 36%),
+    radial-gradient(ellipse at 88% 6%, rgba(56, 189, 248, 0.12), transparent 34%),
+    radial-gradient(ellipse at 48% 100%, rgba(244, 114, 182, 0.09), transparent 42%),
+    linear-gradient(180deg, #f7faff 0%, #eef3fb 100%);
 }
 
 /* ─── Reusable surface classes ───────────────────── */
@@ -87,13 +92,14 @@ html:not(.dark) body {
 
 .surface-luxe {
   background:
-    radial-gradient(circle at 14% 12%, rgba(168, 85, 247, 0.2), transparent 36%),
-    radial-gradient(circle at 85% 84%, rgba(59, 130, 246, 0.14), transparent 34%),
+    radial-gradient(circle at 14% 12%, rgba(99, 102, 241, 0.24), transparent 36%),
+    radial-gradient(circle at 85% 84%, rgba(56, 189, 248, 0.16), transparent 34%),
+    radial-gradient(circle at 72% 16%, rgba(244, 114, 182, 0.12), transparent 28%),
     var(--surface-card-bg);
-  border: 1px solid color-mix(in srgb, var(--surface-card-border) 72%, rgba(139, 92, 246, 0.4));
+  border: 1px solid color-mix(in srgb, var(--surface-card-border) 70%, rgba(99, 102, 241, 0.46));
   box-shadow:
-    0 14px 40px rgba(60, 20, 150, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 20px 44px rgba(32, 45, 92, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
 .section-kicker {
@@ -101,11 +107,11 @@ html:not(.dark) body {
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #a78bfa;
+  color: #6366f1;
 }
 
 .text-holo {
-  background: linear-gradient(100deg, #f4f6ff 0%, #c4b5fd 38%, #7dd3fc 68%, #f0abfc 100%);
+  background: linear-gradient(100deg, #eef2ff 0%, #818cf8 36%, #22d3ee 68%, #fb7185 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -130,9 +136,9 @@ html:not(.dark) body {
 
 .neon-ring {
   box-shadow:
-    0 0 0 1px rgba(139, 92, 246, 0.35),
-    0 0 0 3px rgba(56, 189, 248, 0.1),
-    0 0 24px rgba(139, 92, 246, 0.24);
+    0 0 0 1px rgba(99, 102, 241, 0.35),
+    0 0 0 3px rgba(34, 211, 238, 0.14),
+    0 0 28px rgba(99, 102, 241, 0.26);
 }
 
 .scanline {
@@ -163,9 +169,9 @@ html:not(.dark) body {
 
 /* ─── Gradient CTA ───────────────────────────────── */
 .cta-btn {
-  background: linear-gradient(100deg, #9f3fff 0%, #7c32ff 55%, #5f2eff 100%);
+  background: linear-gradient(100deg, #4f46e5 0%, #2563eb 44%, #06b6d4 100%);
   color: #fff;
-  box-shadow: 0 10px 24px rgba(95, 46, 255, 0.34);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.36);
   transition:
     opacity 0.15s ease,
     transform 0.14s ease,
@@ -173,7 +179,7 @@ html:not(.dark) body {
 }
 .cta-btn:hover {
   opacity: 0.96;
-  box-shadow: 0 14px 32px rgba(95, 46, 255, 0.42);
+  box-shadow: 0 16px 36px rgba(6, 182, 212, 0.34);
   transform: translateY(-1px);
 }
 .cta-btn:active {
@@ -239,7 +245,7 @@ html:not(.dark) .text-slate-500 {
   color: #717d8e;
 }
 html:not(.dark) .text-violet-300 {
-  color: #7c3aed;
+  color: #4f46e5;
 }
 
 /* ─── Insight icon tints ─────────────────────────── */
@@ -261,13 +267,13 @@ html:not(.dark) .text-orange-300 {
   color: #64748b;
 }
 .xcr8-input:focus {
-  border-color: rgba(139, 92, 246, 0.6);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+  border-color: rgba(37, 99, 235, 0.62);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.16);
 }
 
 /* ─── Accessibility and feedback helpers ────────── */
 :focus-visible {
-  outline: 2px solid rgba(139, 92, 246, 0.8);
+  outline: 2px solid rgba(59, 130, 246, 0.85);
   outline-offset: 2px;
 }
 

@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { getSession } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -43,30 +42,20 @@ export default function SplashPage() {
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-12">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.14),transparent_30%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.2),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(34,211,238,0.14),transparent_34%)] dark:bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.26),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(34,211,238,0.18),transparent_34%)]" />
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.7, ease: "easeOut" }}
-        className="surface-luxe cyber-grid neon-ring relative z-10 w-full max-w-2xl rounded-[32px] px-6 py-12 text-center sm:px-10"
+        className="relative z-10"
       >
         <motion.div
-          animate={{ y: [0, -8, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          className="mx-auto mb-6 w-fit"
+          animate={{ y: [0, -10, 0], scale: [1, 1.02, 1] }}
+          transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
+          className="mx-auto w-fit"
         >
           <Logo size="md" className="!w-[280px] max-w-full" />
         </motion.div>
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1.5 text-xs font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
-          <Sparkles size={12} />
-          AI Powered Platform For Content Creators
-        </div>
-        <h1 className="text-holo text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-          Building your creator intelligence system
-        </h1>
-        <p className="mx-auto mt-4 max-w-xl text-sm text-slate-400 light:text-slate-500 sm:text-base">
-          Loading your session, personalization, and publishing workspace.
-        </p>
       </motion.div>
     </main>
   );
