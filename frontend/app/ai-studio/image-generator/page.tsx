@@ -12,6 +12,21 @@ type GeneratedImage = {
 };
 
 type RealismLevel = "balanced" | "realistic" | "ultra";
+type CameraAngle = "eye-level" | "low-angle" | "overhead" | "close-up";
+type LightingStyle = "soft daylight" | "golden hour" | "studio key light" | "neon night";
+type UseCase = "ad-creative" | "product-still" | "portrait" | "thumbnail";
+
+type GenerationPreset = {
+  id: string;
+  label: string;
+  subject: string;
+  style: keyof typeof styleNotes;
+  ratio: "4:5" | "1:1" | "16:9";
+  mood: string;
+  palette: string;
+  camera: CameraAngle;
+  lighting: LightingStyle;
+};
 
 const styleNotes: Record<string, string> = {
   cinematic: "cinematic composition, dramatic natural lighting, rich depth of field",
@@ -30,30 +45,111 @@ const realismDirectives: Record<RealismLevel, string> = {
 };
 
 const realismAttempts: Record<RealismLevel, number> = {
-  balanced: 1,
-  realistic: 2,
-  ultra: 3,
+  balanced: 2,
+  realistic: 3,
+  ultra: 4,
 };
 
+const useCaseDirectives: Record<UseCase, string> = {
+  "ad-creative":
+    "premium ad creative, conversion-focused composition, clean negative space, visual hierarchy",
+  "product-still":
+    "hero product shot, clean backdrop, precise material rendering, realistic micro-texture detail",
+  portrait:
+    "editorial portrait photography, natural face proportions, clean skin texture, realistic eyes and hands",
+  thumbnail:
+    "high-clarity thumbnail image, strong subject separation, bold readable composition, high contrast",
+};
+
+const useCaseRatios: Record<UseCase, "4:5" | "1:1" | "16:9"> = {
+  "ad-creative": "4:5",
+  "product-still": "1:1",
+  portrait: "4:5",
+  thumbnail: "16:9",
+};
+
+const cleanPhotorealismDirective =
+  "tack-sharp focus, crisp edges, clean details, natural geometry, accurate anatomy, no visual artifacts";
+
 const qualityNegativeDirectives =
-  "blurry, low resolution, cartoon, painting, illustration, cgi, wax skin, deformed face, extra fingers, extra limbs, text overlay, watermark, logo";
+  "blurry, soft focus, low resolution, noisy image, jpeg artifacts, cartoon, painting, illustration, cgi, wax skin, deformed face, extra fingers, extra limbs, duplicate people, asymmetrical eyes, broken teeth, distorted anatomy, text overlay, watermark, logo";
+
+const variationLabels = ["Hero", "Alternative A", "Alternative B"] as const;
+const variationDirections = [
+  "hero framing, premium composition",
+  "alternative framing, changed angle",
+  "alternative framing, changed spacing",
+] as const;
+
+const generationPresets: readonly GenerationPreset[] = [
+  {
+    id: "creator-workspace",
+    label: "Creator Workspace",
+    subject: "Creator building a weekly content system at a desk",
+    style: "cinematic",
+    ratio: "4:5",
+    mood: "confident and practical",
+    palette: "warm neutrals, muted violet accents, deep charcoal",
+    camera: "eye-level",
+    lighting: "soft daylight",
+  },
+  {
+    id: "product-launch",
+    label: "Product Launch",
+    subject: "Premium skincare product on a modern vanity with subtle reflections",
+    style: "editorial",
+    ratio: "1:1",
+    mood: "clean and aspirational",
+    palette: "cream, rose beige, satin silver",
+    camera: "close-up",
+    lighting: "studio key light",
+  },
+  {
+    id: "ugc-lifestyle",
+    label: "UGC Lifestyle",
+    subject: "Young creator recording a short testimonial with a phone in a bright apartment",
+    style: "documentary",
+    ratio: "4:5",
+    mood: "authentic and upbeat",
+    palette: "natural skin tones, soft blue, warm wood",
+    camera: "eye-level",
+    lighting: "golden hour",
+  },
+  {
+    id: "brand-hero",
+    label: "Brand Hero Banner",
+    subject: "High-end fashion founder in a modern studio with strong silhouettes",
+    style: "vibrant",
+    ratio: "16:9",
+    mood: "bold and premium",
+    palette: "midnight navy, electric cyan, soft magenta",
+    camera: "low-angle",
+    lighting: "neon night",
+  },
+];
 
 const isStyleKey = (value: string): value is keyof typeof styleNotes => value in styleNotes;
 
+const cleanText = (value: string) => value.trim().replace(/\s+/g, " ");
+const defaultPreset = generationPresets[0]!;
+
 export default function ImageGeneratorPage() {
-  const [subject, setSubject] = useState("Creator building a weekly content system at a desk");
-  const [style, setStyle] = useState<keyof typeof styleNotes>("cinematic");
-  const [mood, setMood] = useState("confident and practical");
-  const [ratio, setRatio] = useState("4:5");
-  const [palette, setPalette] = useState("warm orange, cream, deep charcoal");
+  const [subject, setSubject] = useState(defaultPreset.subject);
+  const [style, setStyle] = useState<keyof typeof styleNotes>(defaultPreset.style);
+  const [mood, setMood] = useState(defaultPreset.mood);
+  const [ratio, setRatio] = useState(defaultPreset.ratio);
+  const [palette, setPalette] = useState(defaultPreset.palette);
+  const [cameraAngle, setCameraAngle] = useState<CameraAngle>(defaultPreset.camera);
+  const [lightingStyle, setLightingStyle] = useState<LightingStyle>(defaultPreset.lighting);
+  const [useCase, setUseCase] = useState<UseCase>("ad-creative");
   const [realism, setRealism] = useState<RealismLevel>("ultra");
   const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [promptPreview, setPromptPreview] = useState<string>("");
   const [generating, setGenerating] = useState(false);
+  const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canGenerate = subject.trim().length > 4;
-
-  const variationLabels = useMemo(() => ["Variation 1", "Variation 2", "Variation 3"], []);
 
   useEffect(() => {
     return () => {
@@ -96,10 +192,80 @@ export default function ImageGeneratorPage() {
     return URL.createObjectURL(blob);
   };
 
+  const getDimensions = (nextRatio: string, nextRealism: RealismLevel) => {
+    if (nextRatio === "1:1") {
+      return nextRealism === "ultra"
+        ? { width: 1536, height: 1536 }
+        : { width: 1280, height: 1280 };
+    }
+
+    if (nextRatio === "16:9") {
+      return nextRealism === "ultra" ? { width: 1920, height: 1080 } : { width: 1536, height: 864 };
+    }
+
+    return nextRealism === "ultra" ? { width: 1536, height: 1920 } : { width: 1280, height: 1600 };
+  };
+
+  const buildPrompt = (
+    cleanSubject: string,
+    cleanMood: string,
+    cleanPalette: string,
+    direction: string,
+  ) =>
+    [
+      `high-end commercial photography of ${cleanSubject}`,
+      realismDirectives[realism],
+      cleanPhotorealismDirective,
+      useCaseDirectives[useCase],
+      styleNotes[style],
+      `subject mood ${cleanMood}`,
+      `color palette ${cleanPalette}`,
+      `camera angle ${cameraAngle}`,
+      `lighting ${lightingStyle}`,
+      `aspect ratio ${ratio}`,
+      direction,
+      "no text overlay",
+      qualityNegativeDirectives,
+    ].join(", ");
+
+  const generateVariation = async (
+    label: string,
+    index: number,
+    cleanSubject: string,
+    cleanMood: string,
+    cleanPalette: string,
+  ): Promise<GeneratedImage> => {
+    const direction = variationDirections[index] ?? "alternative framing";
+    const prompt = buildPrompt(cleanSubject, cleanMood, cleanPalette, direction);
+    const dimensions = getDimensions(ratio, realism);
+    const seed = Date.now() + index * 97;
+    const src = await resolveImageBlobUrl(
+      prompt,
+      dimensions.width,
+      dimensions.height,
+      seed,
+      realismAttempts[realism],
+    );
+
+    return {
+      id: `${seed}-${index}`,
+      title: label,
+      src,
+      downloadName: `xcr8-${useCase}-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
+    };
+  };
+
   const handleGenerate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const cleanSubject = subject.trim();
+    const cleanSubject = cleanText(subject);
+    const cleanMood = cleanText(mood);
+    const cleanPalette = cleanText(palette);
+
     if (!cleanSubject) return;
+    if (cleanSubject.length < 10) {
+      setError("Describe the subject in a bit more detail so results can be higher quality.");
+      return;
+    }
 
     setGenerating(true);
     setError(null);
@@ -109,38 +275,20 @@ export default function ImageGeneratorPage() {
     }
     setImages([]);
 
-    const dimensions =
-      ratio === "1:1"
-        ? { width: 1280, height: 1280 }
-        : ratio === "16:9"
-          ? { width: 1536, height: 864 }
-          : { width: 1280, height: 1600 };
-
     const settled = await Promise.allSettled(
-      variationLabels.map(async (label, index) => {
-        const direction = `subject mood ${mood}, color palette ${palette}, aspect ratio ${ratio}`;
-        const prompt = `${cleanSubject}, ${realismDirectives[realism]}, ${styleNotes[style]}, ${direction}, no text overlay, ${qualityNegativeDirectives}`;
-        const seed = Date.now() + index * 37;
-        const src = await resolveImageBlobUrl(
-          prompt,
-          dimensions.width,
-          dimensions.height,
-          seed,
-          realismAttempts[realism],
-        );
-
-        return {
-          id: `${seed}-${index}`,
-          title: label,
-          src,
-          downloadName: `xcr8-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
-        };
-      }),
+      variationLabels.map((label, index) =>
+        generateVariation(label, index, cleanSubject, cleanMood, cleanPalette),
+      ),
     );
 
-    const built = settled
-      .filter((item): item is PromiseFulfilledResult<GeneratedImage> => item.status === "fulfilled")
-      .map((item) => item.value);
+    setPromptPreview(buildPrompt(cleanSubject, cleanMood, cleanPalette, variationDirections[0]));
+
+    const built: GeneratedImage[] = [];
+    for (const item of settled) {
+      if (item.status === "fulfilled") {
+        built.push(item.value);
+      }
+    }
 
     if (built.length === 0) {
       setError("Could not generate images right now. Please try again.");
@@ -154,6 +302,42 @@ export default function ImageGeneratorPage() {
     }
 
     setGenerating(false);
+  };
+
+  const handleRegenerateVariation = async (target: GeneratedImage, index: number) => {
+    const cleanSubject = cleanText(subject);
+    const cleanMood = cleanText(mood);
+    const cleanPalette = cleanText(palette);
+
+    if (!cleanSubject || cleanSubject.length < 10) {
+      setError("Add a slightly more detailed subject before regenerating.");
+      return;
+    }
+
+    setRegeneratingImageId(target.id);
+    setError(null);
+
+    try {
+      const regenerated = await generateVariation(
+        variationLabels[index] ?? "Alternative",
+        index,
+        cleanSubject,
+        cleanMood,
+        cleanPalette,
+      );
+
+      setImages((previous) =>
+        previous.map((item) => {
+          if (item.id !== target.id) return item;
+          URL.revokeObjectURL(item.src);
+          return regenerated;
+        }),
+      );
+    } catch {
+      setError("Could not regenerate this variation right now. Please try again.");
+    } finally {
+      setRegeneratingImageId(null);
+    }
   };
 
   const handleImageDownload = (src: string, fileName: string) => {
@@ -171,6 +355,18 @@ export default function ImageGeneratorPage() {
     }
   };
 
+  const applyPreset = (preset: GenerationPreset) => {
+    setSubject(preset.subject);
+    setStyle(preset.style);
+    setRatio(preset.ratio);
+    setUseCase(preset.style === "editorial" ? "product-still" : "ad-creative");
+    setMood(preset.mood);
+    setPalette(preset.palette);
+    setCameraAngle(preset.camera);
+    setLightingStyle(preset.lighting);
+    setError(null);
+  };
+
   return (
     <StudioShell
       title="AI Studio"
@@ -180,6 +376,24 @@ export default function ImageGeneratorPage() {
     >
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
         <form onSubmit={(e) => void handleGenerate(e)} className="space-y-3.5">
+          <div className="surface-soft rounded-2xl p-4">
+            <p className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Quick presets
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {generationPresets.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="surface-soft rounded-2xl p-4">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               What should the image show?
@@ -218,6 +432,21 @@ export default function ImageGeneratorPage() {
           </div>
 
           <select
+            value={useCase}
+            onChange={(e) => {
+              const selected = e.target.value as UseCase;
+              setUseCase(selected);
+              setRatio(useCaseRatios[selected]);
+            }}
+            className="xcr8-input"
+          >
+            <option value="ad-creative">Use case: Ad Creative</option>
+            <option value="product-still">Use case: Product Still</option>
+            <option value="portrait">Use case: Portrait</option>
+            <option value="thumbnail">Use case: Thumbnail</option>
+          </select>
+
+          <select
             value={realism}
             onChange={(e) => setRealism(e.target.value as RealismLevel)}
             className="xcr8-input"
@@ -242,6 +471,29 @@ export default function ImageGeneratorPage() {
             />
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <select
+              value={cameraAngle}
+              onChange={(e) => setCameraAngle(e.target.value as CameraAngle)}
+              className="xcr8-input"
+            >
+              <option value="eye-level">Camera: Eye level</option>
+              <option value="low-angle">Camera: Low angle</option>
+              <option value="overhead">Camera: Overhead</option>
+              <option value="close-up">Camera: Close up</option>
+            </select>
+            <select
+              value={lightingStyle}
+              onChange={(e) => setLightingStyle(e.target.value as LightingStyle)}
+              className="xcr8-input"
+            >
+              <option value="soft daylight">Lighting: Soft daylight</option>
+              <option value="golden hour">Lighting: Golden hour</option>
+              <option value="studio key light">Lighting: Studio key light</option>
+              <option value="neon night">Lighting: Neon night</option>
+            </select>
+          </div>
+
           <button
             type="submit"
             disabled={!canGenerate || generating}
@@ -264,11 +516,17 @@ export default function ImageGeneratorPage() {
             Photorealism mode controls strictness and internal rerolls. Generated images are loaded
             as downloadable files to reduce broken renders.
           </p>
+
+          {promptPreview ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400 light:border-slate-200 light:bg-white light:text-slate-600">
+              Prompt brief: {promptPreview}
+            </div>
+          ) : null}
         </form>
 
         <div className="space-y-3.5">
           {images.length ? (
-            images.map((image) => (
+            images.map((image, index) => (
               <article key={image.id} className="surface-card rounded-2xl p-4">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                   <ImagePlus size={11} />
@@ -282,14 +540,28 @@ export default function ImageGeneratorPage() {
                   className="h-auto w-full rounded-xl border border-white/10 bg-black/20 object-cover"
                 />
 
-                <button
-                  type="button"
-                  onClick={() => handleImageDownload(image.src, image.downloadName)}
-                  className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
-                >
-                  <Download size={12} />
-                  Download image
-                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleImageDownload(image.src, image.downloadName)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
+                  >
+                    <Download size={12} />
+                    Download image
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(regeneratingImageId)}
+                    onClick={() => void handleRegenerateVariation(image, index)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-60"
+                  >
+                    <RefreshCw
+                      size={12}
+                      className={regeneratingImageId === image.id ? "animate-spin" : ""}
+                    />
+                    {regeneratingImageId === image.id ? "Regenerating..." : "Regenerate this"}
+                  </button>
+                </div>
               </article>
             ))
           ) : (
