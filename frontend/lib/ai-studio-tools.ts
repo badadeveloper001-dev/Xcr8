@@ -1,6 +1,7 @@
-import { ImagePlus, Lightbulb, Mic, TrendingUp, Wand2, type LucideIcon } from "lucide-react";
+import { Bot, ImagePlus, Lightbulb, Mic, TrendingUp, Wand2, type LucideIcon } from "lucide-react";
 
 export type StudioToolId =
+  | "assistant"
   | "composer"
   | "brainstorm"
   | "image-generator"
@@ -20,6 +21,16 @@ export type StudioTool = {
 };
 
 export const studioTools: StudioTool[] = [
+  {
+    id: "assistant",
+    name: "Assistant",
+    tagline: "A central AI that knows your app and your style.",
+    description:
+      "Conversational workspace guide that answers product questions and plans next moves.",
+    status: "live",
+    icon: Bot,
+    href: "/ai-studio/assistant",
+  },
   {
     id: "composer",
     name: "Composer",

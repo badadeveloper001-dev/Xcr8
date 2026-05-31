@@ -2,6 +2,8 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.schemas import (
+    AssistantRequest,
+    AssistantResponse,
     ContentIdeaRequest,
     ContentIdeaResponse,
     ComposeRequest,
@@ -11,6 +13,7 @@ from app.schemas import (
     DetectLanguageRequest,
     DetectLanguageResponse,
 )
+from app.services.assistant import generate_assistant_reply
 from app.services.idea_generator import generate_composed_content, generate_content_ideas
 from app.services.caption_adapter import adapt_caption, detect_caption_language
 
@@ -59,4 +62,10 @@ def ideas_generate(payload: ContentIdeaRequest) -> ContentIdeaResponse:
 def compose(payload: ComposeRequest) -> ComposeResponse:
     result = generate_composed_content(payload.model_dump())
     return ComposeResponse(**result)
+
+
+@app.post("/assistant", response_model=AssistantResponse)
+def assistant(payload: AssistantRequest) -> AssistantResponse:
+    result = generate_assistant_reply(payload.model_dump())
+    return AssistantResponse(**result)
 

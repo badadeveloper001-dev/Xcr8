@@ -222,6 +222,27 @@ export type AiComposeResponse = {
   usage: Record<string, unknown>;
 };
 
+export type AiAssistantPayload = {
+  user_id: number;
+  message: string;
+  language: string;
+  tone: string;
+  vibe?: string | null;
+  messages?: AiConversationMessage[];
+};
+
+export type AiAssistantResponse = {
+  assistant_message: string;
+  follow_up_question: string;
+  suggested_actions: string[];
+  language: string;
+  tone: string;
+  model: string;
+  prompt_template_version: string;
+  latency_ms: number;
+  usage: Record<string, unknown>;
+};
+
 export async function signup(payload: SignupPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup", payload);
   return data;
@@ -337,6 +358,15 @@ export async function generateAiBrainstorm(
 
 export async function composeAiContent(payload: AiComposePayload): Promise<AiComposeResponse> {
   const { data } = await apiClient.post<AiComposeResponse>("/api/v1/ai/compose", payload, {
+    timeout: 60_000,
+  });
+  return data;
+}
+
+export async function chatWithAiAssistant(
+  payload: AiAssistantPayload,
+): Promise<AiAssistantResponse> {
+  const { data } = await apiClient.post<AiAssistantResponse>("/api/v1/ai/assistant", payload, {
     timeout: 60_000,
   });
   return data;

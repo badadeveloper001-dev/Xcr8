@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Compass, Sparkles, Stars, Workflow } from "lucide-react";
+import { ArrowRight, Compass, MessageSquareQuote, Stars, Workflow } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 
 export default function AIStudioPage() {
@@ -67,21 +67,22 @@ export default function AIStudioPage() {
             <Compass size={13} />
             Quick Start
           </p>
-          <h3 className="text-lg font-semibold text-white light:text-slate-900">Start with Image Generator</h3>
+          <h3 className="text-lg font-semibold text-white light:text-slate-900">
+            Start with Assistant
+          </h3>
           <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
-            Generate premium visual outputs first, then move to Composer or Brainstorm for post
-            copy and rollout.
+            Ask the central assistant anything about the app, your content, or your next move.
           </p>
           <Link
-            href="/ai-studio/image-generator"
+            href="/ai-studio/assistant"
             className="cta-btn mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold"
           >
-            Open Image Generator
+            Open Assistant
             <ArrowRight size={15} />
           </Link>
           <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[11px] font-medium text-indigo-200 light:border-indigo-300 light:bg-indigo-100 light:text-indigo-700">
-            <Sparkles size={11} />
-            Built for real production workflows
+            <MessageSquareQuote size={11} />
+            Built for real creator conversations
           </div>
         </motion.section>
       </div>

@@ -103,3 +103,26 @@ class ComposeResponse(BaseModel):
     prompt_template_version: str
     latency_ms: int = 0
     usage: dict = Field(default_factory=dict)
+
+
+class AssistantRequest(BaseModel):
+    user_id: int
+    message: str = Field(min_length=1, max_length=4000)
+    language: str = Field(default="auto", max_length=32)
+    tone: str = Field(default="conversational", max_length=80)
+    vibe: str | None = Field(default=None, max_length=120)
+    messages: list[ConversationMessage] = Field(default_factory=list)
+    app_context: dict = Field(default_factory=dict)
+    creator_memory: dict = Field(default_factory=dict)
+
+
+class AssistantResponse(BaseModel):
+    assistant_message: str
+    follow_up_question: str
+    suggested_actions: list[str] = Field(default_factory=list)
+    language: str
+    tone: str
+    model: str
+    prompt_template_version: str
+    latency_ms: int = 0
+    usage: dict = Field(default_factory=dict)
