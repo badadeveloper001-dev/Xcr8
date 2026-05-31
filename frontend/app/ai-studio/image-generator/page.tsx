@@ -3,24 +3,49 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Download, ImagePlus, RefreshCw } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
+import { useCreatorStore } from "@/lib/store";
 
 type GeneratedImage = {
   id: string;
   title: string;
   src: string;
+  historySrc: string;
   downloadName: string;
+  prompt: string;
+  createdAt: string;
+};
+
+type HistoryImage = {
+  id: string;
+  title: string;
+  src: string;
+  downloadName: string;
+  prompt: string;
+  createdAt: string;
+  settings: {
+    subject: string;
+    style: StyleKey;
+    ratio: "4:5" | "1:1" | "16:9";
+    mood: string;
+    palette: string;
+    cameraAngle: CameraAngle;
+    lightingStyle: LightingStyle;
+    useCase: UseCase;
+    realism: RealismLevel;
+  };
 };
 
 type RealismLevel = "balanced" | "realistic" | "ultra";
 type CameraAngle = "eye-level" | "low-angle" | "overhead" | "close-up";
 type LightingStyle = "soft daylight" | "golden hour" | "studio key light" | "neon night";
 type UseCase = "ad-creative" | "product-still" | "portrait" | "thumbnail" | "sports-action";
+type StyleKey = "cinematic" | "editorial" | "documentary" | "vibrant";
 
 type GenerationPreset = {
   id: string;
   label: string;
   subject: string;
-  style: keyof typeof styleNotes;
+  style: StyleKey;
   ratio: "4:5" | "1:1" | "16:9";
   mood: string;
   palette: string;
@@ -28,7 +53,7 @@ type GenerationPreset = {
   lighting: LightingStyle;
 };
 
-const styleNotes: Record<string, string> = {
+const styleNotes: Record<StyleKey, string> = {
   cinematic: "cinematic composition, dramatic natural lighting, rich depth of field",
   editorial: "editorial photography style, premium brand framing, clean composition",
   documentary: "documentary realism, authentic moment, natural skin texture",
@@ -135,10 +160,17 @@ const isStyleKey = (value: string): value is keyof typeof styleNotes => value in
 
 const cleanText = (value: string) => value.trim().replace(/\s+/g, " ");
 const defaultPreset = generationPresets[0]!;
+const HISTORY_LIMIT = 30;
 
 export default function ImageGeneratorPage() {
+  const userId = useCreatorStore((s) => s.userId);
+  const historyStorageKey = useMemo(
+    () => `xcr8-image-history:v1:${userId ?? "anon"}`,
+    [userId],
+  );
+
   const [subject, setSubject] = useState(defaultPreset.subject);
-  const [style, setStyle] = useState<keyof typeof styleNotes>(defaultPreset.style);
+  const [style, setStyle] = useState<StyleKey>(defaultPreset.style);
   const [mood, setMood] = useState(defaultPreset.mood);
   const [ratio, setRatio] = useState(defaultPreset.ratio);
   const [palette, setPalette] = useState(defaultPreset.palette);
@@ -147,12 +179,60 @@ export default function ImageGeneratorPage() {
   const [useCase, setUseCase] = useState<UseCase>("ad-creative");
   const [realism, setRealism] = useState<RealismLevel>("ultra");
   const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [history, setHistory] = useState<HistoryImage[]>([]);
   const [promptPreview, setPromptPreview] = useState<string>("");
   const [generating, setGenerating] = useState(false);
   const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canGenerate = subject.trim().length > 4;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(historyStorageKey);
+      if (!raw) {
+        setHistory([]);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        setHistory([]);
+        return;
+      }
+
+      const safe = parsed
+        .filter(
+          (entry): entry is HistoryImage =>
+            typeof entry === "object" &&
+            entry !== null &&
+            "id" in entry &&
+            "src" in entry &&
+            "title" in entry &&
+            "downloadName" in entry &&
+            "prompt" in entry &&
+            "createdAt" in entry &&
+            typeof entry.id === "string" &&
+            typeof entry.src === "string" &&
+            typeof entry.title === "string" &&
+            typeof entry.downloadName === "string" &&
+            typeof entry.prompt === "string" &&
+            typeof entry.createdAt === "string",
+        )
+        .slice(0, HISTORY_LIMIT);
+
+      setHistory(safe);
+    } catch {
+      setHistory([]);
+    }
+  }, [historyStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(historyStorageKey, JSON.stringify(history.slice(0, HISTORY_LIMIT)));
+  }, [history, historyStorageKey]);
 
   useEffect(() => {
     return () => {
@@ -174,7 +254,7 @@ export default function ImageGeneratorPage() {
     height: number,
     seed: number,
     attempts: number,
-  ): Promise<string> => {
+  ): Promise<{ blobUrl: string; historySrc: string }> => {
     const params = new URLSearchParams({
       prompt,
       width: String(width),
@@ -192,7 +272,13 @@ export default function ImageGeneratorPage() {
     if (!blob.type.startsWith("image/")) {
       throw new Error("invalid_blob");
     }
-    return URL.createObjectURL(blob);
+
+    const sourceHeader = response.headers.get("X-Xcr8-Image-Source")?.trim();
+    const blobUrl = URL.createObjectURL(blob);
+    return {
+      blobUrl,
+      historySrc: sourceHeader && sourceHeader.startsWith("http") ? sourceHeader : blobUrl,
+    };
   };
 
   const getDimensions = (nextRatio: string, nextRealism: RealismLevel) => {
@@ -242,19 +328,23 @@ export default function ImageGeneratorPage() {
     const prompt = buildPrompt(cleanSubject, cleanMood, cleanPalette, direction);
     const dimensions = getDimensions(ratio, realism);
     const seed = Date.now() + index * 97;
-    const src = await resolveImageBlobUrl(
+    const resolved = await resolveImageBlobUrl(
       prompt,
       dimensions.width,
       dimensions.height,
       seed,
       realismAttempts[realism],
     );
+    const now = new Date().toISOString();
 
     return {
       id: `${seed}-${index}`,
       title: label,
-      src,
+      src: resolved.blobUrl,
+      historySrc: resolved.historySrc,
       downloadName: `xcr8-${useCase}-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
+      prompt,
+      createdAt: now,
     };
   };
 
@@ -297,6 +387,29 @@ export default function ImageGeneratorPage() {
       setError("Could not generate images right now. Please try again.");
     } else {
       setImages(built);
+      setHistory((previous) => {
+        const newEntries: HistoryImage[] = built.map((item) => ({
+          id: item.id,
+          title: item.title,
+          src: item.historySrc,
+          downloadName: item.downloadName,
+          prompt: item.prompt,
+          createdAt: item.createdAt,
+          settings: {
+            subject: cleanSubject,
+            style,
+            ratio,
+            mood: cleanMood,
+            palette: cleanPalette,
+            cameraAngle,
+            lightingStyle,
+            useCase,
+            realism,
+          },
+        }));
+
+        return [...newEntries, ...previous].slice(0, HISTORY_LIMIT);
+      });
       if (built.length < variationLabels.length) {
         setError(
           `Generated ${built.length} of ${variationLabels.length} images. Please regenerate for more.`,
@@ -336,6 +449,30 @@ export default function ImageGeneratorPage() {
           return regenerated;
         }),
       );
+
+      setHistory((previous) => {
+        const next: HistoryImage = {
+          id: regenerated.id,
+          title: regenerated.title,
+          src: regenerated.historySrc,
+          downloadName: regenerated.downloadName,
+          prompt: regenerated.prompt,
+          createdAt: regenerated.createdAt,
+          settings: {
+            subject: cleanSubject,
+            style,
+            ratio,
+            mood: cleanMood,
+            palette: cleanPalette,
+            cameraAngle,
+            lightingStyle,
+            useCase,
+            realism,
+          },
+        };
+
+        return [next, ...previous].slice(0, HISTORY_LIMIT);
+      });
     } catch {
       setError("Could not regenerate this variation right now. Please try again.");
     } finally {
@@ -367,6 +504,20 @@ export default function ImageGeneratorPage() {
     setPalette(preset.palette);
     setCameraAngle(preset.camera);
     setLightingStyle(preset.lighting);
+    setError(null);
+  };
+
+  const restoreFromHistory = (item: HistoryImage) => {
+    setSubject(item.settings.subject);
+    setStyle(item.settings.style);
+    setRatio(item.settings.ratio);
+    setMood(item.settings.mood);
+    setPalette(item.settings.palette);
+    setCameraAngle(item.settings.cameraAngle);
+    setLightingStyle(item.settings.lightingStyle);
+    setUseCase(item.settings.useCase);
+    setRealism(item.settings.realism);
+    setPromptPreview(item.prompt);
     setError(null);
   };
 
@@ -573,6 +724,67 @@ export default function ImageGeneratorPage() {
               Generated images will appear here with one-click download.
             </div>
           )}
+
+          <section className="surface-card rounded-2xl p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="section-kicker">Generation History</p>
+                <p className="text-xs text-slate-400 light:text-slate-600">
+                  {history.length} saved image{history.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              {history.length ? (
+                <button
+                  type="button"
+                  onClick={() => setHistory([])}
+                  className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
+                >
+                  Clear history
+                </button>
+              ) : null}
+            </div>
+
+            {history.length ? (
+              <div className="space-y-3">
+                {history.slice(0, 12).map((item) => (
+                  <article key={item.id} className="surface-soft rounded-xl p-3">
+                    <img
+                      src={item.src}
+                      alt={item.title}
+                      loading="lazy"
+                      className="h-auto w-full rounded-lg border border-white/10 bg-black/20 object-cover"
+                    />
+                    <p className="mt-2 text-sm font-medium text-white light:text-slate-900">
+                      {item.title}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => restoreFromHistory(item)}
+                        className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-xs text-violet-300 transition hover:bg-violet-500/20"
+                      >
+                        Reuse settings
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleImageDownload(item.src, item.downloadName)}
+                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
+                      >
+                        Download
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500 light:text-slate-600">
+                Your generated images will be saved here automatically.
+              </p>
+            )}
+          </section>
         </div>
       </div>
     </StudioShell>

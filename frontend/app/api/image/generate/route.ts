@@ -37,6 +37,7 @@ type CandidateResult = {
   body: ArrayBuffer;
   contentType: string;
   score: number;
+  sourceUrl: string;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -173,7 +174,7 @@ export async function GET(request: NextRequest) {
           const score = scoreCandidate(contentType, body.byteLength);
 
           if (!best || score > best.score) {
-            best = { body, contentType, score };
+            best = { body, contentType, score, sourceUrl: url };
           }
         } catch {
           continue;
@@ -193,6 +194,7 @@ export async function GET(request: NextRequest) {
         "Content-Type": best.contentType,
         "Cache-Control": "no-store",
         "X-Xcr8-Image-Bytes": String(best.body.byteLength),
+        "X-Xcr8-Image-Source": best.sourceUrl,
       },
     });
   }
