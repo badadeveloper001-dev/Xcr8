@@ -82,9 +82,7 @@ export default function AssistantPage() {
         return;
       }
 
-      setError(
-        errorMessage,
-      );
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
