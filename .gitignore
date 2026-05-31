@@ -33,3 +33,6 @@ yarn-error.log*
 # Local CLI caches
 .home/
 .npm-cache/
+
+# Local test artifacts
+tmp/
