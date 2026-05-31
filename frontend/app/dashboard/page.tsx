@@ -54,14 +54,15 @@ const fallbackTrendRadar = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
   const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [activePostMenu, setActivePostMenu] = useState<string | null>(null);
   useEffect(() => {
-    if (!userId) router.replace("/auth/login");
-  }, [router, userId]);
+    if (hasHydrated && !userId) router.replace("/auth/login");
+  }, [hasHydrated, router, userId]);
 
   const { data } = useQuery<DashboardOverviewPayload, Error>({
     queryKey: ["dashboard", userId],
@@ -193,7 +194,7 @@ export default function DashboardPage() {
     router.push(href);
   };
 
-  if (!userId) return null;
+  if (!hasHydrated || !userId) return null;
 
   return (
     <MobileShell hideHeader>

@@ -50,6 +50,7 @@ function getUploadUrl(payload: unknown): string {
 export default function ComposePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
   const setDistributionDraft = useCreatorStore((s) => s.setDistributionDraft);
   const distributionDraft = useCreatorStore((s) => s.distributionDraft);
@@ -66,8 +67,8 @@ export default function ComposePage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) router.replace("/auth/login");
-  }, [router, userId]);
+    if (hasHydrated && !userId) router.replace("/auth/login");
+  }, [hasHydrated, router, userId]);
 
   const groupedVariants = useMemo(() => {
     const variants = distributionDraft?.variants ?? [];
@@ -77,7 +78,7 @@ export default function ComposePage() {
     }, {});
   }, [distributionDraft]);
 
-  if (!userId) return null;
+  if (!hasHydrated || !userId) return null;
 
   const toggleItem = (id: string, list: string[], setList: (v: string[]) => void) => {
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);

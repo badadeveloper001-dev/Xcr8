@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Download, ImagePlus, RefreshCw } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { useCreatorStore } from "@/lib/store";
@@ -164,10 +165,7 @@ const HISTORY_LIMIT = 30;
 
 export default function ImageGeneratorPage() {
   const userId = useCreatorStore((s) => s.userId);
-  const historyStorageKey = useMemo(
-    () => `xcr8-image-history:v1:${userId ?? "anon"}`,
-    [userId],
-  );
+  const historyStorageKey = useMemo(() => `xcr8-image-history:v1:${userId ?? "anon"}`, [userId]);
 
   const [subject, setSubject] = useState(defaultPreset.subject);
   const [style, setStyle] = useState<StyleKey>(defaultPreset.style);
@@ -507,20 +505,6 @@ export default function ImageGeneratorPage() {
     setError(null);
   };
 
-  const restoreFromHistory = (item: HistoryImage) => {
-    setSubject(item.settings.subject);
-    setStyle(item.settings.style);
-    setRatio(item.settings.ratio);
-    setMood(item.settings.mood);
-    setPalette(item.settings.palette);
-    setCameraAngle(item.settings.cameraAngle);
-    setLightingStyle(item.settings.lightingStyle);
-    setUseCase(item.settings.useCase);
-    setRealism(item.settings.realism);
-    setPromptPreview(item.prompt);
-    setError(null);
-  };
-
   return (
     <StudioShell
       title="AI Studio"
@@ -531,9 +515,17 @@ export default function ImageGeneratorPage() {
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
         <form onSubmit={(e) => void handleGenerate(e)} className="space-y-3.5">
           <div className="surface-soft rounded-2xl p-4">
-            <p className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Quick presets
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Quick presets
+              </p>
+              <Link
+                href="/ai-studio/history"
+                className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-300 transition hover:bg-violet-500/20"
+              >
+                History
+              </Link>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               {generationPresets.map((preset) => (
                 <button
@@ -724,67 +716,6 @@ export default function ImageGeneratorPage() {
               Generated images will appear here with one-click download.
             </div>
           )}
-
-          <section className="surface-card rounded-2xl p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="section-kicker">Generation History</p>
-                <p className="text-xs text-slate-400 light:text-slate-600">
-                  {history.length} saved image{history.length === 1 ? "" : "s"}
-                </p>
-              </div>
-              {history.length ? (
-                <button
-                  type="button"
-                  onClick={() => setHistory([])}
-                  className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
-                >
-                  Clear history
-                </button>
-              ) : null}
-            </div>
-
-            {history.length ? (
-              <div className="space-y-3">
-                {history.slice(0, 12).map((item) => (
-                  <article key={item.id} className="surface-soft rounded-xl p-3">
-                    <img
-                      src={item.src}
-                      alt={item.title}
-                      loading="lazy"
-                      className="h-auto w-full rounded-lg border border-white/10 bg-black/20 object-cover"
-                    />
-                    <p className="mt-2 text-sm font-medium text-white light:text-slate-900">
-                      {item.title}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      {new Date(item.createdAt).toLocaleString()}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => restoreFromHistory(item)}
-                        className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-xs text-violet-300 transition hover:bg-violet-500/20"
-                      >
-                        Reuse settings
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleImageDownload(item.src, item.downloadName)}
-                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
-                      >
-                        Download
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500 light:text-slate-600">
-                Your generated images will be saved here automatically.
-              </p>
-            )}
-          </section>
         </div>
       </div>
     </StudioShell>

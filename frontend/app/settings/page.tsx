@@ -27,6 +27,7 @@ const platforms = [
 export default function SettingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const clearSession = useCreatorStore((s) => s.clearSession);
   const userId = useCreatorStore((s) => s.userId);
   const email = useCreatorStore((s) => s.email);
@@ -35,8 +36,8 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) router.replace("/auth/login");
-  }, [router, userId]);
+    if (hasHydrated && !userId) router.replace("/auth/login");
+  }, [hasHydrated, router, userId]);
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["platform-connections", userId],
@@ -72,7 +73,7 @@ export default function SettingsPage() {
     },
   });
 
-  if (!userId) return null;
+  if (!hasHydrated || !userId) return null;
 
   return (
     <MobileShell title="Settings" subtitle="Profile, accounts & preferences.">
@@ -182,10 +183,7 @@ export default function SettingsPage() {
           ) : null}
           <div className="space-y-2">
             {platforms.map((p) => (
-              <div
-                key={p.id}
-                className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
-              >
+              <div key={p.id} className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3">
                 <span
                   className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${p.cls}`}
                 >

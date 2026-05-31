@@ -27,13 +27,14 @@ export function StudioShell({
   children,
 }: StudioShellProps) {
   const router = useRouter();
+  const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
 
   useEffect(() => {
-    if (!userId) router.replace("/auth/login");
-  }, [router, userId]);
+    if (hasHydrated && !userId) router.replace("/auth/login");
+  }, [hasHydrated, router, userId]);
 
-  if (!userId) return null;
+  if (!hasHydrated || !userId) return null;
 
   return (
     <MobileShell title={title} subtitle={subtitle}>

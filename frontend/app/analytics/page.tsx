@@ -130,6 +130,7 @@ const fadeUp = (delay = 0) => ({
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
   const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -145,8 +146,8 @@ export default function AnalyticsPage() {
   );
 
   useEffect(() => {
-    if (!userId) router.replace("/auth/login");
-  }, [router, userId]);
+    if (hasHydrated && !userId) router.replace("/auth/login");
+  }, [hasHydrated, router, userId]);
 
   const { data } = useQuery({
     queryKey: ["analytics", userId],
@@ -154,7 +155,7 @@ export default function AnalyticsPage() {
     enabled: Boolean(userId),
   });
 
-  if (!userId) return null;
+  if (!hasHydrated || !userId) return null;
 
   const engagement = data?.engagement?.length ? data.engagement : demoEngagement;
   const usingDemoData = !data?.engagement?.length;

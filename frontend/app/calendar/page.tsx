@@ -37,11 +37,12 @@ function formatSchedule(iso: string) {
 
 export default function CalendarPage() {
   const router = useRouter();
+  const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
 
   useEffect(() => {
-    if (!userId) router.replace("/auth/login");
-  }, [router, userId]);
+    if (hasHydrated && !userId) router.replace("/auth/login");
+  }, [hasHydrated, router, userId]);
 
   const { data } = useQuery({
     queryKey: ["calendar", userId],
@@ -51,7 +52,7 @@ export default function CalendarPage() {
     refetchOnWindowFocus: true,
   });
 
-  if (!userId) return null;
+  if (!hasHydrated || !userId) return null;
 
   const items = data?.items ?? [];
 

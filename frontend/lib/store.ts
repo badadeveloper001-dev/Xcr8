@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 type CreatorState = {
+  hasHydrated: boolean;
+  setHasHydrated: (value: boolean) => void;
   activeCreatorId: string | null;
   setActiveCreatorId: (id: string | null) => void;
   userId: number | null;
@@ -38,6 +40,8 @@ type CreatorState = {
 export const useCreatorStore = create<CreatorState>()(
   persist(
     (set) => ({
+      hasHydrated: false,
+      setHasHydrated: (value) => set({ hasHydrated: value }),
       activeCreatorId: null,
       setActiveCreatorId: (id) => set({ activeCreatorId: id }),
       userId: null,
@@ -75,6 +79,9 @@ export const useCreatorStore = create<CreatorState>()(
     {
       name: "xcr8-creator-store",
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       partialize: (state) => ({
         userId: state.userId,
         email: state.email,

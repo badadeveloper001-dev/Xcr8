@@ -81,6 +81,7 @@ function toggleMany(value: string, current: string[], set: (v: string[]) => void
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
   const setSession = useCreatorStore((state) => state.setSession);
   const displayName = useCreatorStore((state) => state.displayName) ?? "Creator";
@@ -102,17 +103,17 @@ export default function OnboardingPage() {
   const [personality, setPersonality] = useState("conversational");
 
   useEffect(() => {
-    if (!userId) {
+    if (hasHydrated && !userId) {
       router.replace("/auth/login");
     }
-  }, [router, userId]);
+  }, [hasHydrated, router, userId]);
 
   const progress = useMemo(() => {
     if (initializing) return initProgress;
     return Math.round((step / (wizardSteps.length + 1)) * 100);
   }, [initProgress, initializing, step]);
 
-  if (!userId) return null;
+  if (!hasHydrated || !userId) return null;
 
   const canContinue = () => {
     if (step === 2) return true;
