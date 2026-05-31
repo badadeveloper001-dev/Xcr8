@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Bot, SendHorizontal, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { chatWithAiAssistant, getApiErrorMessage, type AiAssistantResponse } from "@/lib/api";
@@ -18,25 +18,79 @@ const starterPrompts = [
 ];
 
 const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_switch"];
+const MAX_RENDERED_MESSAGES = 240;
+const MAX_SENT_MESSAGES = 40;
+
+function buildWelcomeMessage(displayName: string | null): ChatItem {
+  return {
+    role: "assistant",
+    content: displayName
+      ? `I’m your Xcr8 assistant, ${displayName}. Ask me anything about the app, your content, or your next move.`
+      : "I’m your Xcr8 assistant. Ask me anything about the app, your content, or your next move.",
+  };
+}
+
+function isChatItem(value: unknown): value is ChatItem {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as { role?: unknown; content?: unknown };
+  return (
+    (candidate.role === "user" || candidate.role === "assistant") &&
+    typeof candidate.content === "string" &&
+    candidate.content.trim().length > 0
+  );
+}
 
 export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
   const email = useCreatorStore((state) => state.email);
   const displayName = useCreatorStore((state) => state.displayName);
   const clearSession = useCreatorStore((state) => state.clearSession);
-  const [messages, setMessages] = useState<ChatItem[]>([
-    {
-      role: "assistant",
-      content: displayName
-        ? `I’m your Xcr8 assistant, ${displayName}. Ask me anything about the app, your content, or your next move.`
-        : "I’m your Xcr8 assistant. Ask me anything about the app, your content, or your next move.",
-    },
-  ]);
+  const welcomeMessage = useMemo(() => buildWelcomeMessage(displayName), [displayName]);
+  const [messages, setMessages] = useState<ChatItem[]>([welcomeMessage]);
   const [prompt, setPrompt] = useState("");
   const [language, setLanguage] = useState("auto");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiAssistantResponse | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(`xcr8-assistant-chat-v1:${userId}`);
+      if (!raw) {
+        setMessages([welcomeMessage]);
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setMessages([welcomeMessage]);
+        return;
+      }
+
+      const restored = parsed.filter(isChatItem).slice(-MAX_RENDERED_MESSAGES);
+      setMessages(restored.length > 0 ? restored : [welcomeMessage]);
+    } catch {
+      setMessages([welcomeMessage]);
+    }
+  }, [userId, welcomeMessage]);
+
+  useEffect(() => {
+    if (!userId || messages.length === 0) {
+      return;
+    }
+
+    localStorage.setItem(
+      `xcr8-assistant-chat-v1:${userId}`,
+      JSON.stringify(messages.slice(-MAX_RENDERED_MESSAGES)),
+    );
+  }, [userId, messages]);
 
   const submitPrompt = async (value: string) => {
     const nextPrompt = value.trim();
@@ -49,7 +103,8 @@ export default function AssistantPage() {
       return;
     }
 
-    const nextMessages: ChatItem[] = [...messages, { role: "user", content: nextPrompt }];
+    const userMessage: ChatItem = { role: "user", content: nextPrompt };
+    const nextMessages = [...messages, userMessage].slice(-MAX_RENDERED_MESSAGES);
     setMessages(nextMessages);
     setLoading(true);
     setError(null);
@@ -61,16 +116,21 @@ export default function AssistantPage() {
         message: nextPrompt,
         language,
         tone: "auto",
-        messages: nextMessages.map((message) => ({ role: message.role, content: message.content })),
+        messages: nextMessages
+          .slice(-MAX_SENT_MESSAGES)
+          .map((message) => ({ role: message.role, content: message.content })),
       });
       setResult(data);
-      setMessages([
-        ...nextMessages,
-        {
-          role: "assistant",
-          content: `${data.assistant_message} ${data.follow_up_question}`.trim(),
-        },
-      ]);
+      const assistantMessage: ChatItem = {
+        role: "assistant",
+        content: `${data.assistant_message} ${data.follow_up_question}`.trim(),
+      };
+      setMessages(
+        [
+          ...nextMessages,
+          assistantMessage,
+        ].slice(-MAX_RENDERED_MESSAGES),
+      );
       setPrompt("");
     } catch (err) {
       const errorMessage = getApiErrorMessage(

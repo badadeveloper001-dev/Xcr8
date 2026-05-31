@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,6 +30,12 @@ from app.schemas.mvp import (
 from app.services.ai_adapter import generate_composed_content, generate_content_ideas
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+logger = logging.getLogger(__name__)
+
+ASSISTANT_CHAT_MEMORY_TYPE = "assistant_chat"
+ASSISTANT_CHAT_MEMORY_KEY = "assistant_long_chat_memory_v1"
+ASSISTANT_CHAT_MEMORY_MAX_CHARS = 24000
+ASSISTANT_REQUEST_MESSAGE_LIMIT = 40
 
 
 def _coalesce_value(value: str | None, fallback: str) -> str:
@@ -62,6 +69,65 @@ def _build_missing_user_assistant_response(payload: AIAssistantRequest) -> AIAss
         latency_ms=0,
         usage={"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
     )
+
+
+def _compact_text(value: str, max_chars: int) -> str:
+    cleaned = " ".join(str(value or "").split())
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[-max_chars:]
+
+
+def _get_assistant_chat_memory(db: Session, user_id: int) -> CreatorMemory | None:
+    return db.scalar(
+        select(CreatorMemory)
+        .where(
+            CreatorMemory.user_id == user_id,
+            CreatorMemory.memory_type == ASSISTANT_CHAT_MEMORY_TYPE,
+            CreatorMemory.memory_key == ASSISTANT_CHAT_MEMORY_KEY,
+        )
+        .order_by(desc(CreatorMemory.created_at))
+        .limit(1)
+    )
+
+
+def _serialize_recent_messages(payload: AIAssistantRequest) -> list[dict]:
+    return [message.model_dump() for message in payload.messages[-ASSISTANT_REQUEST_MESSAGE_LIMIT:]]
+
+
+def _persist_assistant_chat_memory(
+    db: Session,
+    user_id: int,
+    memory_record: CreatorMemory | None,
+    user_message: str,
+    assistant_message: str,
+) -> None:
+    now = datetime.now(tz=UTC)
+    turn = (
+        f"[{now.isoformat()}] "
+        f"User: {_compact_text(user_message, 1800)}\n"
+        f"Assistant: {_compact_text(assistant_message, 2600)}"
+    )
+
+    current = (memory_record.memory_value if memory_record else "") or ""
+    merged = f"{current}\n\n{turn}".strip() if current else turn
+    merged = _compact_text(merged, ASSISTANT_CHAT_MEMORY_MAX_CHARS)
+
+    try:
+        target = memory_record or CreatorMemory(
+            user_id=user_id,
+            memory_type=ASSISTANT_CHAT_MEMORY_TYPE,
+            memory_key=ASSISTANT_CHAT_MEMORY_KEY,
+            memory_value="",
+        )
+        target.memory_value = merged
+        target.confidence_score = 0.95
+        target.last_used_at = now
+        db.add(target)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Unable to persist assistant chat memory for user %s: %s", user_id, exc)
 
 
 def _resolve_assistant_user(db: Session, payload: AIAssistantRequest) -> User | None:
@@ -323,6 +389,9 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         (profile.preferences or {}).get("personality") if profile and _is_auto_or_empty(payload.vibe) else str(payload.vibe or "").strip()
     )
     creator_memory = _build_creator_memory(profile, resolved_language, payload.message, recent_memories)
+    long_chat_memory = _get_assistant_chat_memory(db, user.id)
+    if long_chat_memory and long_chat_memory.memory_value:
+        creator_memory["long_chat_memory"] = long_chat_memory.memory_value
     app_context = _build_assistant_context(db, user, profile)
 
     try:
@@ -334,14 +403,22 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
                 "language": resolved_language,
                 "tone": resolved_tone,
                 "vibe": resolved_vibe,
-                "messages": [message.model_dump() for message in payload.messages],
+                "messages": _serialize_recent_messages(payload),
                 "app_context": app_context,
                 "creator_memory": creator_memory,
             },
             timeout=60.0,
         )
         response.raise_for_status()
-        return AIAssistantResponse(**response.json())
+        parsed_response = AIAssistantResponse(**response.json())
+        _persist_assistant_chat_memory(
+            db,
+            user.id,
+            long_chat_memory,
+            payload.message,
+            parsed_response.assistant_message,
+        )
+        return parsed_response
     except Exception:
         memory_facts = creator_memory.get("memory_facts", [])
         recent_posts = app_context.get("recent_posts", [])
@@ -360,7 +437,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         if first_post:
             assistant_message += f" Your latest post is {first_post}."
 
-        return AIAssistantResponse(
+        fallback_response = AIAssistantResponse(
             assistant_message=assistant_message,
             follow_up_question="What should I help you figure out next?",
             suggested_actions=["Summarize my dashboard", "Review my latest post", "Help me plan content"],
@@ -371,3 +448,11 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
             latency_ms=0,
             usage={"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
         )
+        _persist_assistant_chat_memory(
+            db,
+            user.id,
+            long_chat_memory,
+            payload.message,
+            fallback_response.assistant_message,
+        )
+        return fallback_response
