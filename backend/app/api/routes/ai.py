@@ -64,6 +64,17 @@ def _build_missing_user_assistant_response(payload: AIAssistantRequest) -> AIAss
     )
 
 
+def _resolve_assistant_user(db: Session, payload: AIAssistantRequest) -> User | None:
+    user = db.get(User, payload.user_id)
+    if user:
+        return user
+
+    if payload.email:
+        return db.scalar(select(User).where(User.email == payload.email))
+
+    return None
+
+
 def _build_creator_memory(
     profile: CreatorProfile | None,
     payload_language: str,
@@ -286,15 +297,15 @@ def compose(payload: AIComposeRequest, db: Session = Depends(get_db)) -> AICompo
 
 @router.post("/assistant", response_model=AIAssistantResponse)
 def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIAssistantResponse:
-    user = db.get(User, payload.user_id)
+    user = _resolve_assistant_user(db, payload)
     if not user:
         return _build_missing_user_assistant_response(payload)
 
-    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
     recent_memories = list(
         db.scalars(
             select(CreatorMemory)
-            .where(CreatorMemory.user_id == payload.user_id)
+            .where(CreatorMemory.user_id == user.id)
             .order_by(
                 desc(CreatorMemory.confidence_score),
                 desc(CreatorMemory.last_used_at),
@@ -318,7 +329,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         response = httpx.post(
             f"{settings.ai_service_url.rstrip('/')}/assistant",
             json={
-                "user_id": payload.user_id,
+                "user_id": user.id,
                 "message": payload.message,
                 "language": resolved_language,
                 "tone": resolved_tone,

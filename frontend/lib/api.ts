@@ -224,6 +224,7 @@ export type AiComposeResponse = {
 
 export type AiAssistantPayload = {
   user_id: number;
+  email?: string;
   message: string;
   language?: string;
   tone?: string;

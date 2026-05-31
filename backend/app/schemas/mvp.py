@@ -199,6 +199,7 @@ class AIComposeResponse(BaseModel):
 
 class AIAssistantRequest(BaseModel):
     user_id: int
+    email: EmailStr | None = None
     message: str = Field(min_length=1, max_length=4000)
     language: str = Field(default="auto", max_length=32)
     tone: str = Field(default="auto", max_length=80)

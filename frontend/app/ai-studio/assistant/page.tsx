@@ -21,6 +21,7 @@ const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_s
 
 export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
+  const email = useCreatorStore((state) => state.email);
   const displayName = useCreatorStore((state) => state.displayName);
   const clearSession = useCreatorStore((state) => state.clearSession);
   const [messages, setMessages] = useState<ChatItem[]>([
@@ -56,6 +57,7 @@ export default function AssistantPage() {
     try {
       const data = await chatWithAiAssistant({
         user_id: userId,
+        email: email ?? undefined,
         message: nextPrompt,
         language,
         tone: "auto",
@@ -222,9 +224,6 @@ export default function AssistantPage() {
                     {action}
                   </button>
                 ))}
-              </div>
-              <div className="mt-4 rounded-xl bg-black/20 p-3 text-xs text-slate-400 light:bg-slate-50 light:text-slate-600">
-                Model: {result.model} · Language: {result.language} · Tone: {result.tone}
               </div>
             </article>
           ) : (
