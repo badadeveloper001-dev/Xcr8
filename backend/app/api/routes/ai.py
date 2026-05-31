@@ -36,6 +36,34 @@ def _coalesce_value(value: str | None, fallback: str) -> str:
     return cleaned or fallback
 
 
+def _is_auto_or_empty(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"", "auto"}
+
+
+def _build_missing_user_assistant_response(payload: AIAssistantRequest) -> AIAssistantResponse:
+    resolved_language = "english" if _is_auto_or_empty(payload.language) else payload.language
+    resolved_tone = "conversational" if _is_auto_or_empty(payload.tone) else payload.tone
+
+    return AIAssistantResponse(
+        assistant_message=(
+            "I can still help with content strategy and next steps, but I could not load your account context yet. "
+            "Please refresh or sign in again so I can personalize your assistant replies."
+        ),
+        follow_up_question="Want me to give you a quick content plan while you reconnect your session?",
+        suggested_actions=[
+            "Quick content plan for this week",
+            "Caption ideas for my niche",
+            "Growth actions I can do today",
+        ],
+        language=resolved_language,
+        tone=resolved_tone,
+        model="backend-local-assistant-missing-user",
+        prompt_template_version="assistant-v1",
+        latency_ms=0,
+        usage={"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
+    )
+
+
 def _build_creator_memory(
     profile: CreatorProfile | None,
     payload_language: str,
@@ -260,7 +288,7 @@ def compose(payload: AIComposeRequest, db: Session = Depends(get_db)) -> AICompo
 def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIAssistantResponse:
     user = db.get(User, payload.user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        return _build_missing_user_assistant_response(payload)
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
     recent_memories = list(
@@ -276,9 +304,13 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         )
     )
 
-    resolved_language = user.language if str(payload.language).strip().lower() in {"", "auto"} else payload.language
-    resolved_tone = _coalesce_value(payload.tone, profile.tone if profile else "conversational")
-    resolved_vibe = _coalesce_value(payload.vibe, (profile.preferences or {}).get("personality") if profile else "")
+    resolved_language = user.language if _is_auto_or_empty(payload.language) else payload.language
+    resolved_tone = (
+        profile.tone if profile and _is_auto_or_empty(payload.tone) else _coalesce_value(payload.tone, "conversational")
+    )
+    resolved_vibe = (
+        (profile.preferences or {}).get("personality") if profile and _is_auto_or_empty(payload.vibe) else str(payload.vibe or "").strip()
+    )
     creator_memory = _build_creator_memory(profile, resolved_language, payload.message, recent_memories)
     app_context = _build_assistant_context(db, user, profile)
 

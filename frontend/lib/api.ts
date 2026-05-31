@@ -225,8 +225,8 @@ export type AiComposeResponse = {
 export type AiAssistantPayload = {
   user_id: number;
   message: string;
-  language: string;
-  tone: string;
+  language?: string;
+  tone?: string;
   vibe?: string | null;
   messages?: AiConversationMessage[];
 };

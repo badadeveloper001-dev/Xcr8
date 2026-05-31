@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { ArrowRight, Bot, Lightbulb, SendHorizontal, Sparkles } from "lucide-react";
+import { ArrowRight, Bot, SendHorizontal, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { chatWithAiAssistant, getApiErrorMessage, type AiAssistantResponse } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -12,18 +12,17 @@ type ChatItem = {
 };
 
 const starterPrompts = [
-  "What does Xcr8 already know about my creator profile?",
   "Help me plan my next content move based on my current workspace.",
-  "Give me a quick summary of my app activity in a friendly tone.",
+  "Give me a quick summary of my app activity and what to improve.",
+  "What is the best next action for my growth this week?",
 ];
 
-const vibeOptions = ["friendly", "direct", "premium", "playful", "calm", "hype"];
-const toneOptions = ["conversational", "bold", "educational", "warm", "sharp", "luxury"];
 const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_switch"];
 
 export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
   const displayName = useCreatorStore((state) => state.displayName);
+  const clearSession = useCreatorStore((state) => state.clearSession);
   const [messages, setMessages] = useState<ChatItem[]>([
     {
       role: "assistant",
@@ -34,8 +33,6 @@ export default function AssistantPage() {
   ]);
   const [prompt, setPrompt] = useState("");
   const [language, setLanguage] = useState("auto");
-  const [tone, setTone] = useState("conversational");
-  const [vibe, setVibe] = useState("friendly");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiAssistantResponse | null>(null);
@@ -46,7 +43,10 @@ export default function AssistantPage() {
       setError("Type a question so I can respond naturally.");
       return;
     }
-    if (!userId) return;
+    if (!userId) {
+      setError("Your session is missing. Please log in again to use the assistant.");
+      return;
+    }
 
     const nextMessages: ChatItem[] = [...messages, { role: "user", content: nextPrompt }];
     setMessages(nextMessages);
@@ -58,8 +58,7 @@ export default function AssistantPage() {
         user_id: userId,
         message: nextPrompt,
         language,
-        tone,
-        vibe,
+        tone: "auto",
         messages: nextMessages.map((message) => ({ role: message.role, content: message.content })),
       });
       setResult(data);
@@ -72,8 +71,19 @@ export default function AssistantPage() {
       ]);
       setPrompt("");
     } catch (err) {
+      const errorMessage = getApiErrorMessage(
+        err,
+        "Could not reach the assistant right now. Please try again.",
+      );
+
+      if (errorMessage.toLowerCase().includes("user not found")) {
+        clearSession();
+        setError("Your session has expired. Please log in again.");
+        return;
+      }
+
       setError(
-        getApiErrorMessage(err, "Could not reach the assistant right now. Please try again."),
+        errorMessage,
       );
     } finally {
       setLoading(false);
@@ -94,7 +104,7 @@ export default function AssistantPage() {
               <Bot size={11} />
               Assistant settings
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-1">
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
@@ -106,20 +116,9 @@ export default function AssistantPage() {
                   </option>
                 ))}
               </select>
-              <select value={tone} onChange={(e) => setTone(e.target.value)} className="xcr8-input">
-                {toneOptions.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-              <select value={vibe} onChange={(e) => setVibe(e.target.value)} className="xcr8-input">
-                {vibeOptions.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+              <p className="text-xs text-slate-500 light:text-slate-600">
+                Tone and vibe adapt automatically based on your profile, message, and app context.
+              </p>
             </div>
           </div>
 
@@ -202,24 +201,6 @@ export default function AssistantPage() {
         </div>
 
         <div className="space-y-3.5">
-          <article className="surface-soft rounded-2xl p-4">
-            <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <Lightbulb size={11} />
-              What it knows
-            </p>
-            <div className="space-y-2 text-sm text-slate-300 light:text-slate-700">
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 light:border-slate-200 light:bg-white/70">
-                Your profile, tone, and onboarding context.
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 light:border-slate-200 light:bg-white/70">
-                Recent posts, dashboard activity, and creator memories.
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 light:border-slate-200 light:bg-white/70">
-                Language-aware replies that adapt to your vibe.
-              </div>
-            </div>
-          </article>
-
           {result ? (
             <article className="surface-card rounded-2xl p-4">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 light:border-cyan-500/20 light:bg-cyan-50 light:text-cyan-700">

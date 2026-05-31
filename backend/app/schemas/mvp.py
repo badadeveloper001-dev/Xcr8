@@ -201,7 +201,7 @@ class AIAssistantRequest(BaseModel):
     user_id: int
     message: str = Field(min_length=1, max_length=4000)
     language: str = Field(default="auto", max_length=32)
-    tone: str = Field(default="conversational", max_length=80)
+    tone: str = Field(default="auto", max_length=80)
     vibe: str | None = Field(default=None, max_length=120)
     messages: list[AIConversationMessage] = Field(default_factory=list)
 
