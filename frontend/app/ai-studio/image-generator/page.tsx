@@ -14,7 +14,7 @@ type GeneratedImage = {
 type RealismLevel = "balanced" | "realistic" | "ultra";
 type CameraAngle = "eye-level" | "low-angle" | "overhead" | "close-up";
 type LightingStyle = "soft daylight" | "golden hour" | "studio key light" | "neon night";
-type UseCase = "ad-creative" | "product-still" | "portrait" | "thumbnail";
+type UseCase = "ad-creative" | "product-still" | "portrait" | "thumbnail" | "sports-action";
 
 type GenerationPreset = {
   id: string;
@@ -59,6 +59,8 @@ const useCaseDirectives: Record<UseCase, string> = {
     "editorial portrait photography, natural face proportions, clean skin texture, realistic eyes and hands",
   thumbnail:
     "high-clarity thumbnail image, strong subject separation, bold readable composition, high contrast",
+  "sports-action":
+    "elite sports action photography, one athlete in dynamic motion, exactly one football in frame, realistic ball movement, crisp limbs, freeze-frame intensity",
 };
 
 const useCaseRatios: Record<UseCase, "4:5" | "1:1" | "16:9"> = {
@@ -66,6 +68,7 @@ const useCaseRatios: Record<UseCase, "4:5" | "1:1" | "16:9"> = {
   "product-still": "1:1",
   portrait: "4:5",
   thumbnail: "16:9",
+  "sports-action": "16:9",
 };
 
 const cleanPhotorealismDirective =
@@ -444,6 +447,7 @@ export default function ImageGeneratorPage() {
             <option value="product-still">Use case: Product Still</option>
             <option value="portrait">Use case: Portrait</option>
             <option value="thumbnail">Use case: Thumbnail</option>
+            <option value="sports-action">Use case: Sports Action</option>
           </select>
 
           <select

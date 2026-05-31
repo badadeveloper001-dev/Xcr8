@@ -4,8 +4,11 @@ export const dynamic = "force-dynamic";
 
 const MIN_DIMENSION = 512;
 const MAX_DIMENSION = 1792;
-const MIN_IMAGE_BYTES = 42_000;
+const MIN_IMAGE_BYTES_STRICT = 42_000;
+const MIN_IMAGE_BYTES_RELAXED = 18_000;
 const FETCH_TIMEOUT_MS = 20_000;
+const GLOBAL_QUALITY_NEGATIVE =
+  "blurry, low resolution, noisy image, cgi look, deformed anatomy, extra limbs, extra fingers, duplicate body parts, duplicated objects, multiple balls, duplicate football, distorted face, watermark, logo, text overlay";
 
 function parsePositiveInt(value: string | null, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -25,6 +28,8 @@ function buildCandidateUrls(
     `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed}`,
     `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 97}`,
     `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 197}&safe=true`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 307}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 409}&safe=true`,
   ];
 }
 
@@ -36,6 +41,32 @@ type CandidateResult = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function enrichPrompt(rawPrompt: string): string {
+  const compact = rawPrompt.trim().replace(/\s+/g, " ");
+  const lower = compact.toLowerCase();
+
+  const baseQuality =
+    "high-end professional photography, tack-sharp focus, natural skin texture, physically plausible lighting, accurate anatomy";
+
+  const sportsKeywords = ["football", "soccer", "striker", "goalkeeper", "stadium", "match"];
+  const isSportsPrompt = sportsKeywords.some((keyword) => lower.includes(keyword));
+
+  const sportsQuality =
+    "single athlete in motion, full body visible, clear limbs and fingers, exactly one football visible, only one ball in frame, no duplicate footballs, realistic single-ball contact, dynamic grass spray, freeze-frame sports action";
+
+  const withScaffold = [
+    compact,
+    baseQuality,
+    isSportsPrompt ? sportsQuality : "clean composition, realistic proportions",
+    "no text overlay",
+    GLOBAL_QUALITY_NEGATIVE,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return withScaffold;
 }
 
 function mimeScore(contentType: string): number {
@@ -72,6 +103,10 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
+function scoreCandidate(contentType: string, bodyLength: number): number {
+  return bodyLength + mimeScore(contentType);
+}
+
 export async function GET(request: NextRequest) {
   const prompt = request.nextUrl.searchParams.get("prompt")?.trim() ?? "";
   if (!prompt) {
@@ -92,35 +127,63 @@ export async function GET(request: NextRequest) {
     MAX_DIMENSION,
   );
   const seed = parsePositiveInt(request.nextUrl.searchParams.get("seed"), Date.now());
-  const attempts = clamp(parsePositiveInt(request.nextUrl.searchParams.get("attempts"), 2), 1, 4);
+  const attempts = clamp(parsePositiveInt(request.nextUrl.searchParams.get("attempts"), 2), 1, 5);
+  const enrichedPrompt = enrichPrompt(prompt);
 
   let best: CandidateResult | null = null;
 
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const candidates = buildCandidateUrls(prompt, width, height, seed + attempt * 541);
+  const passes = [
+    { minBytes: MIN_IMAGE_BYTES_STRICT, retries: attempts, width, height },
+    {
+      minBytes: MIN_IMAGE_BYTES_RELAXED,
+      retries: Math.max(2, attempts - 1),
+      width,
+      height,
+    },
+    {
+      minBytes: MIN_IMAGE_BYTES_RELAXED,
+      retries: 2,
+      width: clamp(Math.floor(width * 0.8), MIN_DIMENSION, MAX_DIMENSION),
+      height: clamp(Math.floor(height * 0.8), MIN_DIMENSION, MAX_DIMENSION),
+    },
+  ] as const;
 
-    for (const url of candidates) {
-      try {
-        const upstream = await fetchWithTimeout(url);
+  for (const pass of passes) {
+    for (let attempt = 0; attempt < pass.retries; attempt += 1) {
+      const candidates = buildCandidateUrls(
+        enrichedPrompt,
+        pass.width,
+        pass.height,
+        seed + attempt * 541,
+      );
 
-        if (!upstream.ok) continue;
-        const contentType = upstream.headers.get("content-type") ?? "";
-        if (!contentType.startsWith("image/")) continue;
-        if (!isSupportedOutput(contentType)) continue;
+      for (const url of candidates) {
+        try {
+          const upstream = await fetchWithTimeout(url);
 
-        const body = await upstream.arrayBuffer();
-        if (body.byteLength === 0) continue;
-        if (body.byteLength < MIN_IMAGE_BYTES) continue;
+          if (!upstream.ok) continue;
+          const contentType = upstream.headers.get("content-type") ?? "";
+          if (!contentType.startsWith("image/")) continue;
+          if (!isSupportedOutput(contentType)) continue;
 
-        const score = body.byteLength + mimeScore(contentType);
+          const body = await upstream.arrayBuffer();
+          if (body.byteLength === 0) continue;
+          if (body.byteLength < pass.minBytes) continue;
 
-        if (!best || score > best.score) {
-          best = { body, contentType, score };
+          const score = scoreCandidate(contentType, body.byteLength);
+
+          if (!best || score > best.score) {
+            best = { body, contentType, score };
+          }
+        } catch {
+          continue;
         }
-      } catch {
-        continue;
       }
+
+      if (best) break;
     }
+
+    if (best) break;
   }
 
   if (best) {
