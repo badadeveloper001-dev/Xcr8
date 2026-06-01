@@ -46,7 +46,7 @@ def _request_email_code_with_grace(email: str) -> str:
         return "Verification code sent to your email."
     except SupabaseAuthError as exc:
         if _is_auth_rate_limited(str(exc), exc.status_code):
-            return "A verification code was sent recently. Please wait about 60 seconds and try again."
+            return "Email provider limit reached. Please wait about 60 seconds, then resend code and check spam/promotions."
         raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
 
 

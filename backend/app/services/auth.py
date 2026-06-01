@@ -72,21 +72,6 @@ def supabase_sign_up(email: str, password: str, metadata: dict | None = None) ->
         except ValueError:
             pass
 
-        if _is_rate_limited(fallback_message, response.status_code):
-            admin_response = client.post(
-                f"{settings.supabase_url}/auth/v1/admin/users",
-                headers=_admin_headers(),
-                json={
-                    "email": email,
-                    "password": password,
-                    "user_metadata": metadata_payload,
-                    "email_confirm": True,
-                },
-            )
-            if admin_response.status_code < 400:
-                return admin_response.json()
-            _raise_auth_error(admin_response, "Supabase signup failed")
-
     _raise_auth_error(response, "Supabase signup failed")
 
 
@@ -104,18 +89,47 @@ def supabase_sign_in(email: str, password: str) -> dict:
 
 
 def supabase_request_email_otp(email: str) -> None:
+    last_response: httpx.Response | None = None
     with httpx.Client(timeout=15.0) as client:
-        response = client.post(
-            f"{settings.supabase_url}/auth/v1/otp",
-            headers=_auth_headers(),
-            json={
-                "email": email,
-                "create_user": False,
-            },
-        )
+        for create_user in (False, True):
+            response = client.post(
+                f"{settings.supabase_url}/auth/v1/otp",
+                headers=_auth_headers(),
+                json={
+                    "email": email,
+                    "create_user": create_user,
+                },
+            )
 
-    if response.status_code >= 400:
-        _raise_auth_error(response, "Could not send verification code.")
+            if response.status_code < 400:
+                return
+
+            last_response = response
+            try:
+                payload = response.json()
+                message = payload.get("msg") or payload.get("message") or payload.get("error_description")
+                detail = str(message).strip() if isinstance(message, str) else ""
+            except ValueError:
+                detail = ""
+
+            if _is_rate_limited(detail, response.status_code):
+                _raise_auth_error(response, "Too many email attempts. Please wait and retry.")
+
+            if create_user is False:
+                lowered = detail.lower()
+                if (
+                    "not found" in lowered
+                    or "no user" in lowered
+                    or "sign up" in lowered
+                    or response.status_code == 422
+                ):
+                    continue
+
+            _raise_auth_error(response, "Could not send verification code.")
+
+    if last_response is not None:
+        _raise_auth_error(last_response, "Could not send verification code.")
+    raise SupabaseAuthError("Could not send verification code.", status_code=400)
 
 
 def supabase_verify_email_otp(email: str, token: str) -> dict:
