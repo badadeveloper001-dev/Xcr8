@@ -152,6 +152,14 @@ def _serialize_recent_messages(payload: AIAssistantRequest) -> list[dict]:
     return [message.model_dump() for message in payload.messages[-ASSISTANT_REQUEST_MESSAGE_LIMIT:]]
 
 
+def _build_persisted_assistant_message(assistant_message: str, follow_up_question: str | None) -> str:
+    primary = str(assistant_message or "").strip()
+    follow_up = str(follow_up_question or "").strip()
+    if primary and follow_up:
+        return f"{primary} {follow_up}".strip()
+    return primary or follow_up
+
+
 def _persist_assistant_chat_memory(
     db: Session,
     user_id: int,
@@ -527,7 +535,10 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
             chat_id,
             chat_memory_record,
             payload.message,
-            parsed_response.assistant_message,
+            _build_persisted_assistant_message(
+                parsed_response.assistant_message,
+                parsed_response.follow_up_question,
+            ),
         )
         parsed_response.chat_id = chat_id
         return parsed_response
@@ -567,7 +578,10 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
             chat_id,
             chat_memory_record,
             payload.message,
-            fallback_response.assistant_message,
+            _build_persisted_assistant_message(
+                fallback_response.assistant_message,
+                fallback_response.follow_up_question,
+            ),
         )
         return fallback_response
 
@@ -646,7 +660,7 @@ def get_assistant_chat_history(
                 messages=[
                     {
                         "role": "assistant",
-                        "content": "I still remember the context from your earlier Cr8or AI conversation and will use it in this chat.",
+                        "content": _compact_text(legacy_memory.memory_value, 6000),
                     }
                 ],
             )
