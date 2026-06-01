@@ -225,6 +225,7 @@ export type AiComposeResponse = {
 export type AiAssistantPayload = {
   user_id: number;
   email?: string;
+  chat_id?: string;
   message: string;
   language?: string;
   tone?: string;
@@ -233,6 +234,7 @@ export type AiAssistantPayload = {
 };
 
 export type AiAssistantResponse = {
+  chat_id?: string | null;
   assistant_message: string;
   follow_up_question: string;
   suggested_actions: string[];
@@ -242,6 +244,20 @@ export type AiAssistantResponse = {
   prompt_template_version: string;
   latency_ms: number;
   usage: Record<string, unknown>;
+};
+
+export type AiAssistantChatSummary = {
+  chat_id: string;
+  title: string;
+  preview: string;
+  updated_at: string;
+};
+
+export type AiAssistantChatHistory = {
+  chat_id: string;
+  title: string;
+  updated_at: string;
+  messages: AiConversationMessage[];
 };
 
 export async function signup(payload: SignupPayload): Promise<SessionPayload> {
@@ -370,6 +386,33 @@ export async function chatWithAiAssistant(
   const { data } = await apiClient.post<AiAssistantResponse>("/api/v1/ai/assistant", payload, {
     timeout: 60_000,
   });
+  return data;
+}
+
+export async function listAiAssistantChats(
+  userId: number,
+  email?: string,
+): Promise<AiAssistantChatSummary[]> {
+  const { data } = await apiClient.get<AiAssistantChatSummary[]>(
+    `/api/v1/ai/assistant/chats/${userId}`,
+    {
+      params: email ? { email } : undefined,
+    },
+  );
+  return data;
+}
+
+export async function getAiAssistantChatHistory(
+  userId: number,
+  chatId: string,
+  email?: string,
+): Promise<AiAssistantChatHistory> {
+  const { data } = await apiClient.get<AiAssistantChatHistory>(
+    `/api/v1/ai/assistant/chats/${userId}/${chatId}`,
+    {
+      params: email ? { email } : undefined,
+    },
+  );
   return data;
 }
 

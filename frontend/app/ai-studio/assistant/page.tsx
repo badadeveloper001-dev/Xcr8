@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Bot, SendHorizontal, Sparkles } from "lucide-react";
+import { Bot, MessageSquarePlus, SendHorizontal, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
-import { chatWithAiAssistant, getApiErrorMessage, type AiAssistantResponse } from "@/lib/api";
+import {
+  chatWithAiAssistant,
+  getAiAssistantChatHistory,
+  getApiErrorMessage,
+  listAiAssistantChats,
+  type AiAssistantChatSummary,
+} from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 type ChatItem = {
@@ -20,6 +26,14 @@ const starterPrompts = [
 const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_switch"];
 const MAX_RENDERED_MESSAGES = 240;
 const MAX_SENT_MESSAGES = 40;
+
+function createChatId() {
+  return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildChatTitle(value: string) {
+  return value.trim().slice(0, 56) || "New chat";
+}
 
 function buildWelcomeMessage(displayName: string | null): ChatItem {
   return {
@@ -50,47 +64,114 @@ export default function AssistantPage() {
   const clearSession = useCreatorStore((state) => state.clearSession);
   const welcomeMessage = useMemo(() => buildWelcomeMessage(displayName), [displayName]);
   const [messages, setMessages] = useState<ChatItem[]>([welcomeMessage]);
+  const [chatSessions, setChatSessions] = useState<AiAssistantChatSummary[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [language, setLanguage] = useState("auto");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AiAssistantResponse | null>(null);
+  const [suggestedActions, setSuggestedActions] = useState<string[]>(starterPrompts);
 
   useEffect(() => {
     if (!userId) {
       return;
     }
 
-    try {
-      const raw = localStorage.getItem(`xcr8-assistant-chat-v1:${userId}`);
-      if (!raw) {
-        setMessages([welcomeMessage]);
-        return;
-      }
+    let cancelled = false;
 
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        setMessages([welcomeMessage]);
-        return;
-      }
+    const loadChatSessions = async () => {
+      try {
+        const sessions = await listAiAssistantChats(userId, email ?? undefined);
+        if (cancelled) {
+          return;
+        }
 
-      const restored = parsed.filter(isChatItem).slice(-MAX_RENDERED_MESSAGES);
-      setMessages(restored.length > 0 ? restored : [welcomeMessage]);
-    } catch {
-      setMessages([welcomeMessage]);
-    }
-  }, [userId, welcomeMessage]);
+        setChatSessions(sessions);
+        const storageKey = `xcr8-assistant-active-chat:${userId}`;
+        const storedChatId = localStorage.getItem(storageKey);
+        const nextChatId =
+          storedChatId && sessions.some((session) => session.chat_id === storedChatId)
+            ? storedChatId
+            : (sessions[0]?.chat_id ?? createChatId());
+        setActiveChatId(nextChatId);
+      } catch {
+        if (!cancelled) {
+          setChatSessions([]);
+          setActiveChatId(createChatId());
+          setMessages([welcomeMessage]);
+        }
+      }
+    };
+
+    void loadChatSessions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [email, userId, welcomeMessage]);
 
   useEffect(() => {
-    if (!userId || messages.length === 0) {
+    if (!userId || !activeChatId) {
       return;
     }
 
-    localStorage.setItem(
-      `xcr8-assistant-chat-v1:${userId}`,
-      JSON.stringify(messages.slice(-MAX_RENDERED_MESSAGES)),
-    );
-  }, [userId, messages]);
+    localStorage.setItem(`xcr8-assistant-active-chat:${userId}`, activeChatId);
+  }, [activeChatId, userId]);
+
+  useEffect(() => {
+    if (!userId || !activeChatId) {
+      return;
+    }
+
+    const hasServerChat = chatSessions.some((session) => session.chat_id === activeChatId);
+    if (!hasServerChat) {
+      setMessages([welcomeMessage]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadChatHistory = async () => {
+      try {
+        const history = await getAiAssistantChatHistory(userId, activeChatId, email ?? undefined);
+        if (cancelled) {
+          return;
+        }
+
+        const restored = history.messages.filter(isChatItem).slice(-MAX_RENDERED_MESSAGES);
+        setMessages(restored.length > 0 ? restored : [welcomeMessage]);
+      } catch {
+        if (!cancelled) {
+          setMessages([welcomeMessage]);
+        }
+      }
+    };
+
+    void loadChatHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChatId, chatSessions, email, userId, welcomeMessage]);
+
+  const startNewChat = () => {
+    const nextChatId = createChatId();
+    const updatedAt = new Date().toISOString();
+    setActiveChatId(nextChatId);
+    setMessages([welcomeMessage]);
+    setError(null);
+    setPrompt("");
+    setSuggestedActions(starterPrompts);
+    setChatSessions((current) => [
+      {
+        chat_id: nextChatId,
+        title: "New chat",
+        preview: "Start a fresh conversation with Cr8or AI.",
+        updated_at: updatedAt,
+      },
+      ...current.filter((session) => session.chat_id !== nextChatId),
+    ]);
+  };
 
   const submitPrompt = async (value: string) => {
     const nextPrompt = value.trim();
@@ -103,6 +184,11 @@ export default function AssistantPage() {
       return;
     }
 
+    const currentChatId = activeChatId ?? createChatId();
+    if (!activeChatId) {
+      setActiveChatId(currentChatId);
+    }
+
     const userMessage: ChatItem = { role: "user", content: nextPrompt };
     const nextMessages = [...messages, userMessage].slice(-MAX_RENDERED_MESSAGES);
     setMessages(nextMessages);
@@ -113,6 +199,7 @@ export default function AssistantPage() {
       const data = await chatWithAiAssistant({
         user_id: userId,
         email: email ?? undefined,
+        chat_id: currentChatId,
         message: nextPrompt,
         language,
         tone: "auto",
@@ -120,12 +207,30 @@ export default function AssistantPage() {
           .slice(-MAX_SENT_MESSAGES)
           .map((message) => ({ role: message.role, content: message.content })),
       });
-      setResult(data);
+      const resolvedChatId = data.chat_id ?? currentChatId;
       const assistantMessage: ChatItem = {
         role: "assistant",
         content: `${data.assistant_message} ${data.follow_up_question}`.trim(),
       };
       setMessages([...nextMessages, assistantMessage].slice(-MAX_RENDERED_MESSAGES));
+      setSuggestedActions(
+        data.suggested_actions.length > 0 ? data.suggested_actions : starterPrompts,
+      );
+      setActiveChatId(resolvedChatId);
+      setChatSessions((current) => {
+        const existing = current.find((session) => session.chat_id === resolvedChatId);
+        const updatedSession: AiAssistantChatSummary = {
+          chat_id: resolvedChatId,
+          title:
+            existing?.title && existing.title !== "New chat"
+              ? existing.title
+              : buildChatTitle(nextPrompt),
+          preview: assistantMessage.content.slice(0, 90),
+          updated_at: new Date().toISOString(),
+        };
+
+        return [updatedSession, ...current.filter((session) => session.chat_id !== resolvedChatId)];
+      });
       setPrompt("");
     } catch (err) {
       const errorMessage = getApiErrorMessage(
@@ -148,17 +253,27 @@ export default function AssistantPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="The central assistant knows your app, your profile, and your content context."
+      subtitle="Cr8or AI keeps separate chats, remembers context, and stays tied to your creator workspace."
       activeToolId="assistant"
       showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr]">
         <div className="space-y-3.5">
           <div className="surface-soft rounded-2xl p-4">
-            <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <Bot size={11} />
-              Cr8or AI settings
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <Bot size={11} />
+                Cr8or AI settings
+              </p>
+              <button
+                type="button"
+                onClick={startNewChat}
+                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+              >
+                <MessageSquarePlus size={13} />
+                New chat
+              </button>
+            </div>
             <div className="grid gap-3 sm:grid-cols-1">
               <select
                 value={language}
@@ -256,40 +371,72 @@ export default function AssistantPage() {
         </div>
 
         <div className="space-y-3.5">
-          {result ? (
-            <article className="surface-card rounded-2xl p-4">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 light:border-cyan-500/20 light:bg-cyan-50 light:text-cyan-700">
-                <Sparkles size={11} />
-                Cr8or AI reply
-              </div>
-              <h3 className="text-lg font-semibold text-white light:text-slate-900">
-                {result.follow_up_question}
-              </h3>
-              <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
-                {result.assistant_message}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {result.suggested_actions.map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    onClick={() => setPrompt(action)}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:text-slate-700"
-                  >
-                    {action}
-                  </button>
-                ))}
-              </div>
-            </article>
-          ) : (
-            <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
-              Cr8or AI replies will appear here after you send a message.
+          <article className="surface-card rounded-2xl p-4">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 light:border-cyan-500/20 light:bg-cyan-50 light:text-cyan-700">
+              <Sparkles size={11} />
+              Saved chats
             </div>
-          )}
+            <div className="space-y-2">
+              {chatSessions.length > 0 ? (
+                chatSessions.map((session) => {
+                  const active = session.chat_id === activeChatId;
+
+                  return (
+                    <button
+                      key={session.chat_id}
+                      type="button"
+                      onClick={() => setActiveChatId(session.chat_id)}
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                        active
+                          ? "border-cyan-300/35 bg-cyan-500/10 light:border-cyan-300 light:bg-cyan-50"
+                          : "border-white/10 bg-white/5 hover:bg-white/10 light:border-slate-200 light:bg-white/70"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white light:text-slate-900">
+                            {session.title}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
+                            {session.preview}
+                          </p>
+                        </div>
+                        <span className="text-[11px] text-slate-500 light:text-slate-500">
+                          {new Date(session.updated_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-500 light:border-slate-200 light:bg-white/70 light:text-slate-600">
+                  Your conversations will appear here once you start chatting.
+                </div>
+              )}
+            </div>
+          </article>
+
+          <article className="surface-soft rounded-2xl p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Quick prompts
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {suggestedActions.map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => setPrompt(action)}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:text-slate-700"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          </article>
 
           <div className="surface-soft rounded-2xl p-4 text-sm text-slate-400 light:text-slate-600">
-            Use the assistant to ask app questions, review your content context, or set the tone for
-            a reply that matches the user’s language.
+            Use Cr8or AI to run separate conversations for strategy, content planning, and product
+            help without mixing contexts.
           </div>
         </div>
       </div>

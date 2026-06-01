@@ -200,6 +200,7 @@ class AIComposeResponse(BaseModel):
 class AIAssistantRequest(BaseModel):
     user_id: int
     email: EmailStr | None = None
+    chat_id: str | None = Field(default=None, max_length=120)
     message: str = Field(min_length=1, max_length=4000)
     language: str = Field(default="auto", max_length=32)
     tone: str = Field(default="auto", max_length=80)
@@ -208,6 +209,7 @@ class AIAssistantRequest(BaseModel):
 
 
 class AIAssistantResponse(BaseModel):
+    chat_id: str | None = None
     assistant_message: str
     follow_up_question: str
     suggested_actions: list[str] = Field(default_factory=list)
@@ -217,3 +219,17 @@ class AIAssistantResponse(BaseModel):
     prompt_template_version: str
     latency_ms: int = 0
     usage: dict = Field(default_factory=dict)
+
+
+class AIAssistantChatSummary(BaseModel):
+    chat_id: str
+    title: str
+    preview: str
+    updated_at: str
+
+
+class AIAssistantChatHistory(BaseModel):
+    chat_id: str
+    title: str
+    updated_at: str
+    messages: list[AIConversationMessage] = Field(default_factory=list)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 import logging
 
 import httpx
@@ -20,6 +21,8 @@ from app.db.models import (
     User,
 )
 from app.schemas.mvp import (
+    AIAssistantChatHistory,
+    AIAssistantChatSummary,
     AIAssistantRequest,
     AIAssistantResponse,
     AIBrainstormRequest,
@@ -34,7 +37,8 @@ logger = logging.getLogger(__name__)
 
 ASSISTANT_CHAT_MEMORY_TYPE = "assistant_chat"
 ASSISTANT_CHAT_MEMORY_KEY = "assistant_long_chat_memory_v1"
-ASSISTANT_CHAT_MEMORY_MAX_CHARS = 24000
+ASSISTANT_CHAT_MEMORY_PREFIX = "assistant_chat:"
+ASSISTANT_CHAT_MAX_MESSAGES = 120
 ASSISTANT_REQUEST_MESSAGE_LIMIT = 40
 
 
@@ -52,6 +56,7 @@ def _build_missing_user_assistant_response(payload: AIAssistantRequest) -> AIAss
     resolved_tone = "conversational" if _is_auto_or_empty(payload.tone) else payload.tone
 
     return AIAssistantResponse(
+        chat_id=payload.chat_id,
         assistant_message=(
             "I can still help with content strategy and next steps, but I could not load your account context yet. "
             "Please refresh or sign in again so I can personalize your assistant replies."
@@ -78,7 +83,59 @@ def _compact_text(value: str, max_chars: int) -> str:
     return cleaned[-max_chars:]
 
 
-def _get_assistant_chat_memory(db: Session, user_id: int) -> CreatorMemory | None:
+def _normalize_chat_id(chat_id: str | None) -> str:
+    cleaned = str(chat_id or "").strip()
+    if not cleaned:
+        return "default"
+    return cleaned[:120]
+
+
+def _assistant_chat_memory_key(chat_id: str) -> str:
+    return f"{ASSISTANT_CHAT_MEMORY_PREFIX}{chat_id}"
+
+
+def _parse_chat_memory_record(memory_record: CreatorMemory | None) -> dict | None:
+    if not memory_record or not memory_record.memory_value:
+        return None
+
+    try:
+        parsed = json.loads(memory_record.memory_value)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+
+    messages = parsed.get("messages")
+    if not isinstance(messages, list):
+        parsed["messages"] = []
+
+    return parsed
+
+
+def _build_chat_title(messages: list[dict], fallback: str = "New chat") -> str:
+    first_user_message = next(
+        (str(message.get("content") or "").strip() for message in messages if message.get("role") == "user"),
+        "",
+    )
+    title = first_user_message or fallback
+    return _compact_text(title, 56)
+
+
+def _get_assistant_chat_memory(db: Session, user_id: int, chat_id: str) -> CreatorMemory | None:
+    return db.scalar(
+        select(CreatorMemory)
+        .where(
+            CreatorMemory.user_id == user_id,
+            CreatorMemory.memory_type == ASSISTANT_CHAT_MEMORY_TYPE,
+            CreatorMemory.memory_key == _assistant_chat_memory_key(chat_id),
+        )
+        .order_by(desc(CreatorMemory.created_at))
+        .limit(1)
+    )
+
+
+def _get_legacy_assistant_chat_memory(db: Session, user_id: int) -> CreatorMemory | None:
     return db.scalar(
         select(CreatorMemory)
         .where(
@@ -98,29 +155,39 @@ def _serialize_recent_messages(payload: AIAssistantRequest) -> list[dict]:
 def _persist_assistant_chat_memory(
     db: Session,
     user_id: int,
+    chat_id: str,
     memory_record: CreatorMemory | None,
     user_message: str,
     assistant_message: str,
 ) -> None:
     now = datetime.now(tz=UTC)
-    turn = (
-        f"[{now.isoformat()}] "
-        f"User: {_compact_text(user_message, 1800)}\n"
-        f"Assistant: {_compact_text(assistant_message, 2600)}"
-    )
-
-    current = (memory_record.memory_value if memory_record else "") or ""
-    merged = f"{current}\n\n{turn}".strip() if current else turn
-    merged = _compact_text(merged, ASSISTANT_CHAT_MEMORY_MAX_CHARS)
+    existing_payload = _parse_chat_memory_record(memory_record) or {
+        "chat_id": chat_id,
+        "title": _build_chat_title([]),
+        "updated_at": now.isoformat(),
+        "messages": [],
+    }
+    existing_messages = existing_payload.get("messages") if isinstance(existing_payload.get("messages"), list) else []
+    updated_messages = [
+        *existing_messages,
+        {"role": "user", "content": _compact_text(user_message, 1800)},
+        {"role": "assistant", "content": _compact_text(assistant_message, 2600)},
+    ][-ASSISTANT_CHAT_MAX_MESSAGES:]
+    stored_payload = {
+        "chat_id": chat_id,
+        "title": _build_chat_title(updated_messages),
+        "updated_at": now.isoformat(),
+        "messages": updated_messages,
+    }
 
     try:
         target = memory_record or CreatorMemory(
             user_id=user_id,
             memory_type=ASSISTANT_CHAT_MEMORY_TYPE,
-            memory_key=ASSISTANT_CHAT_MEMORY_KEY,
+            memory_key=_assistant_chat_memory_key(chat_id),
             memory_value="",
         )
-        target.memory_value = merged
+        target.memory_value = json.dumps(stored_payload)
         target.confidence_score = 0.95
         target.last_used_at = now
         db.add(target)
@@ -139,6 +206,42 @@ def _resolve_assistant_user(db: Session, payload: AIAssistantRequest) -> User | 
         return db.scalar(select(User).where(User.email == payload.email))
 
     return None
+
+
+def _resolve_user_by_identity(db: Session, user_id: int, email: str | None) -> User | None:
+    user = db.get(User, user_id)
+    if user:
+        return user
+    if email:
+        return db.scalar(select(User).where(User.email == email))
+    return None
+
+
+def _build_chat_history_response(memory_record: CreatorMemory, fallback_chat_id: str) -> AIAssistantChatHistory:
+    payload = _parse_chat_memory_record(memory_record) or {}
+    messages = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+    updated_at = str(payload.get("updated_at") or memory_record.last_used_at or memory_record.created_at)
+    title = str(payload.get("title") or _build_chat_title(messages))
+
+    return AIAssistantChatHistory(
+        chat_id=str(payload.get("chat_id") or fallback_chat_id),
+        title=title,
+        updated_at=updated_at,
+        messages=messages,
+    )
+
+
+def _build_legacy_chat_summary(memory_record: CreatorMemory) -> AIAssistantChatSummary | None:
+    if not memory_record.memory_value:
+        return None
+
+    preview = _compact_text(memory_record.memory_value.replace("\n", " "), 90)
+    return AIAssistantChatSummary(
+        chat_id="default",
+        title="Earlier Cr8or AI chat",
+        preview=preview or "Your earlier Cr8or AI memory.",
+        updated_at=str(memory_record.last_used_at or memory_record.created_at),
+    )
 
 
 def _build_creator_memory(
@@ -367,6 +470,8 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
     if not user:
         return _build_missing_user_assistant_response(payload)
 
+    chat_id = _normalize_chat_id(payload.chat_id)
+
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
     recent_memories = list(
         db.scalars(
@@ -389,9 +494,14 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         (profile.preferences or {}).get("personality") if profile and _is_auto_or_empty(payload.vibe) else str(payload.vibe or "").strip()
     )
     creator_memory = _build_creator_memory(profile, resolved_language, payload.message, recent_memories)
-    long_chat_memory = _get_assistant_chat_memory(db, user.id)
-    if long_chat_memory and long_chat_memory.memory_value:
-        creator_memory["long_chat_memory"] = long_chat_memory.memory_value
+    chat_memory_record = _get_assistant_chat_memory(db, user.id, chat_id)
+    chat_memory_payload = _parse_chat_memory_record(chat_memory_record)
+    if chat_memory_payload and isinstance(chat_memory_payload.get("messages"), list):
+        creator_memory["long_chat_memory"] = json.dumps(chat_memory_payload.get("messages", []))
+    elif chat_id == "default":
+        legacy_memory = _get_legacy_assistant_chat_memory(db, user.id)
+        if legacy_memory and legacy_memory.memory_value:
+            creator_memory["long_chat_memory"] = legacy_memory.memory_value
     app_context = _build_assistant_context(db, user, profile)
 
     try:
@@ -414,10 +524,12 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         _persist_assistant_chat_memory(
             db,
             user.id,
-            long_chat_memory,
+            chat_id,
+            chat_memory_record,
             payload.message,
             parsed_response.assistant_message,
         )
+        parsed_response.chat_id = chat_id
         return parsed_response
     except Exception:
         memory_facts = creator_memory.get("memory_facts", [])
@@ -438,6 +550,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
             assistant_message += f" Your latest post is {first_post}."
 
         fallback_response = AIAssistantResponse(
+            chat_id=chat_id,
             assistant_message=assistant_message,
             follow_up_question="What should I help you figure out next?",
             suggested_actions=["Summarize my dashboard", "Review my latest post", "Help me plan content"],
@@ -451,8 +564,99 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         _persist_assistant_chat_memory(
             db,
             user.id,
-            long_chat_memory,
+            chat_id,
+            chat_memory_record,
             payload.message,
             fallback_response.assistant_message,
         )
         return fallback_response
+
+
+@router.get("/assistant/chats/{user_id}", response_model=list[AIAssistantChatSummary])
+def list_assistant_chats(user_id: int, email: str | None = None, db: Session = Depends(get_db)) -> list[AIAssistantChatSummary]:
+    user = _resolve_user_by_identity(db, user_id, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    chat_records = list(
+        db.scalars(
+            select(CreatorMemory)
+            .where(
+                CreatorMemory.user_id == user.id,
+                CreatorMemory.memory_type == ASSISTANT_CHAT_MEMORY_TYPE,
+                CreatorMemory.memory_key.like(f"{ASSISTANT_CHAT_MEMORY_PREFIX}%"),
+            )
+            .order_by(desc(CreatorMemory.last_used_at), desc(CreatorMemory.created_at))
+        )
+    )
+
+    summaries: list[AIAssistantChatSummary] = []
+    for record in chat_records:
+        payload = _parse_chat_memory_record(record)
+        if not payload:
+            continue
+
+        messages = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+        preview_source = next(
+            (
+                str(message.get("content") or "").strip()
+                for message in reversed(messages)
+                if str(message.get("content") or "").strip()
+            ),
+            "",
+        )
+        summaries.append(
+            AIAssistantChatSummary(
+                chat_id=str(payload.get("chat_id") or record.memory_key.replace(ASSISTANT_CHAT_MEMORY_PREFIX, "", 1)),
+                title=str(payload.get("title") or _build_chat_title(messages)),
+                preview=_compact_text(preview_source or "Cr8or AI chat", 90),
+                updated_at=str(payload.get("updated_at") or record.last_used_at or record.created_at),
+            )
+        )
+
+    if not any(summary.chat_id == "default" for summary in summaries):
+        legacy_memory = _get_legacy_assistant_chat_memory(db, user.id)
+        legacy_summary = _build_legacy_chat_summary(legacy_memory) if legacy_memory else None
+        if legacy_summary:
+            summaries.append(legacy_summary)
+
+    return summaries
+
+
+@router.get("/assistant/chats/{user_id}/{chat_id}", response_model=AIAssistantChatHistory)
+def get_assistant_chat_history(
+    user_id: int,
+    chat_id: str,
+    email: str | None = None,
+    db: Session = Depends(get_db),
+) -> AIAssistantChatHistory:
+    user = _resolve_user_by_identity(db, user_id, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    normalized_chat_id = _normalize_chat_id(chat_id)
+    chat_record = _get_assistant_chat_memory(db, user.id, normalized_chat_id)
+    if not chat_record and normalized_chat_id == "default":
+        legacy_memory = _get_legacy_assistant_chat_memory(db, user.id)
+        if legacy_memory:
+            return AIAssistantChatHistory(
+                chat_id="default",
+                title="Earlier Cr8or AI chat",
+                updated_at=str(legacy_memory.last_used_at or legacy_memory.created_at),
+                messages=[
+                    {
+                        "role": "assistant",
+                        "content": "I still remember the context from your earlier Cr8or AI conversation and will use it in this chat.",
+                    }
+                ],
+            )
+
+    if not chat_record:
+        return AIAssistantChatHistory(
+            chat_id=normalized_chat_id,
+            title="New chat",
+            updated_at=datetime.now(tz=UTC).isoformat(),
+            messages=[],
+        )
+
+    return _build_chat_history_response(chat_record, normalized_chat_id)
