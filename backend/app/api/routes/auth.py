@@ -40,6 +40,16 @@ def _is_auth_rate_limited(message: str, status_code: int) -> bool:
     return status_code == 429 or "rate limit" in lowered or "too many" in lowered
 
 
+def _request_email_code_with_grace(email: str) -> str:
+    try:
+        supabase_request_email_otp(email)
+        return "Verification code sent to your email."
+    except SupabaseAuthError as exc:
+        if _is_auth_rate_limited(str(exc), exc.status_code):
+            return "A verification code was sent recently. Please wait about 60 seconds and try again."
+        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+
+
 def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
     salt_bytes = salt or secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, 120_000)
@@ -227,11 +237,8 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
                 "email_code_verified": False,
             }
         db.commit()
-        try:
-            supabase_request_email_otp(normalized_email)
-        except SupabaseAuthError as exc:
-            raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
-        return {"message": "Verification code sent to your email."}
+        message = _request_email_code_with_grace(normalized_email)
+        return {"message": message}
 
     username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == payload.username))
     if username_taken:
@@ -268,12 +275,8 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
     db.add(profile)
     db.commit()
 
-    try:
-        supabase_request_email_otp(normalized_email)
-    except SupabaseAuthError as exc:
-        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
-
-    return {"message": "Verification code sent to your email."}
+    message = _request_email_code_with_grace(normalized_email)
+    return {"message": message}
 
 
 @router.post("/signup/verify-code", response_model=AuthSessionResponse)
