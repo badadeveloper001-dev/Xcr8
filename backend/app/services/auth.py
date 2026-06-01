@@ -166,6 +166,36 @@ def supabase_verify_email_otp(email: str, token: str) -> dict:
     raise SupabaseAuthError("Invalid or expired verification code.", status_code=400)
 
 
+def supabase_admin_confirm_email(email: str) -> None:
+    with httpx.Client(timeout=15.0) as client:
+        list_response = client.get(
+            f"{settings.supabase_url}/auth/v1/admin/users",
+            headers=_admin_headers(),
+            params={"email": email},
+        )
+
+        if list_response.status_code >= 400:
+            _raise_auth_error(list_response, "Could not look up user for verification.")
+
+        payload = list_response.json()
+        users = payload.get("users") if isinstance(payload, dict) else None
+        if not isinstance(users, list) or not users:
+            raise SupabaseAuthError("Account not found for verification.", status_code=404)
+
+        user_id = users[0].get("id") if isinstance(users[0], dict) else None
+        if not isinstance(user_id, str) or not user_id.strip():
+            raise SupabaseAuthError("Account not found for verification.", status_code=404)
+
+        confirm_response = client.put(
+            f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+            headers=_admin_headers(),
+            json={"email_confirm": True},
+        )
+
+    if confirm_response.status_code >= 400:
+        _raise_auth_error(confirm_response, "Could not confirm account email.")
+
+
 def supabase_request_password_reset(email: str) -> None:
     with httpx.Client(timeout=15.0) as client:
         response = client.post(

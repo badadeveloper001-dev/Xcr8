@@ -20,6 +20,11 @@ class AuthSignupCodeVerifyRequest(BaseModel):
     code: str = Field(min_length=4, max_length=12)
 
 
+class AuthSignupPasswordVerifyRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
 class AuthLoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { getApiErrorMessage, signup, verifySignupCode } from "@/lib/api";
+import { getApiErrorMessage, signup, verifySignupCode, verifySignupPassword } from "@/lib/api";
 import { supabaseClient } from "@/lib/supabase";
 import { useCreatorStore } from "@/lib/store";
 import { ArrowRight, Sparkles } from "lucide-react";
@@ -124,6 +124,36 @@ export default function SignupPage() {
       return;
     }
     await supabaseClient.auth.signInWithOAuth({ provider: "google" });
+  };
+
+  const handleVerifyWithPassword = async () => {
+    if (!codeSent || password.length < 8) {
+      setError("Enter your account password to continue.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const session = await verifySignupPassword({
+        email: email.trim(),
+        password,
+      });
+      setSession({
+        userId: session.user_id,
+        email: session.email,
+        displayName: session.display_name,
+        fullName: session.full_name,
+        username: session.username,
+        onboardingComplete: session.onboarding_complete,
+      });
+      router.push("/onboarding");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not verify with password. Please check your password."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -308,17 +338,27 @@ export default function SignupPage() {
                 Continue with Google
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setCodeSent(false);
-                  setVerificationCode("");
-                  setNotice(null);
-                }}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:shadow-sm light:hover:bg-slate-50"
-              >
-                Edit signup details / resend code
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void handleVerifyWithPassword()}
+                  disabled={loading}
+                  className="w-full rounded-2xl border border-emerald-400/25 bg-emerald-500/10 py-3.5 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/15 disabled:opacity-60 light:border-emerald-300 light:bg-emerald-50 light:text-emerald-700"
+                >
+                  I did not get a code, verify with password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCodeSent(false);
+                    setVerificationCode("");
+                    setNotice(null);
+                  }}
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:shadow-sm light:hover:bg-slate-50"
+                >
+                  Edit signup details / resend code
+                </button>
+              </div>
             )}
           </form>
 
