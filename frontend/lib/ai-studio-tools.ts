@@ -23,8 +23,8 @@ export type StudioTool = {
 export const studioTools: StudioTool[] = [
   {
     id: "assistant",
-    name: "Assistant",
-    tagline: "A central AI that knows your app and your style.",
+    name: "Cr8or AI",
+    tagline: "Your named AI copilot across every creator screen.",
     description:
       "Conversational workspace guide that answers product questions and plans next moves.",
     status: "live",

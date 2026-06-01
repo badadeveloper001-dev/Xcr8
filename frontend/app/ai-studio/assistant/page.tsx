@@ -25,8 +25,8 @@ function buildWelcomeMessage(displayName: string | null): ChatItem {
   return {
     role: "assistant",
     content: displayName
-      ? `I’m your Xcr8 assistant, ${displayName}. Ask me anything about the app, your content, or your next move.`
-      : "I’m your Xcr8 assistant. Ask me anything about the app, your content, or your next move.",
+      ? `I’m Cr8or AI, ${displayName}. Ask me anything about the app, your content, or your next move.`
+      : "I’m Cr8or AI. Ask me anything about the app, your content, or your next move.",
   };
 }
 
@@ -125,12 +125,7 @@ export default function AssistantPage() {
         role: "assistant",
         content: `${data.assistant_message} ${data.follow_up_question}`.trim(),
       };
-      setMessages(
-        [
-          ...nextMessages,
-          assistantMessage,
-        ].slice(-MAX_RENDERED_MESSAGES),
-      );
+      setMessages([...nextMessages, assistantMessage].slice(-MAX_RENDERED_MESSAGES));
       setPrompt("");
     } catch (err) {
       const errorMessage = getApiErrorMessage(
@@ -162,7 +157,7 @@ export default function AssistantPage() {
           <div className="surface-soft rounded-2xl p-4">
             <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <Bot size={11} />
-              Assistant settings
+              Cr8or AI settings
             </p>
             <div className="grid gap-3 sm:grid-cols-1">
               <select
@@ -185,7 +180,7 @@ export default function AssistantPage() {
           <div className="surface-card rounded-2xl p-4">
             <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-white light:text-slate-900">
               <Sparkles size={16} className="text-cyan-300" />
-              Central assistant chat
+              Cr8or AI chat
             </h2>
 
             <div className="mb-3 flex flex-wrap gap-2">
@@ -265,7 +260,7 @@ export default function AssistantPage() {
             <article className="surface-card rounded-2xl p-4">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 light:border-cyan-500/20 light:bg-cyan-50 light:text-cyan-700">
                 <Sparkles size={11} />
-                Assistant reply
+                Cr8or AI reply
               </div>
               <h3 className="text-lg font-semibold text-white light:text-slate-900">
                 {result.follow_up_question}
@@ -288,7 +283,7 @@ export default function AssistantPage() {
             </article>
           ) : (
             <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
-              The assistant reply will appear here after you send a message.
+              Cr8or AI replies will appear here after you send a message.
             </div>
           )}
 

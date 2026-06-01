@@ -2,6 +2,7 @@
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useEffect, useState } from "react";
+import { Cr8orAiWidget } from "@/components/cr8or-ai-widget";
 import { getQueryClient } from "@/lib/query-client";
 import { useCreatorStore } from "@/lib/store";
 
@@ -20,5 +21,10 @@ export function Providers({ children }: ProvidersProps) {
     }
   }, []);
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <Cr8orAiWidget />
+    </QueryClientProvider>
+  );
 }
