@@ -15,7 +15,10 @@ PROMPT_TEMPLATE_VERSION = "assistant-v1"
 SYSTEM_PROMPT = (
     "You are Xcr8 Central Assistant, a conversational product guide for creators. "
     "Your job is to help the user with the app, their content, their memories, their uploads, their dashboard, "
-    "and their workflow. Speak in the user's language when possible and match their vibe naturally. "
+    "and their workflow. Always reply in the same language as the latest user message. "
+    "If the user's last message is mixed-language, mirror the dominant language and style. "
+    "Only switch language when the user explicitly asks to switch. "
+    "Match their vibe naturally. "
     "If creator_memory.long_chat_memory is provided, use it as conversation history context for continuity. "
     "If app_context.feature_catalog or app_context.workspace_map is provided, use those names and routes accurately so you know the full app surface. "
     "Be concise, warm, and practical. Never invent facts that are not present in the provided context. "
@@ -95,6 +98,7 @@ def generate_assistant_reply(payload: dict) -> dict:
                         {
                             "prompt_template_version": PROMPT_TEMPLATE_VERSION,
                             "message": payload.get("message", ""),
+                            "latest_user_message": payload.get("message", ""),
                             "language": payload.get("language", "english"),
                             "tone": payload.get("tone", "conversational"),
                             "vibe": payload.get("vibe"),

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import json
 import logging
+import re
 import uuid
 from collections import Counter, defaultdict
 
@@ -120,8 +121,80 @@ def _is_auto_or_empty(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"", "auto"}
 
 
+def _detect_message_language(message: str, fallback_language: str = "english") -> str:
+    text = str(message or "").strip()
+    if not text:
+        return _coalesce_value(fallback_language, "english")
+
+    lowered = text.lower()
+
+    if re.search(r"[\u0600-\u06ff]", text):
+        return "arabic"
+    if re.search(r"[\u0900-\u097f]", text):
+        return "hindi"
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "chinese"
+    if re.search(r"[\u3040-\u30ff]", text):
+        return "japanese"
+    if re.search(r"[\uac00-\ud7af]", text):
+        return "korean"
+    if re.search(r"[\u0400-\u04ff]", text):
+        return "russian"
+
+    yoruba_markers = ["ṣ", "ọ", "ẹ", "ń", "à", "á", "è", "é", "ì", "í", "ò", "ó", "ù", "ú"]
+    yoruba_words = [
+        "bawo",
+        "ẹ",
+        "jọwọ",
+        "mo",
+        "lọwọ",
+        "lọwọlọwọ",
+        "ṣe",
+        "nitorinaa",
+        "kí",
+        "jẹ",
+        "ọwọ",
+        "ẹ ṣe",
+    ]
+    pidgin_words = [
+        "abeg",
+        "abi",
+        "dey",
+        "wetin",
+        "una",
+        "wahala",
+        "how far",
+        "no wahala",
+        "shey",
+        "sha",
+        "don",
+        "comot",
+        "make we",
+    ]
+    french_words = ["bonjour", "merci", "s'il", "avec", "pour", "vous", "nous", "est-ce", "francais"]
+    spanish_words = ["hola", "gracias", "por favor", "como", "estoy", "quiero", "necesito", "usted"]
+    portuguese_words = ["ola", "obrigado", "voce", "preciso", "quero", "agora", "com", "para"]
+
+    if any(marker in lowered for marker in yoruba_markers) or sum(word in lowered for word in yoruba_words) >= 2:
+        return "yoruba"
+    if sum(word in lowered for word in pidgin_words) >= 2:
+        return "nigerian_pidgin"
+    if sum(word in lowered for word in french_words) >= 2:
+        return "french"
+    if sum(word in lowered for word in spanish_words) >= 2:
+        return "spanish"
+    if sum(word in lowered for word in portuguese_words) >= 2:
+        return "portuguese"
+
+    return _coalesce_value(fallback_language, "english")
+
+
 def _build_missing_user_assistant_response(payload: AIAssistantRequest) -> AIAssistantResponse:
-    resolved_language = "english" if _is_auto_or_empty(payload.language) else payload.language
+    resolved_language = (
+        _detect_message_language(payload.message, "english")
+        if _is_auto_or_empty(payload.language)
+        else payload.language
+    )
     resolved_tone = "conversational" if _is_auto_or_empty(payload.tone) else payload.tone
 
     return AIAssistantResponse(
@@ -805,7 +878,11 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         )
     )
 
-    resolved_language = user.language if _is_auto_or_empty(payload.language) else payload.language
+    resolved_language = (
+        _detect_message_language(payload.message, user.language)
+        if _is_auto_or_empty(payload.language)
+        else payload.language
+    )
     resolved_tone = (
         profile.tone if profile and _is_auto_or_empty(payload.tone) else _coalesce_value(payload.tone, "conversational")
     )
