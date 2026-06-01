@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
-from app.db.models import AuthCredential, CreatorProfile, User
+from app.db.models import AuthCredential, CreatorMemory, CreatorProfile, User
 from app.schemas.mvp import (
     AuthLoginRequest,
     AuthSessionResponse,
+    AuthSignupCodeVerifyRequest,
     PasswordResetConfirmRequest,
     AuthSignupRequest,
     OnboardingRequest,
@@ -23,10 +24,12 @@ from app.schemas.mvp import (
 )
 from app.services.auth import (
     SupabaseAuthError,
+    supabase_request_email_otp,
     supabase_request_password_reset,
     supabase_sign_in,
     supabase_sign_up,
     supabase_update_password,
+    supabase_verify_email_otp,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -94,8 +97,65 @@ def _normalize_email(value: str) -> str:
     return str(value or "").strip().lower()
 
 
-@router.post("/signup", response_model=AuthSessionResponse)
-def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+def _first_or_default(values: list[str], fallback: str) -> str:
+    for item in values:
+        candidate = str(item).strip()
+        if candidate:
+            return candidate
+    return fallback
+
+
+def _is_email_code_verified(profile: CreatorProfile | None) -> bool:
+    if not profile:
+        return True
+
+    preferences = profile.preferences if isinstance(profile.preferences, dict) else {}
+    if "email_code_verified" not in preferences:
+        return True
+    return bool(preferences.get("email_code_verified"))
+
+
+def _compact_list(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        value = str(item or "").strip()
+        key = value.lower()
+        if value and key not in seen:
+            normalized.append(value)
+            seen.add(key)
+    return normalized
+
+
+def _upsert_creator_memory(
+    db: Session,
+    user_id: int,
+    memory_key: str,
+    memory_value: str,
+    confidence_score: float = 0.92,
+) -> None:
+    existing = db.scalar(
+        select(CreatorMemory).where(
+            CreatorMemory.user_id == user_id,
+            CreatorMemory.memory_type == "onboarding",
+            CreatorMemory.memory_key == memory_key,
+        )
+    )
+
+    target = existing or CreatorMemory(
+        user_id=user_id,
+        memory_type="onboarding",
+        memory_key=memory_key,
+        memory_value="",
+    )
+    target.memory_value = memory_value
+    target.confidence_score = confidence_score
+    target.last_used_at = datetime.now(tz=UTC)
+    db.add(target)
+
+
+@router.post("/signup/request-code")
+def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> dict[str, str]:
     normalized_email = _normalize_email(str(payload.email))
 
     if payload.password != payload.confirm_password:
@@ -104,15 +164,17 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
     if len(payload.password) < 8 or not any(ch.isdigit() for ch in payload.password):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters and include a number.")
 
+    metadata_payload = {
+        "full_name": payload.full_name,
+        "username": payload.username,
+        "onboarding_complete": False,
+    }
+
     try:
         supabase_sign_up(
             email=normalized_email,
             password=payload.password,
-            metadata={
-                "full_name": payload.full_name,
-                "username": payload.username,
-                "onboarding_complete": False,
-            },
+            metadata=metadata_payload,
         )
     except SupabaseAuthError as exc:
         message = str(exc)
@@ -121,13 +183,18 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
                 status_code=429,
                 detail="Too many sign-up attempts right now. Please wait a minute and try again.",
             ) from exc
-
-        status_code = 409 if "already" in message.lower() else max(400, min(exc.status_code, 499))
-        raise HTTPException(status_code=status_code, detail=message) from exc
+        if "already" not in message.lower():
+            status_code = max(400, min(exc.status_code, 499))
+            raise HTTPException(status_code=status_code, detail=message) from exc
 
     existing = db.scalar(select(User).where(User.email == normalized_email))
     if existing:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing.id))
+        profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == existing.id))
+
+        if _is_email_code_verified(profile):
+            raise HTTPException(status_code=409, detail="Account already exists. Please log in.")
+
         desired_username = payload.username
         if credential and credential.username != desired_username:
             username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == desired_username))
@@ -154,10 +221,17 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
         existing.display_name = payload.full_name
         existing.language = payload.language
         existing.timezone = payload.timezone
+        if profile:
+            profile.preferences = {
+                **(profile.preferences or {}),
+                "email_code_verified": False,
+            }
         db.commit()
-        db.refresh(existing)
-        credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing.id))
-        return _session_payload(existing, credential)
+        try:
+            supabase_request_email_otp(normalized_email)
+        except SupabaseAuthError as exc:
+            raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+        return {"message": "Verification code sent to your email."}
 
     username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == payload.username))
     if username_taken:
@@ -189,13 +263,57 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
     profile = CreatorProfile(
         user_id=user.id,
         multilingual_profile=[payload.language],
+        preferences={"email_code_verified": False},
     )
     db.add(profile)
     db.commit()
-    db.refresh(user)
+
+    try:
+        supabase_request_email_otp(normalized_email)
+    except SupabaseAuthError as exc:
+        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+
+    return {"message": "Verification code sent to your email."}
+
+
+@router.post("/signup/verify-code", response_model=AuthSessionResponse)
+def signup_verify_code(payload: AuthSignupCodeVerifyRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    normalized_email = _normalize_email(str(payload.email))
+
+    try:
+        supabase_verify_email_otp(normalized_email, str(payload.code).strip())
+    except SupabaseAuthError as exc:
+        if _is_auth_rate_limited(str(exc), exc.status_code):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many verification attempts. Please wait a minute and try again.",
+            ) from exc
+        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+
+    user = db.scalar(select(User).where(User.email == normalized_email))
+    if not user:
+        raise HTTPException(status_code=404, detail="Signup session not found. Please register again.")
+
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    if profile:
+        profile.preferences = {
+            **(profile.preferences or {}),
+            "email_code_verified": True,
+            "email_verified_at": datetime.now(tz=UTC).isoformat(),
+        }
+        db.add(profile)
+        db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
+
+
+@router.post("/signup", response_model=AuthSessionResponse)
+def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    raise HTTPException(
+        status_code=410,
+        detail="Signup flow has changed. Request an email code first via /auth/signup/request-code.",
+    )
 
 
 @router.post("/login", response_model=AuthSessionResponse)
@@ -261,6 +379,13 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
             # Accounts without onboarding metadata are treated as already onboarded.
             user.onboarding_complete = True
 
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    if not _is_email_code_verified(profile):
+        raise HTTPException(
+            status_code=403,
+            detail="Please verify your email code before logging in.",
+        )
+
     if credential is None:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     if not credential:
@@ -303,18 +428,43 @@ def onboarding(payload: OnboardingRequest, db: Session = Depends(get_db)) -> Aut
         profile = CreatorProfile(user_id=user.id)
         db.add(profile)
 
-    profile.niche = payload.content_niche
-    profile.tone = payload.tone
+    creator_type = _compact_list(payload.creator_type)
+    platforms_used = _compact_list(payload.platforms_used)
+    content_niche = _compact_list(payload.content_niche)
+    audience_location = _compact_list(payload.audience_location)
+    content_goals = _compact_list(payload.content_goals)
+    posting_frequency = _compact_list(payload.posting_frequency)
+    tone = _compact_list(payload.tone)
+    personality = _compact_list(payload.personality)
+
+    profile.niche = _first_or_default(content_niche, profile.niche or "creator")
+    profile.tone = _first_or_default(tone, profile.tone or "confident")
     profile.preferences = {
         **(profile.preferences or {}),
-        "creator_type": payload.creator_type,
-        "platforms_used": payload.platforms_used,
-        "audience_location": payload.audience_location,
-        "content_goals": payload.content_goals,
-        "posting_frequency": payload.posting_frequency,
-        "personality": payload.personality,
+        "creator_type": creator_type,
+        "platforms_used": platforms_used,
+        "audience_location": audience_location,
+        "content_goals": content_goals,
+        "posting_frequency": posting_frequency,
+        "personality": personality,
+        "tones": tone,
+        "niches": content_niche,
         "initialized_at": datetime.now(tz=UTC).isoformat(),
     }
+
+    onboarding_memory = {
+        "onboarding_creator_type": ", ".join(creator_type) or "creator",
+        "onboarding_platforms": ", ".join(platforms_used) or "none",
+        "onboarding_niches": ", ".join(content_niche) or "creator",
+        "onboarding_audience_locations": ", ".join(audience_location) or "global",
+        "onboarding_content_goals": ", ".join(content_goals) or "grow audience",
+        "onboarding_posting_frequency": ", ".join(posting_frequency) or "weekly",
+        "onboarding_tones": ", ".join(tone) or "conversational",
+        "onboarding_personality": ", ".join(personality) or "conversational",
+    }
+    for memory_key, memory_value in onboarding_memory.items():
+        _upsert_creator_memory(db, user.id, memory_key, memory_value)
+
     user.onboarding_complete = True
 
     db.commit()

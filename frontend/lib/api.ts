@@ -31,6 +31,11 @@ export type SignupPayload = {
   timezone: string;
 };
 
+export type SignupVerifyCodePayload = {
+  email: string;
+  code: string;
+};
+
 export type LoginPayload = {
   email: string;
   password: string;
@@ -49,14 +54,14 @@ export type PasswordResetConfirmPayload = {
 
 export type OnboardingPayload = {
   user_id: number;
-  creator_type: string;
+  creator_type: string[];
   platforms_used: string[];
-  content_niche: string;
-  audience_location: string;
+  content_niche: string[];
+  audience_location: string[];
   content_goals: string[];
-  posting_frequency: string;
-  tone: string;
-  personality: string;
+  posting_frequency: string[];
+  tone: string[];
+  personality: string[];
 };
 
 export type DistributionDraftPayload = {
@@ -294,8 +299,16 @@ export type AiAssistantChatCreatePayload = {
   title?: string | null;
 };
 
-export async function signup(payload: SignupPayload): Promise<SessionPayload> {
-  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup", payload);
+export async function signup(payload: SignupPayload): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>(
+    "/api/v1/auth/signup/request-code",
+    payload,
+  );
+  return data;
+}
+
+export async function verifySignupCode(payload: SignupVerifyCodePayload): Promise<SessionPayload> {
+  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup/verify-code", payload);
   return data;
 }
 

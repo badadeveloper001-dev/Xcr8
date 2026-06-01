@@ -3,18 +3,23 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { getApiErrorMessage, signup } from "@/lib/api";
+import { getApiErrorMessage, signup, verifySignupCode } from "@/lib/api";
 import { supabaseClient } from "@/lib/supabase";
+import { useCreatorStore } from "@/lib/store";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Logo } from "@/components/logo";
 
 export default function SignupPage() {
   const router = useRouter();
+  const setSession = useCreatorStore((state) => state.setSession);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,37 +49,70 @@ export default function SignupPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!agreeTerms) {
-      setError("You must agree to the Terms to continue.");
+    if (!codeSent) {
+      if (!agreeTerms) {
+        setError("You must agree to the Terms to continue.");
+        return;
+      }
+
+      const validationError = validateForm();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      setNotice(null);
+      try {
+        const response = await signup({
+          full_name: fullName.trim(),
+          username: username.trim(),
+          email: email.trim(),
+          password,
+          confirm_password: confirmPassword,
+          language: "english",
+          timezone: "Africa/Lagos",
+        });
+        setCodeSent(true);
+        setNotice(response.message || "Verification code sent. Check your email inbox.");
+      } catch (err) {
+        setError(
+          getApiErrorMessage(
+            err,
+            "Could not create account. Start the backend service and try again.",
+          ),
+        );
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
+    if (verificationCode.trim().length < 4) {
+      setError("Enter the verification code sent to your email.");
       return;
     }
 
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
-      await signup({
-        full_name: fullName.trim(),
-        username: username.trim(),
+      const session = await verifySignupCode({
         email: email.trim(),
-        password,
-        confirm_password: confirmPassword,
-        language: "english",
-        timezone: "Africa/Lagos",
+        code: verificationCode.trim(),
       });
-      router.push(`/auth/login?notice=verify-email&email=${encodeURIComponent(email.trim())}`);
+      setSession({
+        userId: session.user_id,
+        email: session.email,
+        displayName: session.display_name,
+        fullName: session.full_name,
+        username: session.username,
+        onboardingComplete: session.onboarding_complete,
+      });
+      router.push("/onboarding");
     } catch (err) {
-      setError(
-        getApiErrorMessage(
-          err,
-          "Could not create account. Start the backend service and try again.",
-        ),
-      );
+      setError(getApiErrorMessage(err, "Invalid or expired code. Request a new code and try again."));
     } finally {
       setLoading(false);
     }
@@ -138,14 +176,18 @@ export default function SignupPage() {
 
           <p className="section-kicker mb-2">Create profile</p>
           <h1 className="text-3xl font-bold tracking-tight text-white light:text-slate-900 sm:text-[2.05rem]">
-            Start your workspace
+            {codeSent ? "Verify your email" : "Start your workspace"}
           </h1>
           <p className="mt-1.5 text-sm text-slate-400 light:text-slate-500">
-            Create your account, then we will calibrate your creator tone in onboarding.
+            {codeSent
+              ? "Enter the code sent to your email to continue to onboarding."
+              : "Create your account, then verify your email code before onboarding."}
           </p>
 
           <form className="mt-6 space-y-3.5" onSubmit={(e) => void handleSubmit(e)}>
-            <div>
+            {!codeSent ? (
+              <>
+                <div>
               <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
                 Full name
               </label>
@@ -223,6 +265,25 @@ export default function SignupPage() {
               />
               I agree to the Terms of Service and Privacy Policy.
             </label>
+              </>
+            ) : (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                  Verification code
+                </label>
+                <input
+                  required
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\s+/g, ""))}
+                  placeholder="Enter the 6-digit code"
+                  className="xcr8-input"
+                  autoComplete="one-time-code"
+                />
+                <p className="mt-2 text-xs text-slate-500 light:text-slate-500">
+                  Sent to {email.trim()}. If you did not receive it, use resend code below.
+                </p>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -230,22 +291,42 @@ export default function SignupPage() {
               className="cta-btn inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold disabled:opacity-60"
             >
               {loading ? (
-                "Creating account…"
+                codeSent ? "Verifying code..." : "Sending code..."
               ) : (
                 <>
-                  Create account <ArrowRight size={16} />
+                  {codeSent ? "Verify code" : "Send email code"} <ArrowRight size={16} />
                 </>
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => void handleGoogle()}
-              className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:shadow-sm light:hover:bg-slate-50"
-            >
-              Continue with Google
-            </button>
+            {!codeSent ? (
+              <button
+                type="button"
+                onClick={() => void handleGoogle()}
+                className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:shadow-sm light:hover:bg-slate-50"
+              >
+                Continue with Google
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setCodeSent(false);
+                  setVerificationCode("");
+                  setNotice(null);
+                }}
+                className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:shadow-sm light:hover:bg-slate-50"
+              >
+                Edit signup details / resend code
+              </button>
+            )}
           </form>
+
+          {notice && (
+            <p className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5 text-sm text-cyan-300">
+              {notice}
+            </p>
+          )}
 
           {error && (
             <p

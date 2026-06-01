@@ -437,6 +437,22 @@ def _build_creator_memory(
     prompt_seed: str,
     recent_memories: list[CreatorMemory],
 ) -> dict:
+    preferences = (profile.preferences or {}) if profile else {}
+    raw_personality = preferences.get("personality") if isinstance(preferences, dict) else None
+    raw_audience_location = preferences.get("audience_location") if isinstance(preferences, dict) else None
+
+    if isinstance(raw_personality, list):
+        personality = ", ".join(str(item).strip() for item in raw_personality if str(item).strip()) or None
+    else:
+        personality = str(raw_personality).strip() if raw_personality else None
+
+    if isinstance(raw_audience_location, list):
+        audience_location = ", ".join(
+            str(item).strip() for item in raw_audience_location if str(item).strip()
+        ) or None
+    else:
+        audience_location = str(raw_audience_location).strip() if raw_audience_location else None
+
     memory_facts = [
         f"{memory.memory_key}: {memory.memory_value}"
         for memory in recent_memories
@@ -449,8 +465,8 @@ def _build_creator_memory(
         "slang_profile": profile.slang_profile if profile else "light",
         "niche": profile.niche if profile else prompt_seed,
         "preferred_caption_length": profile.preferred_caption_length if profile else 120,
-        "personality": (profile.preferences or {}).get("personality") if profile else None,
-        "audience_location": (profile.preferences or {}).get("audience_location") if profile else None,
+        "personality": personality,
+        "audience_location": audience_location,
         "multilingual_profile": profile.multilingual_profile if profile else [payload_language],
         "memory_facts": memory_facts,
     }

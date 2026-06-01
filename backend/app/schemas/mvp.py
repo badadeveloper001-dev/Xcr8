@@ -15,6 +15,11 @@ class AuthSignupRequest(BaseModel):
     timezone: str = "Africa/Lagos"
 
 
+class AuthSignupCodeVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=12)
+
+
 class AuthLoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
@@ -48,14 +53,14 @@ class AuthSessionResponse(BaseModel):
 
 class OnboardingRequest(BaseModel):
     user_id: int
-    creator_type: str
+    creator_type: list[str]
     platforms_used: list[str]
-    content_niche: str
-    audience_location: str
+    content_niche: list[str]
+    audience_location: list[str]
     content_goals: list[str]
-    posting_frequency: str
-    tone: str
-    personality: str
+    posting_frequency: list[str]
+    tone: list[str]
+    personality: list[str]
 
 
 class PlatformConnection(BaseModel):

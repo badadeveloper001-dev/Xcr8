@@ -66,11 +66,6 @@ const wizardSteps = [
   "Tone & Personality",
 ];
 
-function selectOne(value: string, current: string, set: (v: string) => void) {
-  if (current === value) return;
-  set(value);
-}
-
 function toggleMany(value: string, current: string[], set: (v: string[]) => void) {
   if (current.includes(value)) {
     set(current.filter((item) => item !== value));
@@ -93,14 +88,14 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [creatorType, setCreatorType] = useState("influencer");
+  const [creatorType, setCreatorType] = useState<string[]>(["influencer"]);
   const [platformsUsed, setPlatformsUsed] = useState<string[]>(["instagram", "tiktok"]);
-  const [contentNiche, setContentNiche] = useState("entertainment");
-  const [audienceLocation, setAudienceLocation] = useState("Nigeria");
+  const [contentNiche, setContentNiche] = useState<string[]>(["entertainment"]);
+  const [audienceLocation, setAudienceLocation] = useState<string[]>(["Nigeria"]);
   const [contentGoals, setContentGoals] = useState<string[]>(["grow audience"]);
-  const [postingFrequency, setPostingFrequency] = useState("3-4x weekly");
-  const [tone, setTone] = useState("bold");
-  const [personality, setPersonality] = useState("conversational");
+  const [postingFrequency, setPostingFrequency] = useState<string[]>(["3-4x weekly"]);
+  const [tone, setTone] = useState<string[]>(["bold"]);
+  const [personality, setPersonality] = useState<string[]>(["conversational"]);
 
   useEffect(() => {
     if (hasHydrated && !userId) {
@@ -116,8 +111,12 @@ export default function OnboardingPage() {
   if (!hasHydrated || !userId) return null;
 
   const canContinue = () => {
+    if (step === 1) return creatorType.length > 0;
     if (step === 2) return true;
-    if (step === 5) return contentGoals.length > 0;
+    if (step === 3) return contentNiche.length > 0;
+    if (step === 4) return audienceLocation.length > 0;
+    if (step === 5) return contentGoals.length > 0 && postingFrequency.length > 0;
+    if (step === 6) return tone.length > 0 && personality.length > 0;
     return true;
   };
 
@@ -254,9 +253,9 @@ export default function OnboardingPage() {
                   <button
                     key={item}
                     type="button"
-                    onClick={() => selectOne(item, creatorType, setCreatorType)}
+                    onClick={() => toggleMany(item, creatorType, setCreatorType)}
                     className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                      creatorType === item
+                      creatorType.includes(item)
                         ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40"
                         : "surface-soft text-slate-300 light:text-slate-700"
                     }`}
@@ -297,9 +296,9 @@ export default function OnboardingPage() {
                   <button
                     key={item}
                     type="button"
-                    onClick={() => selectOne(item, contentNiche, setContentNiche)}
+                    onClick={() => toggleMany(item, contentNiche, setContentNiche)}
                     className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                      contentNiche === item
+                      contentNiche.includes(item)
                         ? "bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40"
                         : "surface-soft text-slate-300 light:text-slate-700"
                     }`}
@@ -316,9 +315,9 @@ export default function OnboardingPage() {
                   <button
                     key={item}
                     type="button"
-                    onClick={() => selectOne(item, audienceLocation, setAudienceLocation)}
+                    onClick={() => toggleMany(item, audienceLocation, setAudienceLocation)}
                     className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                      audienceLocation === item
+                      audienceLocation.includes(item)
                         ? "bg-fuchsia-500/20 text-fuchsia-300 ring-1 ring-fuchsia-500/40"
                         : "surface-soft text-slate-300 light:text-slate-700"
                     }`}
@@ -347,20 +346,27 @@ export default function OnboardingPage() {
                     </button>
                   ))}
                 </div>
-                <label className="block text-xs text-slate-500">
-                  Posting frequency
-                  <select
-                    value={postingFrequency}
-                    onChange={(e) => setPostingFrequency(e.target.value)}
-                    className="xcr8-input mt-1"
-                  >
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Posting frequency
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {frequencies.map((item) => (
-                      <option key={item} value={item}>
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => toggleMany(item, postingFrequency, setPostingFrequency)}
+                        className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                          postingFrequency.includes(item)
+                            ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
+                            : "surface-soft text-slate-300 light:text-slate-700"
+                        }`}
+                      >
                         {item}
-                      </option>
+                      </button>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </div>
               </>
             )}
 
@@ -375,9 +381,9 @@ export default function OnboardingPage() {
                       <button
                         key={item}
                         type="button"
-                        onClick={() => selectOne(item, tone, setTone)}
+                        onClick={() => toggleMany(item, tone, setTone)}
                         className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                          tone === item
+                          tone.includes(item)
                             ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40"
                             : "surface-soft text-slate-300 light:text-slate-700"
                         }`}
@@ -396,9 +402,9 @@ export default function OnboardingPage() {
                       <button
                         key={`p-${item}`}
                         type="button"
-                        onClick={() => selectOne(item, personality, setPersonality)}
+                        onClick={() => toggleMany(item, personality, setPersonality)}
                         className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                          personality === item
+                          personality.includes(item)
                             ? "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40"
                             : "surface-soft text-slate-300 light:text-slate-700"
                         }`}

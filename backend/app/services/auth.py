@@ -103,6 +103,38 @@ def supabase_sign_in(email: str, password: str) -> dict:
     return response.json()
 
 
+def supabase_request_email_otp(email: str) -> None:
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(
+            f"{settings.supabase_url}/auth/v1/otp",
+            headers=_auth_headers(),
+            json={
+                "email": email,
+                "create_user": False,
+            },
+        )
+
+    if response.status_code >= 400:
+        _raise_auth_error(response, "Could not send verification code.")
+
+
+def supabase_verify_email_otp(email: str, token: str) -> dict:
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(
+            f"{settings.supabase_url}/auth/v1/verify",
+            headers=_auth_headers(),
+            json={
+                "email": email,
+                "token": token,
+                "type": "email",
+            },
+        )
+
+    if response.status_code >= 400:
+        _raise_auth_error(response, "Invalid or expired verification code.")
+    return response.json()
+
+
 def supabase_request_password_reset(email: str) -> None:
     with httpx.Client(timeout=15.0) as client:
         response = client.post(
