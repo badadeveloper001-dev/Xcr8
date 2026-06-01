@@ -240,6 +240,10 @@ def _generate_chat_id() -> str:
     return f"chat-{uuid.uuid4().hex[:12]}"
 
 
+def _normalize_email(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
 def _parse_chat_memory_record(memory_record: CreatorMemory | None) -> dict | None:
     if not memory_record or not memory_record.memory_value:
         return None
@@ -373,7 +377,8 @@ def _resolve_assistant_user(db: Session, payload: AIAssistantRequest) -> User | 
         return user
 
     if payload.email:
-        return db.scalar(select(User).where(User.email == payload.email))
+        normalized_email = _normalize_email(payload.email)
+        return db.scalar(select(User).where(func.lower(User.email) == normalized_email))
 
     return None
 
@@ -383,7 +388,8 @@ def _resolve_user_by_identity(db: Session, user_id: int, email: str | None) -> U
     if user:
         return user
     if email:
-        return db.scalar(select(User).where(User.email == email))
+        normalized_email = _normalize_email(email)
+        return db.scalar(select(User).where(func.lower(User.email) == normalized_email))
     return None
 
 

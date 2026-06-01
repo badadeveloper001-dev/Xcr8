@@ -90,8 +90,14 @@ def _extract_onboarding_state(user_meta: dict | None) -> tuple[bool, bool]:
     return True, bool(user_meta.get("onboarding_complete"))
 
 
+def _normalize_email(value: str) -> str:
+    return str(value or "").strip().lower()
+
+
 @router.post("/signup", response_model=AuthSessionResponse)
 def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    normalized_email = _normalize_email(str(payload.email))
+
     if payload.password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match.")
 
@@ -100,7 +106,7 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
 
     try:
         supabase_sign_up(
-            email=payload.email,
+            email=normalized_email,
             password=payload.password,
             metadata={
                 "full_name": payload.full_name,
@@ -119,7 +125,7 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
         status_code = 409 if "already" in message.lower() else max(400, min(exc.status_code, 499))
         raise HTTPException(status_code=status_code, detail=message) from exc
 
-    existing = db.scalar(select(User).where(User.email == payload.email))
+    existing = db.scalar(select(User).where(User.email == normalized_email))
     if existing:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing.id))
         desired_username = payload.username
@@ -160,7 +166,7 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
         local_username = payload.username
 
     user = User(
-        email=payload.email,
+        email=normalized_email,
         display_name=payload.full_name,
         language=payload.language,
         timezone=payload.timezone,
@@ -194,8 +200,10 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
 
 @router.post("/login", response_model=AuthSessionResponse)
 def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    normalized_email = _normalize_email(str(payload.email))
+
     try:
-        auth_payload = supabase_sign_in(payload.email, payload.password)
+        auth_payload = supabase_sign_in(normalized_email, payload.password)
     except SupabaseAuthError as exc:
         message = str(exc)
         if _is_auth_rate_limited(message, exc.status_code):
@@ -211,22 +219,22 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
         user_meta if isinstance(user_meta, dict) else None
     )
 
-    user = db.scalar(select(User).where(User.email == payload.email))
+    user = db.scalar(select(User).where(User.email == normalized_email))
     credential: AuthCredential | None = None
     if not user:
-        display_name = payload.email.split("@")[0]
+        display_name = normalized_email.split("@")[0]
         if isinstance(user_meta, dict):
             display_name = str(user_meta.get("full_name") or display_name)
 
         user = User(
-            email=payload.email,
+            email=normalized_email,
             display_name=display_name,
             onboarding_complete=onboarding_from_meta,
         )
         db.add(user)
         db.flush()
 
-        username_seed = payload.email.split("@")[0]
+        username_seed = normalized_email.split("@")[0]
         if isinstance(user_meta, dict):
             username_seed = str(user_meta.get("username") or username_seed)
 
@@ -259,7 +267,7 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
         placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
         credential = AuthCredential(
             user_id=user.id,
-            username=_ensure_unique_username(db, payload.email.split("@")[0]),
+            username=_ensure_unique_username(db, normalized_email.split("@")[0]),
             full_name=user.display_name,
             password_salt=placeholder_salt,
             password_hash=placeholder_hash,
@@ -321,8 +329,10 @@ def request_password_reset(
     payload: PasswordResetRequest,
     db: Session = Depends(get_db),
 ) -> PasswordResetRequestResponse:
+    normalized_email = _normalize_email(str(payload.email))
+
     try:
-        supabase_request_password_reset(payload.email)
+        supabase_request_password_reset(normalized_email)
     except SupabaseAuthError:
         # Keep response generic for security and compatibility.
         pass
