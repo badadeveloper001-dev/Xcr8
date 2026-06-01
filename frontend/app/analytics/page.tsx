@@ -11,7 +11,6 @@ import {
   Download,
   Globe2,
   HeartPulse,
-  Lightbulb,
   LineChart,
   Rocket,
   Sparkles,
@@ -32,11 +31,44 @@ type EngagementItem = {
 
 type AnalyticsOverview = {
   engagement: EngagementItem[];
+  summary?: {
+    total_reach_estimate: number;
+    audience_growth: number;
+    average_engagement_rate: number;
+    average_caption_effectiveness: number;
+    top_platform: string;
+    connected_platforms: number;
+    total_posts: number;
+    ai_generations: number;
+    latest_post_title?: string | null;
+    strongest_post_title?: string | null;
+  };
   insights: {
     best_caption_length: number;
     best_posting_times: string[];
     trend: string;
   };
+  brain_insights?: string[];
+  audience?: {
+    top_regions: string[];
+    languages: string[];
+    content_preference: string;
+    peak_active_window: string;
+    loyalty_score: number;
+    device_split: string;
+    mood_signal: string;
+  };
+  performance?: {
+    watch_time_curve: string;
+    drop_off_point: string;
+    replay_spike: string;
+    emotion_signal: string;
+  };
+  category_intelligence?: Array<{
+    label: string;
+    score: number;
+    insight: string;
+  }>;
 };
 
 async function fetchAnalytics(userId: number) {
@@ -104,7 +136,7 @@ const platformShort: Record<string, string> = {
   threads: "TH",
 };
 
-const categoryPerformance = [
+const categoryPerformanceFallback = [
   { label: "Cinematic", score: 92, insight: "Highest retention + saves" },
   { label: "Storytelling", score: 88, insight: "Strong watch-through" },
   { label: "Educational", score: 84, insight: "Best for shares" },
@@ -115,12 +147,29 @@ const categoryPerformance = [
   { label: "Controversial", score: 61, insight: "Spikes comments, mixed sentiment" },
 ];
 
-const assistantPrompts = [
-  "Why did this video underperform?",
-  "What content should I post tomorrow?",
-  "Why is retention dropping?",
-  "What audience is growing fastest?",
+const brainInsightFallback = [
+  "Your audience prefers emotionally driven storytelling.",
+  "Retention increases when subtitles appear in the first 3 seconds.",
+  "Darker cinematic visuals increase save-rate for your audience.",
+  "Educational carousels outperform short tweets for your audience.",
 ];
+
+const audienceFallback = {
+  top_regions: ["Nigeria", "UK rising"],
+  languages: ["EN", "Pidgin", "Yoruba"],
+  content_preference: "Cinematic storytelling",
+  peak_active_window: "7:30 PM - 10:00 PM",
+  loyalty_score: 78,
+  device_split: "92% mobile",
+  mood_signal: "Optimistic + aspirational",
+};
+
+const performanceFallback = {
+  watch_time_curve: "Watch time curve: strongest in first 18s",
+  drop_off_point: "Drop-off point detected at 0:25",
+  replay_spike: "Replay spike at product reveal",
+  emotion_signal: "Emotional peak detected at CTA transition",
+};
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 16 },
@@ -133,11 +182,6 @@ export default function AnalyticsPage() {
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
   const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantAnswer, setAssistantAnswer] = useState(
-    "Ask a question for strategy-grade analytics guidance.",
-  );
-  const [assistantQuestion, setAssistantQuestion] = useState("");
   const [exportFormat, setExportFormat] = useState<"pdf" | "presentation" | "client" | "growth">(
     "pdf",
   );
@@ -159,11 +203,18 @@ export default function AnalyticsPage() {
 
   const engagement = data?.engagement?.length ? data.engagement : demoEngagement;
   const usingDemoData = !data?.engagement?.length;
+  const summary = data?.summary;
   const insights = data?.insights ?? {
     best_caption_length: 148,
     best_posting_times: ["7:30 PM", "12:00 PM", "8:00 PM"],
     trend: "Short hooks with strong local slang outperform baseline by 28%",
   };
+  const brainInsights = data?.brain_insights?.length ? data.brain_insights : brainInsightFallback;
+  const audience = data?.audience ?? audienceFallback;
+  const performance = data?.performance ?? performanceFallback;
+  const categoryPerformance = data?.category_intelligence?.length
+    ? data.category_intelligence
+    : categoryPerformanceFallback;
 
   const totals = useMemo(() => {
     const reach = engagement.reduce(
@@ -179,16 +230,16 @@ export default function AnalyticsPage() {
       Math.max(engagement.length, 1);
 
     return {
-      totalReach: reach,
-      audienceGrowth: growth,
-      engagementGrowth: avgEngagement * 100,
+      totalReach: summary?.total_reach_estimate ?? reach,
+      audienceGrowth: summary?.audience_growth ?? growth,
+      engagementGrowth: (summary?.average_engagement_rate ?? avgEngagement) * 100,
       watchTime: 42.8,
-      retentionRate: 68 + avgCaption * 12,
-      conversion: 3.2 + avgCaption * 2.1,
-      consistencyScore: 76 + avgCaption * 20,
+      retentionRate: 68 + (summary?.average_caption_effectiveness ?? avgCaption) * 12,
+      conversion: 3.2 + (summary?.average_caption_effectiveness ?? avgCaption) * 2.1,
+      consistencyScore: 76 + (summary?.average_caption_effectiveness ?? avgCaption) * 20,
       momentum: 74 + avgEngagement * 110,
     };
-  }, [engagement]);
+  }, [engagement, summary]);
 
   const exportReport = () => {
     const report = {
@@ -249,51 +300,6 @@ export default function AnalyticsPage() {
     link.download = `xcr8-${exportFormat}-report-${today}.${extension}`;
     link.click();
     URL.revokeObjectURL(url);
-  };
-
-  const answerPrompt = (prompt: string) => {
-    if (prompt.includes("underperform")) {
-      setAssistantAnswer(
-        "This post likely underperformed due to a weak first 3 seconds and late CTA placement. Next: lead with your strongest emotional hook and add subtitles immediately.",
-      );
-      return;
-    }
-    if (prompt.includes("tomorrow")) {
-      setAssistantAnswer(
-        "Post a cinematic storytelling piece at 7:30 PM with a concise 120-150 character caption. This aligns with your highest retention and save-rate window.",
-      );
-      return;
-    }
-    if (prompt.includes("retention")) {
-      setAssistantAnswer(
-        "Retention dip appears around 0:25. Compress setup and introduce payoff by 0:18. Use pacing cuts every 2-3 seconds in the middle section.",
-      );
-      return;
-    }
-    setAssistantAnswer(
-      "Fastest growth is from your UK and Nigerian diaspora audience cluster. Double down on culturally relevant hooks and cross-post optimized edits on TikTok and YouTube Shorts.",
-    );
-  };
-
-  const answerCustomQuestion = () => {
-    const question = assistantQuestion.trim().toLowerCase();
-    if (!question) return;
-
-    if (question.includes("underperform")) {
-      answerPrompt("Why did this video underperform?");
-    } else if (question.includes("tomorrow") || question.includes("next")) {
-      answerPrompt("What content should I post tomorrow?");
-    } else if (question.includes("retention")) {
-      answerPrompt("Why is retention dropping?");
-    } else if (question.includes("growing") || question.includes("fastest")) {
-      answerPrompt("What audience is growing fastest?");
-    } else {
-      setAssistantAnswer(
-        `Strategic read: ${assistantQuestion}. Based on your current patterns, lead with stronger hooks, publish in your active window, and test a more emotional angle for the next post.`,
-      );
-    }
-
-    setAssistantQuestion("");
   };
 
   return (
@@ -429,12 +435,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid gap-2.5 sm:grid-cols-2">
-            {[
-              "Your audience prefers emotionally driven storytelling.",
-              "Retention increases when subtitles appear in the first 3 seconds.",
-              "Darker cinematic visuals increase save-rate for your audience.",
-              "Educational carousels outperform short tweets for your audience.",
-            ].map((line) => (
+            {brainInsights.map((line) => (
               <article
                 key={line}
                 className="surface-soft rounded-xl p-3 text-xs text-slate-300 light:text-slate-700"
@@ -450,10 +451,10 @@ export default function AnalyticsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setAssistantOpen(true)}
+              onClick={() => router.push("/ai-studio/assistant")}
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
-              Ask AI Assistant
+              Ask Cr8or AI
             </button>
           </div>
         </div>
@@ -467,10 +468,10 @@ export default function AnalyticsPage() {
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {[
-              "Watch time curve: strongest in first 18s",
-              "Drop-off point detected at 0:25",
-              "Replay spike at product reveal",
-              "Emotional peak detected at CTA transition",
+              performance.watch_time_curve,
+              performance.drop_off_point,
+              performance.replay_spike,
+              performance.emotion_signal,
             ].map((line) => (
               <article
                 key={line}
@@ -504,14 +505,14 @@ export default function AnalyticsPage() {
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { k: "Demographics", v: "18-34 · 63%" },
-              { k: "Top Region", v: "Nigeria · UK rising" },
-              { k: "Languages", v: "EN · Pidgin · Yoruba" },
-              { k: "Device Split", v: "92% mobile" },
-              { k: "Mood Signal", v: "Optimistic + aspirational" },
-              { k: "Loyalty Score", v: "78 / 100" },
-              { k: "Peak Active", v: "7:30 PM - 10:00 PM" },
-              { k: "Content Preference", v: "Cinematic storytelling" },
+              { k: "Demographics", v: "18-34 · core creator audience" },
+              { k: "Top Region", v: audience.top_regions.join(" · ") },
+              { k: "Languages", v: audience.languages.join(" · ") },
+              { k: "Device Split", v: audience.device_split },
+              { k: "Mood Signal", v: audience.mood_signal },
+              { k: "Loyalty Score", v: `${audience.loyalty_score} / 100` },
+              { k: "Peak Active", v: audience.peak_active_window },
+              { k: "Content Preference", v: audience.content_preference },
             ].map((item) => (
               <article key={item.k} className="surface-soft rounded-xl p-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">{item.k}</p>
@@ -604,10 +605,10 @@ export default function AnalyticsPage() {
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              "Watch time curve: strongest in first 18s",
-              "Drop-off point detected at 0:25",
-              "Replay spike at product reveal",
-              "Emotional peak detected at CTA transition",
+              performance.watch_time_curve,
+              performance.drop_off_point,
+              performance.replay_spike,
+              performance.emotion_signal,
             ].map((line) => (
               <article
                 key={line}
@@ -931,71 +932,6 @@ export default function AnalyticsPage() {
         </div>
       </motion.section>
 
-      <div className="fixed bottom-24 right-4 z-50 sm:right-6">
-        {assistantOpen ? (
-          <div className="surface-card neon-ring mb-3 w-[min(92vw,340px)] rounded-2xl p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-white light:text-slate-900">
-                <Lightbulb size={14} className="text-violet-400" /> Analytics AI Assistant
-              </p>
-              <button
-                type="button"
-                onClick={() => setAssistantOpen(false)}
-                className="text-xs text-slate-500 hover:text-slate-300"
-              >
-                Close
-              </button>
-            </div>
-            <p className="mb-2 text-xs text-slate-500">
-              Strategic, creator-aware answers with actionable next steps.
-            </p>
-            <div className="mb-2 rounded-xl border border-violet-500/20 bg-violet-500/10 px-2.5 py-2 text-xs text-violet-200 light:text-violet-700">
-              {assistantAnswer}
-            </div>
-            <div className="mb-2 flex gap-2">
-              <input
-                value={assistantQuestion}
-                onChange={(event) => setAssistantQuestion(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    answerCustomQuestion();
-                  }
-                }}
-                placeholder="Ask a question..."
-                className="xcr8-input flex-1 py-2 text-xs"
-              />
-              <button
-                type="button"
-                onClick={answerCustomQuestion}
-                className="cta-btn rounded-xl px-3 py-2 text-xs font-semibold"
-              >
-                Ask
-              </button>
-            </div>
-            <div className="space-y-1.5">
-              {assistantPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => answerPrompt(prompt)}
-                  className="surface-soft w-full rounded-xl px-2.5 py-2 text-left text-xs text-slate-300 light:text-slate-700"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={() => setAssistantOpen((prev) => !prev)}
-          className="cta-btn inline-flex h-12 items-center gap-2 rounded-full px-4 text-sm font-semibold"
-        >
-          <Sparkles size={16} /> AI Analytics Assistant
-        </button>
-      </div>
     </MobileShell>
   );
 }
