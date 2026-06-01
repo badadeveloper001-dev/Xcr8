@@ -189,6 +189,35 @@ export type AiBrainstormResponse = {
   usage: Record<string, unknown>;
 };
 
+export type AiTrendMapperPayload = {
+  user_id: number;
+  topic: string;
+  goal: string;
+  platform: string;
+  window: "7d" | "30d" | "90d";
+};
+
+export type AiTrendSignal = {
+  title: string;
+  why_now: string;
+  angle: string;
+  hook: string;
+  action: string;
+  platform: string;
+  confidence_score: number;
+};
+
+export type AiTrendMapperResponse = {
+  topic: string;
+  goal: string;
+  platform: string;
+  window: "7d" | "30d" | "90d";
+  generated_at: string;
+  summary: string;
+  signals: AiTrendSignal[];
+  source_stats: Record<string, number>;
+};
+
 export type AiConversationMessage = {
   role: "user" | "assistant";
   content: string;
@@ -258,6 +287,11 @@ export type AiAssistantChatHistory = {
   title: string;
   updated_at: string;
   messages: AiConversationMessage[];
+};
+
+export type AiAssistantChatCreatePayload = {
+  chat_id?: string | null;
+  title?: string | null;
 };
 
 export async function signup(payload: SignupPayload): Promise<SessionPayload> {
@@ -373,6 +407,15 @@ export async function generateAiBrainstorm(
   return data;
 }
 
+export async function generateAiTrendMap(
+  payload: AiTrendMapperPayload,
+): Promise<AiTrendMapperResponse> {
+  const { data } = await apiClient.post<AiTrendMapperResponse>("/api/v1/ai/trend-mapper", payload, {
+    timeout: 60_000,
+  });
+  return data;
+}
+
 export async function composeAiContent(payload: AiComposePayload): Promise<AiComposeResponse> {
   const { data } = await apiClient.post<AiComposeResponse>("/api/v1/ai/compose", payload, {
     timeout: 60_000,
@@ -414,6 +457,47 @@ export async function getAiAssistantChatHistory(
     },
   );
   return data;
+}
+
+export async function createAiAssistantChat(
+  userId: number,
+  payload: AiAssistantChatCreatePayload,
+  email?: string,
+): Promise<AiAssistantChatSummary> {
+  const { data } = await apiClient.post<AiAssistantChatSummary>(
+    `/api/v1/ai/assistant/chats/${userId}`,
+    payload,
+    {
+      params: email ? { email } : undefined,
+    },
+  );
+  return data;
+}
+
+export async function updateAiAssistantChat(
+  userId: number,
+  chatId: string,
+  payload: AiAssistantChatCreatePayload,
+  email?: string,
+): Promise<AiAssistantChatSummary> {
+  const { data } = await apiClient.patch<AiAssistantChatSummary>(
+    `/api/v1/ai/assistant/chats/${userId}/${chatId}`,
+    payload,
+    {
+      params: email ? { email } : undefined,
+    },
+  );
+  return data;
+}
+
+export async function deleteAiAssistantChat(
+  userId: number,
+  chatId: string,
+  email?: string,
+): Promise<void> {
+  await apiClient.delete(`/api/v1/ai/assistant/chats/${userId}/${chatId}`, {
+    params: email ? { email } : undefined,
+  });
 }
 
 export type PlatformConnection = {

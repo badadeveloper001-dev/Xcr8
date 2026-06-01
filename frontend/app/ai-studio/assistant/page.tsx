@@ -4,10 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, MessageSquarePlus, SendHorizontal, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import {
+  createAiAssistantChat,
   chatWithAiAssistant,
+  deleteAiAssistantChat,
   getAiAssistantChatHistory,
   getApiErrorMessage,
   listAiAssistantChats,
+  updateAiAssistantChat,
   type AiAssistantChatSummary,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -26,10 +29,6 @@ const starterPrompts = [
 const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_switch"];
 const MAX_RENDERED_MESSAGES = 240;
 const MAX_SENT_MESSAGES = 40;
-
-function createChatId() {
-  return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 function buildChatTitle(value: string) {
   return value.trim().slice(0, 56) || "New chat";
@@ -92,9 +91,21 @@ export default function AssistantPage() {
 
     const loadChatSessions = async () => {
       try {
-        const sessions = await listAiAssistantChats(userId, email ?? undefined);
+        let sessions = await listAiAssistantChats(userId, email ?? undefined);
         if (cancelled) {
           return;
+        }
+
+        if (sessions.length === 0) {
+          const created = await createAiAssistantChat(
+            userId,
+            { title: "New chat" },
+            email ?? undefined,
+          );
+          if (cancelled) {
+            return;
+          }
+          sessions = [created];
         }
 
         setChatSessions(sessions);
@@ -103,12 +114,12 @@ export default function AssistantPage() {
         const nextChatId =
           storedChatId && sessions.some((session) => session.chat_id === storedChatId)
             ? storedChatId
-            : (sessions[0]?.chat_id ?? createChatId());
+            : sessions[0]?.chat_id ?? null;
         setActiveChatId(nextChatId);
       } catch {
         if (!cancelled) {
           setChatSessions([]);
-          setActiveChatId(createChatId());
+          setActiveChatId(null);
           setMessages([welcomeMessage]);
         }
       }
@@ -166,22 +177,85 @@ export default function AssistantPage() {
   }, [activeChatId, chatSessions, email, userId, welcomeMessage]);
 
   const startNewChat = () => {
-    const nextChatId = createChatId();
-    const updatedAt = new Date().toISOString();
-    setActiveChatId(nextChatId);
-    setMessages([welcomeMessage]);
-    setError(null);
-    setPrompt("");
-    setSuggestedActions(starterPrompts);
-    setChatSessions((current) => [
-      {
-        chat_id: nextChatId,
-        title: "New chat",
-        preview: "Start a fresh conversation with Cr8or AI.",
-        updated_at: updatedAt,
-      },
-      ...current.filter((session) => session.chat_id !== nextChatId),
-    ]);
+    if (!userId) {
+      return;
+    }
+
+    const createChat = async () => {
+      try {
+        const summary = await createAiAssistantChat(
+          userId,
+          { title: "New chat" },
+          email ?? undefined,
+        );
+        setActiveChatId(summary.chat_id);
+        setMessages([welcomeMessage]);
+        setError(null);
+        setPrompt("");
+        setSuggestedActions(starterPrompts);
+        setChatSessions((current) => [
+          summary,
+          ...current.filter((session) => session.chat_id !== summary.chat_id),
+        ]);
+      } catch (err) {
+        setError(getApiErrorMessage(err, "Could not create a new chat right now. Please try again."));
+      }
+    };
+
+    void createChat();
+  };
+
+  const renameChat = async (session: AiAssistantChatSummary) => {
+    if (!userId) {
+      return;
+    }
+
+    const nextTitle = window.prompt("Rename this chat", session.title)?.trim();
+    if (!nextTitle || nextTitle === session.title) {
+      return;
+    }
+
+    try {
+      const updated = await updateAiAssistantChat(
+        userId,
+        session.chat_id,
+        { title: nextTitle },
+        email ?? undefined,
+      );
+      setChatSessions((current) =>
+        current.map((item) => (item.chat_id === updated.chat_id ? updated : item)),
+      );
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not rename that chat right now. Please try again."));
+    }
+  };
+
+  const removeChat = async (session: AiAssistantChatSummary) => {
+    if (!userId) {
+      return;
+    }
+
+    if (!window.confirm(`Delete "${session.title}"? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await deleteAiAssistantChat(userId, session.chat_id, email ?? undefined);
+      setChatSessions((current) => {
+        const remaining = current.filter((item) => item.chat_id !== session.chat_id);
+        if (session.chat_id === activeChatId) {
+          const nextActive = remaining[0]?.chat_id ?? null;
+          setActiveChatId(nextActive);
+          if (!nextActive) {
+            setMessages([welcomeMessage]);
+            setSuggestedActions(starterPrompts);
+          }
+        }
+        return remaining;
+      });
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not delete that chat right now. Please try again."));
+    }
   };
 
   const submitPrompt = async (value: string) => {
@@ -195,9 +269,16 @@ export default function AssistantPage() {
       return;
     }
 
-    const currentChatId = activeChatId ?? createChatId();
-    if (!activeChatId) {
+    let currentChatId = activeChatId;
+    if (!currentChatId) {
+      const created = await createAiAssistantChat(
+        userId,
+        { title: buildChatTitle(nextPrompt) },
+        email ?? undefined,
+      );
+      currentChatId = created.chat_id;
       setActiveChatId(currentChatId);
+      setChatSessions((current) => [created, ...current.filter((session) => session.chat_id !== created.chat_id)]);
     }
 
     const userMessage: ChatItem = { role: "user", content: nextPrompt };
@@ -393,10 +474,17 @@ export default function AssistantPage() {
                   const active = session.chat_id === activeChatId;
 
                   return (
-                    <button
+                    <div
                       key={session.chat_id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setActiveChatId(session.chat_id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveChatId(session.chat_id);
+                        }
+                      }}
                       className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
                         active
                           ? "border-cyan-300/35 bg-cyan-500/10 light:border-cyan-300 light:bg-cyan-50"
@@ -412,11 +500,35 @@ export default function AssistantPage() {
                             {session.preview}
                           </p>
                         </div>
-                        <span className="text-[11px] text-slate-500 light:text-slate-500">
-                          {new Date(session.updated_at).toLocaleDateString()}
-                        </span>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="text-[11px] text-slate-500 light:text-slate-500">
+                            {new Date(session.updated_at).toLocaleDateString()}
+                          </span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void renameChat(session);
+                              }}
+                              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300 transition hover:bg-white/10 light:text-slate-700"
+                            >
+                              Rename
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void removeChat(session);
+                              }}
+                              className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 transition hover:bg-rose-500/15 light:text-rose-600"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               ) : (

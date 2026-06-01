@@ -5,13 +5,11 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { getApiErrorMessage, signup } from "@/lib/api";
 import { supabaseClient } from "@/lib/supabase";
-import { useCreatorStore } from "@/lib/store";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Logo } from "@/components/logo";
 
 export default function SignupPage() {
   const router = useRouter();
-  const setSession = useCreatorStore((state) => state.setSession);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -60,7 +58,7 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
     try {
-      const session = await signup({
+      await signup({
         full_name: fullName.trim(),
         username: username.trim(),
         email: email.trim(),
@@ -69,15 +67,7 @@ export default function SignupPage() {
         language: "english",
         timezone: "Africa/Lagos",
       });
-      setSession({
-        userId: session.user_id,
-        email: session.email,
-        displayName: session.display_name,
-        fullName: session.full_name,
-        username: session.username,
-        onboardingComplete: session.onboarding_complete,
-      });
-      router.push("/onboarding");
+      router.push(`/auth/login?notice=verify-email&email=${encodeURIComponent(email.trim())}`);
     } catch (err) {
       setError(
         getApiErrorMessage(

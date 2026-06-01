@@ -72,7 +72,7 @@ export const studioTools: StudioTool[] = [
     name: "Trend Mapper",
     tagline: "Find trend angles that fit your niche.",
     description: "Maps trending topics to practical post angles and creator actions.",
-    status: "planned",
+    status: "live",
     icon: TrendingUp,
     href: "/ai-studio/trend-mapper",
   },

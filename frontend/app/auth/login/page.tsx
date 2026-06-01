@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { getApiErrorMessage, login } from "@/lib/api";
 import { supabaseClient } from "@/lib/supabase";
 import { useCreatorStore } from "@/lib/store";
@@ -16,7 +16,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const noticeType = params.get("notice");
+    const presetEmail = params.get("email");
+    if (presetEmail) {
+      setEmail(presetEmail);
+    }
+    if (noticeType === "verify-email") {
+      setNotice("Account created. Check your email to verify, then log in.");
+    }
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -159,6 +172,12 @@ export default function LoginPage() {
           >
             Continue with Google
           </button>
+
+          {notice ? (
+            <p className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5 text-sm text-cyan-200 light:text-cyan-700">
+              {notice}
+            </p>
+          ) : null}
 
           {error && (
             <p

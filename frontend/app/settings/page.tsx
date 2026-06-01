@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Bell, ChevronRight, Globe2, LogOut, Moon, Shield, User2 } from "lucide-react";
+import { Bell, Globe2, LogOut, Moon, Shield, User2 } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   connectPlatform,
@@ -34,10 +34,38 @@ export default function SettingsPage() {
   const displayName = useCreatorStore((s) => s.displayName);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [postReminderEnabled, setPostReminderEnabled] = useState(true);
+  const [securityAlertsEnabled, setSecurityAlertsEnabled] = useState(true);
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
   }, [hasHydrated, router, userId]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("xcr8-settings-alerts");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as {
+        postReminders?: boolean;
+        securityAlerts?: boolean;
+      };
+      if (typeof parsed.postReminders === "boolean") {
+        setPostReminderEnabled(parsed.postReminders);
+      }
+      if (typeof parsed.securityAlerts === "boolean") {
+        setSecurityAlertsEnabled(parsed.securityAlerts);
+      }
+    } catch {
+      // Ignore invalid local settings payload.
+    }
+  }, []);
+
+  const saveAlertSettings = (postReminders: boolean, securityAlerts: boolean) => {
+    localStorage.setItem(
+      "xcr8-settings-alerts",
+      JSON.stringify({ postReminders, securityAlerts }),
+    );
+  };
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["platform-connections", userId],
@@ -119,7 +147,6 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <ThemeToggle />
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             {[
@@ -260,11 +287,23 @@ export default function SettingsPage() {
               icon: <Bell size={15} />,
               label: "Post reminders",
               sub: "Get notified before scheduled posts",
+              enabled: postReminderEnabled,
+              toggle: () => {
+                const next = !postReminderEnabled;
+                setPostReminderEnabled(next);
+                saveAlertSettings(next, securityAlertsEnabled);
+              },
             },
             {
               icon: <Shield size={15} />,
               label: "Security alerts",
               sub: "Login and access notifications",
+              enabled: securityAlertsEnabled,
+              toggle: () => {
+                const next = !securityAlertsEnabled;
+                setSecurityAlertsEnabled(next);
+                saveAlertSettings(postReminderEnabled, next);
+              },
             },
           ].map((item, idx) => (
             <div
@@ -280,7 +319,21 @@ export default function SettingsPage() {
                 </p>
                 <p className="text-xs text-slate-500">{item.sub}</p>
               </div>
-              <ChevronRight size={15} className="shrink-0 text-slate-600" />
+              <button
+                type="button"
+                onClick={item.toggle}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
+                  item.enabled
+                    ? "border-cyan-300/40 bg-cyan-500/20"
+                    : "border-white/15 bg-white/5"
+                }`}
+                aria-label={`Toggle ${item.label.toLowerCase()}`}
+                aria-pressed={item.enabled}
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-white transition ${item.enabled ? "translate-x-6" : "translate-x-1"}`}
+                />
+              </button>
             </div>
           ))}
         </motion.article>

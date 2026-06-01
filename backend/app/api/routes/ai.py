@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import json
 import logging
+import uuid
+from collections import Counter, defaultdict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +15,7 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import (
     AIGeneration,
+    AnalyticsSnapshot,
     ConnectedPlatform,
     ContentPost,
     CreatorMemory,
@@ -22,6 +25,7 @@ from app.db.models import (
 )
 from app.schemas.mvp import (
     AIAssistantChatHistory,
+    AIAssistantChatCreateRequest,
     AIAssistantChatSummary,
     AIAssistantRequest,
     AIAssistantResponse,
@@ -29,6 +33,9 @@ from app.schemas.mvp import (
     AIBrainstormResponse,
     AIComposeRequest,
     AIComposeResponse,
+    AITrendMapperRequest,
+    AITrendMapperResponse,
+    AITrendSignal,
 )
 from app.services.ai_adapter import generate_composed_content, generate_content_ideas
 
@@ -40,6 +47,68 @@ ASSISTANT_CHAT_MEMORY_KEY = "assistant_long_chat_memory_v1"
 ASSISTANT_CHAT_MEMORY_PREFIX = "assistant_chat:"
 ASSISTANT_CHAT_MAX_MESSAGES = 120
 ASSISTANT_REQUEST_MESSAGE_LIMIT = 40
+APP_FEATURE_CATALOG = [
+    {
+        "name": "Dashboard",
+        "route": "/dashboard",
+        "description": "Creator home with activity summary, insights, and shortcuts.",
+    },
+    {
+        "name": "Analytics",
+        "route": "/analytics",
+        "description": "Performance intelligence, audience signals, and growth analysis.",
+    },
+    {
+        "name": "AI Studio",
+        "route": "/ai-studio",
+        "description": "Workspace for AI tools like Cr8or AI, Composer, Brainstorm, and more.",
+    },
+    {
+        "name": "Cr8or AI",
+        "route": "/ai-studio/assistant",
+        "description": "Long-running conversational assistant for app guidance and strategy.",
+    },
+    {
+        "name": "Composer",
+        "route": "/ai-studio/composer",
+        "description": "Chat-based post drafting and idea-to-caption creation.",
+    },
+    {
+        "name": "Brainstorm",
+        "route": "/ai-studio/brainstorm",
+        "description": "Generates batches of hooks, angles, and content ideas.",
+    },
+    {
+        "name": "Image Generator",
+        "route": "/ai-studio/image-generator",
+        "description": "Visual concept generation for covers, ads, thumbnails, and promos.",
+    },
+    {
+        "name": "Calendar",
+        "route": "/calendar",
+        "description": "Upcoming schedule, queued posts, and time management.",
+    },
+    {
+        "name": "Compose",
+        "route": "/compose",
+        "description": "Distribution and caption workflow for turning prompts into posts.",
+    },
+    {
+        "name": "Upload",
+        "route": "/upload",
+        "description": "Media ingestion and reusable asset storage.",
+    },
+    {
+        "name": "Settings",
+        "route": "/settings",
+        "description": "Profile, theme, account, and workspace preferences.",
+    },
+    {
+        "name": "Onboarding",
+        "route": "/onboarding",
+        "description": "Initial creator setup and preference capture.",
+    },
+]
 
 
 def _coalesce_value(value: str | None, fallback: str) -> str:
@@ -92,6 +161,10 @@ def _normalize_chat_id(chat_id: str | None) -> str:
 
 def _assistant_chat_memory_key(chat_id: str) -> str:
     return f"{ASSISTANT_CHAT_MEMORY_PREFIX}{chat_id}"
+
+
+def _generate_chat_id() -> str:
+    return f"chat-{uuid.uuid4().hex[:12]}"
 
 
 def _parse_chat_memory_record(memory_record: CreatorMemory | None) -> dict | None:
@@ -160,6 +233,33 @@ def _build_persisted_assistant_message(assistant_message: str, follow_up_questio
     return primary or follow_up
 
 
+def _build_chat_payload(chat_id: str, title: str, messages: list[dict], updated_at: str) -> dict:
+    return {
+        "chat_id": chat_id,
+        "title": title,
+        "updated_at": updated_at,
+        "messages": messages,
+    }
+
+
+def _save_chat_payload(db: Session, user_id: int, chat_id: str, payload: dict) -> CreatorMemory:
+    now = datetime.now(tz=UTC)
+    memory_record = _get_assistant_chat_memory(db, user_id, chat_id)
+    target = memory_record or CreatorMemory(
+        user_id=user_id,
+        memory_type=ASSISTANT_CHAT_MEMORY_TYPE,
+        memory_key=_assistant_chat_memory_key(chat_id),
+        memory_value="",
+    )
+    target.memory_value = json.dumps(payload)
+    target.confidence_score = 0.95
+    target.last_used_at = now
+    db.add(target)
+    db.commit()
+    db.refresh(target)
+    return target
+
+
 def _persist_assistant_chat_memory(
     db: Session,
     user_id: int,
@@ -181,25 +281,14 @@ def _persist_assistant_chat_memory(
         {"role": "user", "content": _compact_text(user_message, 1800)},
         {"role": "assistant", "content": _compact_text(assistant_message, 2600)},
     ][-ASSISTANT_CHAT_MAX_MESSAGES:]
-    stored_payload = {
-        "chat_id": chat_id,
-        "title": _build_chat_title(updated_messages),
-        "updated_at": now.isoformat(),
-        "messages": updated_messages,
-    }
-
     try:
-        target = memory_record or CreatorMemory(
-            user_id=user_id,
-            memory_type=ASSISTANT_CHAT_MEMORY_TYPE,
-            memory_key=_assistant_chat_memory_key(chat_id),
-            memory_value="",
+        stored_payload = _build_chat_payload(
+            chat_id=chat_id,
+            title=_build_chat_title(updated_messages),
+            updated_at=now.isoformat(),
+            messages=updated_messages,
         )
-        target.memory_value = json.dumps(stored_payload)
-        target.confidence_score = 0.95
-        target.last_used_at = now
-        db.add(target)
-        db.commit()
+        _save_chat_payload(db, user_id, chat_id, stored_payload)
     except Exception as exc:
         db.rollback()
         logger.warning("Unable to persist assistant chat memory for user %s: %s", user_id, exc)
@@ -250,6 +339,17 @@ def _build_legacy_chat_summary(memory_record: CreatorMemory) -> AIAssistantChatS
         preview=preview or "Your earlier Cr8or AI memory.",
         updated_at=str(memory_record.last_used_at or memory_record.created_at),
     )
+
+
+def _build_app_context(profile: CreatorProfile | None, user: User, db: Session) -> dict:
+    base_context = _build_assistant_context(db, user, profile)
+    base_context["feature_catalog"] = APP_FEATURE_CATALOG
+    base_context["workspace_map"] = {
+        "primary_ai_tool": "Cr8or AI",
+        "studio_tools": [feature["name"] for feature in APP_FEATURE_CATALOG if feature["route"].startswith("/ai-studio")],
+        "core_routes": [feature["route"] for feature in APP_FEATURE_CATALOG],
+    }
+    return base_context
 
 
 def _build_creator_memory(
@@ -397,6 +497,217 @@ def _build_assistant_context(db: Session, user: User, profile: CreatorProfile | 
     }
 
 
+def _normalized_platform(value: str | None) -> str:
+    cleaned = str(value or "").strip().lower()
+    if not cleaned:
+        return "all"
+    return cleaned
+
+
+def _fallback_trend_signals(payload: AITrendMapperRequest) -> list[AITrendSignal]:
+    platform = payload.platform if payload.platform != "all" else "cross-platform"
+    topic = payload.topic.strip()
+    return [
+        AITrendSignal(
+            title=f"{topic} narrative hooks are rising",
+            why_now="Story-led formats are keeping attention longer in current creator cycles.",
+            angle=f"Frame {topic} as a before-and-after transformation with one concrete lesson.",
+            hook=f"If you're posting {topic}, this one switch can double saves this week.",
+            action="Draft a 3-part post arc and publish the first part during your next evening slot.",
+            platform=platform,
+            confidence_score=0.61,
+        ),
+        AITrendSignal(
+            title="Comment-driven prompts are outperforming static captions",
+            why_now="Posts that ask for a direct audience response are generating stronger distribution loops.",
+            angle="End each caption with a fast binary choice so people respond in one tap.",
+            hook="Hot take: your CTA is too passive. Ask this instead.",
+            action="Run a 48-hour experiment with 2 interactive caption endings and compare saves/comments.",
+            platform=platform,
+            confidence_score=0.58,
+        ),
+        AITrendSignal(
+            title="Mini-series format is gaining traction",
+            why_now="Sequenced posts are increasing repeat viewer return rate versus one-off drops.",
+            angle=f"Turn {topic} into a 5-part mini-series with a strong payoff in part 3.",
+            hook="Part 1 of 5: this is where most creators miss momentum.",
+            action="Create a weekly series board in Calendar and pre-write all 5 hooks.",
+            platform=platform,
+            confidence_score=0.55,
+        ),
+    ]
+
+
+@router.post("/trend-mapper", response_model=AITrendMapperResponse)
+def trend_mapper(payload: AITrendMapperRequest, db: Session = Depends(get_db)) -> AITrendMapperResponse:
+    user = db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    platform_filter = _normalized_platform(payload.platform)
+    snapshots = list(
+        db.scalars(
+            select(AnalyticsSnapshot)
+            .where(AnalyticsSnapshot.user_id == payload.user_id)
+            .order_by(desc(AnalyticsSnapshot.created_at))
+            .limit(140)
+        )
+    )
+
+    if not snapshots:
+        base_signals = _fallback_trend_signals(payload)
+        return AITrendMapperResponse(
+            topic=payload.topic,
+            goal=payload.goal,
+            platform=platform_filter,
+            window=payload.window,
+            generated_at=datetime.now(tz=UTC).isoformat(),
+            summary="Trend Mapper is live. Connect more analytics snapshots for higher-confidence signals.",
+            signals=base_signals,
+            source_stats={"snapshots": 0, "posts": 0, "ai_generations": 0},
+        )
+
+    filtered_snapshots = [
+        item
+        for item in snapshots
+        if item.metric_window == payload.window and (platform_filter == "all" or item.platform.value == platform_filter)
+    ]
+    if not filtered_snapshots:
+        filtered_snapshots = [
+            item
+            for item in snapshots
+            if platform_filter == "all" or item.platform.value == platform_filter
+        ]
+
+    posts = list(
+        db.scalars(
+            select(ContentPost)
+            .where(ContentPost.user_id == payload.user_id)
+            .order_by(desc(ContentPost.created_at))
+            .limit(80)
+        )
+    )
+    generations = list(
+        db.scalars(
+            select(AIGeneration)
+            .join(ContentPost, AIGeneration.post_id == ContentPost.id)
+            .where(ContentPost.user_id == payload.user_id)
+            .order_by(desc(AIGeneration.created_at))
+            .limit(80)
+        )
+    )
+
+    grouped: dict[str, list] = defaultdict(list)
+    regions: Counter[str] = Counter()
+    languages: Counter[str] = Counter()
+
+    for snapshot in sorted(filtered_snapshots, key=lambda item: item.created_at or datetime.now(tz=UTC), reverse=True):
+        platform_name = snapshot.platform.value
+        grouped[platform_name].append(snapshot)
+        payload_blob = snapshot.payload if isinstance(snapshot.payload, dict) else {}
+        for region in payload_blob.get("top_regions", []) if isinstance(payload_blob.get("top_regions"), list) else []:
+            region_value = str(region).strip()
+            if region_value:
+                regions[region_value] += 1
+        for language in payload_blob.get("languages", []) if isinstance(payload_blob.get("languages"), list) else []:
+            language_value = str(language).strip()
+            if language_value:
+                languages[language_value] += 1
+
+    signals: list[AITrendSignal] = []
+    topic_seed = payload.topic.strip()
+
+    for platform_name, platform_snapshots in grouped.items():
+        current = platform_snapshots[0]
+        previous = platform_snapshots[1] if len(platform_snapshots) > 1 else None
+        engagement_delta = current.engagement_rate - (previous.engagement_rate if previous else 0.0)
+        follower_delta = current.followers_delta - (previous.followers_delta if previous else 0)
+        best_hour = current.best_posting_hour or 20
+        best_time = f"{best_hour % 12 or 12}:00 {'AM' if best_hour < 12 else 'PM'}"
+
+        confidence = max(
+            0.41,
+            min(
+                0.96,
+                0.46
+                + (current.caption_effectiveness * 0.28)
+                + (current.engagement_rate * 1.8)
+                + (0.07 if engagement_delta >= 0 else -0.03)
+                + (0.04 if follower_delta >= 0 else -0.02),
+            ),
+        )
+
+        trend_direction = "rising" if engagement_delta >= 0 else "cooling"
+        signals.append(
+            AITrendSignal(
+                title=f"{platform_name.replace('_', ' ').title()} engagement is {trend_direction}",
+                why_now=(
+                    f"Current engagement is {(current.engagement_rate * 100):.1f}% with followers delta {current.followers_delta:+d}."
+                ),
+                angle=(
+                    f"Publish {topic_seed} with a stronger first-line hook and local context tailored to {platform_name.replace('_', ' ')}."
+                ),
+                hook=f"Creators in this lane are winning by framing {topic_seed} in one clear punchline.",
+                action=f"Ship the next {platform_name.replace('_', ' ')} post around {best_time} and compare against your last two drops.",
+                platform=platform_name,
+                confidence_score=round(confidence, 2),
+            )
+        )
+
+    top_region = regions.most_common(1)[0][0] if regions else "your primary audience"
+    top_language = languages.most_common(1)[0][0] if languages else user.language
+    if grouped:
+        signals.append(
+            AITrendSignal(
+                title="Audience context is an immediate lever",
+                why_now=f"Most recent snapshots lean toward {top_region} in {top_language} conversations.",
+                angle=f"Localize your next {topic_seed} post with one culturally specific example.",
+                hook="If this post sounds like everyone else, your audience scrolls.",
+                action="Generate 3 localized caption variants and publish the highest-confidence one this week.",
+                platform=platform_filter,
+                confidence_score=0.64,
+            )
+        )
+
+    if generations:
+        signals.append(
+            AITrendSignal(
+                title="AI-assisted workflows are ready to scale",
+                why_now=f"You have {len(generations)} recent AI generations to mine for winning format patterns.",
+                angle="Recycle top-performing hooks into a recurring series instead of one-off experiments.",
+                hook="Your next growth jump is consistency, not complexity.",
+                action="Use Composer + Calendar to queue a 7-day sequence using one proven hook pattern.",
+                platform=platform_filter,
+                confidence_score=0.6,
+            )
+        )
+
+    ranked = sorted(signals, key=lambda item: item.confidence_score, reverse=True)[:6]
+    if not ranked:
+        ranked = _fallback_trend_signals(payload)
+
+    summary = (
+        f"Trend Mapper found {len(ranked)} actionable signals across {len(grouped)} platform"
+        f"{'s' if len(grouped) != 1 else ''} for '{topic_seed}'."
+    )
+
+    return AITrendMapperResponse(
+        topic=payload.topic,
+        goal=payload.goal,
+        platform=platform_filter,
+        window=payload.window,
+        generated_at=datetime.now(tz=UTC).isoformat(),
+        summary=summary,
+        signals=ranked,
+        source_stats={
+            "snapshots": len(filtered_snapshots),
+            "posts": len(posts),
+            "ai_generations": len(generations),
+            "platforms_analyzed": len(grouped),
+        },
+    )
+
+
 @router.post("/brainstorm", response_model=AIBrainstormResponse)
 def brainstorm(payload: AIBrainstormRequest, db: Session = Depends(get_db)) -> AIBrainstormResponse:
     user = db.get(User, payload.user_id)
@@ -478,7 +789,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
     if not user:
         return _build_missing_user_assistant_response(payload)
 
-    chat_id = _normalize_chat_id(payload.chat_id)
+    chat_id = _normalize_chat_id(payload.chat_id) if payload.chat_id else _generate_chat_id()
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
     recent_memories = list(
@@ -510,7 +821,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         legacy_memory = _get_legacy_assistant_chat_memory(db, user.id)
         if legacy_memory and legacy_memory.memory_value:
             creator_memory["long_chat_memory"] = legacy_memory.memory_value
-    app_context = _build_assistant_context(db, user, profile)
+    app_context = _build_app_context(profile, user, db)
 
     try:
         response = httpx.post(
@@ -584,6 +895,99 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
             ),
         )
         return fallback_response
+
+
+@router.post("/assistant/chats/{user_id}", response_model=AIAssistantChatSummary)
+def create_assistant_chat(
+    user_id: int,
+    payload: AIAssistantChatCreateRequest,
+    email: str | None = None,
+    db: Session = Depends(get_db),
+) -> AIAssistantChatSummary:
+    user = _resolve_user_by_identity(db, user_id, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    chat_id = _normalize_chat_id(payload.chat_id) if payload.chat_id else _generate_chat_id()
+    now = datetime.now(tz=UTC)
+    title = _compact_text(payload.title or "New chat", 56) or "New chat"
+    stored = _build_chat_payload(chat_id, title, [], now.isoformat())
+    _save_chat_payload(db, user.id, chat_id, stored)
+
+    return AIAssistantChatSummary(
+        chat_id=chat_id,
+        title=title,
+        preview="Start a fresh conversation with Cr8or AI.",
+        updated_at=now.isoformat(),
+    )
+
+
+@router.patch("/assistant/chats/{user_id}/{chat_id}", response_model=AIAssistantChatSummary)
+def rename_assistant_chat(
+    user_id: int,
+    chat_id: str,
+    payload: AIAssistantChatCreateRequest,
+    email: str | None = None,
+    db: Session = Depends(get_db),
+) -> AIAssistantChatSummary:
+    user = _resolve_user_by_identity(db, user_id, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    normalized_chat_id = _normalize_chat_id(chat_id)
+    record = _get_assistant_chat_memory(db, user.id, normalized_chat_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    stored_payload = _parse_chat_memory_record(record) or {
+        "chat_id": normalized_chat_id,
+        "updated_at": datetime.now(tz=UTC).isoformat(),
+        "messages": [],
+    }
+    stored_payload["chat_id"] = normalized_chat_id
+    stored_payload["title"] = _compact_text(payload.title or stored_payload.get("title") or "New chat", 56)
+    record.memory_value = json.dumps(stored_payload)
+    record.last_used_at = datetime.now(tz=UTC)
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    preview_source = next(
+        (
+            str(message.get("content") or "").strip()
+            for message in reversed(stored_payload.get("messages", []))
+            if str(message.get("content") or "").strip()
+        ),
+        "",
+    )
+
+    return AIAssistantChatSummary(
+        chat_id=normalized_chat_id,
+        title=str(stored_payload.get("title") or "New chat"),
+        preview=_compact_text(preview_source or "Cr8or AI chat", 90),
+        updated_at=str(stored_payload.get("updated_at") or record.last_used_at or record.created_at),
+    )
+
+
+@router.delete("/assistant/chats/{user_id}/{chat_id}")
+def delete_assistant_chat(
+    user_id: int,
+    chat_id: str,
+    email: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    user = _resolve_user_by_identity(db, user_id, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    normalized_chat_id = _normalize_chat_id(chat_id)
+    record = _get_assistant_chat_memory(db, user.id, normalized_chat_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    db.delete(record)
+    db.commit()
+    return {"message": "Chat deleted"}
 
 
 @router.get("/assistant/chats/{user_id}", response_model=list[AIAssistantChatSummary])

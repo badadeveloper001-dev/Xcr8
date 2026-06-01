@@ -162,6 +162,35 @@ class AIBrainstormResponse(BaseModel):
     usage: dict = Field(default_factory=dict)
 
 
+class AITrendMapperRequest(BaseModel):
+    user_id: int
+    topic: str = Field(min_length=2, max_length=200)
+    goal: str = Field(default="grow audience", max_length=120)
+    platform: str = Field(default="all", max_length=40)
+    window: str = Field(default="30d", pattern=r"^(7d|30d|90d)$")
+
+
+class AITrendSignal(BaseModel):
+    title: str
+    why_now: str
+    angle: str
+    hook: str
+    action: str
+    platform: str
+    confidence_score: float
+
+
+class AITrendMapperResponse(BaseModel):
+    topic: str
+    goal: str
+    platform: str
+    window: str
+    generated_at: str
+    summary: str
+    signals: list[AITrendSignal] = Field(default_factory=list)
+    source_stats: dict = Field(default_factory=dict)
+
+
 class AIConversationMessage(BaseModel):
     role: str = Field(pattern=r"^(user|assistant)$")
     content: str = Field(min_length=1, max_length=8000)
@@ -233,3 +262,8 @@ class AIAssistantChatHistory(BaseModel):
     title: str
     updated_at: str
     messages: list[AIConversationMessage] = Field(default_factory=list)
+
+
+class AIAssistantChatCreateRequest(BaseModel):
+    chat_id: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=120)
