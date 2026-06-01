@@ -29,6 +29,24 @@ type EngagementItem = {
   caption_effectiveness: number;
 };
 
+type TrendPoint = {
+  label: string;
+  created_at?: string | null;
+  engagement_rate: number;
+  followers_delta: number;
+  caption_effectiveness: number;
+};
+
+type PlatformDelta = {
+  platform: string;
+  current_engagement_rate: number;
+  engagement_delta: number;
+  current_followers_delta: number;
+  followers_delta_change: number;
+  caption_effectiveness: number;
+  snapshot_count: number;
+};
+
 type AnalyticsOverview = {
   engagement: EngagementItem[];
   summary?: {
@@ -69,10 +87,15 @@ type AnalyticsOverview = {
     score: number;
     insight: string;
   }>;
+  active_window?: string;
+  trend_series?: Record<string, TrendPoint[]>;
+  platform_deltas?: PlatformDelta[];
 };
 
-async function fetchAnalytics(userId: number) {
-  const { data } = await apiClient.get<AnalyticsOverview>(`/api/v1/analytics/overview/${userId}`);
+async function fetchAnalytics(userId: number, window: string) {
+  const { data } = await apiClient.get<AnalyticsOverview>(`/api/v1/analytics/overview/${userId}`, {
+    params: { window },
+  });
   return data;
 }
 
@@ -171,6 +194,110 @@ const performanceFallback = {
   emotion_signal: "Emotional peak detected at CTA transition",
 };
 
+const chartPalette = ["#22d3ee", "#8b5cf6", "#f472b6", "#f59e0b", "#34d399"];
+
+function TrendChart({ series }: { series: Array<{ platform: string; points: TrendPoint[] }> }) {
+  const flattened = series.flatMap((item) => item.points.map((point) => point.engagement_rate));
+
+  if (flattened.length === 0) {
+    return (
+      <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
+        Trend lines will appear once analytics snapshots start accumulating.
+      </div>
+    );
+  }
+
+  const width = 640;
+  const height = 220;
+  const padding = 20;
+  const minValue = Math.min(...flattened);
+  const maxValue = Math.max(...flattened);
+  const range = Math.max(maxValue - minValue, 0.01);
+  const longestSeries = Math.max(...series.map((item) => item.points.length));
+  const labels = series.find((item) => item.points.length === longestSeries)?.points ?? [];
+
+  const getX = (index: number, count: number) =>
+    count <= 1 ? width / 2 : padding + index * ((width - padding * 2) / (count - 1));
+  const getY = (value: number) =>
+    height - padding - ((value - minValue) / range) * (height - padding * 2);
+
+  return (
+    <div className="surface-card rounded-2xl p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-white light:text-slate-900">
+            Engagement Trend Lines
+          </h3>
+          <p className="text-xs text-slate-500 light:text-slate-600">
+            Real snapshot history across the selected analytics window.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {series.map((item, index) => (
+            <div key={item.platform} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300 light:text-slate-700">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: chartPalette[index % chartPalette.length] }}
+              />
+              {item.platform.replace(/_/g, " ")}
+            </div>
+          ))}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-56 w-full overflow-visible">
+        {[0, 1, 2, 3].map((row) => {
+          const y = padding + row * ((height - padding * 2) / 3);
+          return (
+            <line
+              key={row}
+              x1={padding}
+              y1={y}
+              x2={width - padding}
+              y2={y}
+              stroke="rgba(148,163,184,0.16)"
+              strokeDasharray="4 6"
+            />
+          );
+        })}
+        {series.map((item, seriesIndex) => {
+          const path = item.points
+            .map((point, index) => `${getX(index, item.points.length)},${getY(point.engagement_rate)}`)
+            .join(" ");
+
+          return (
+            <g key={item.platform}>
+              <polyline
+                fill="none"
+                stroke={chartPalette[seriesIndex % chartPalette.length]}
+                strokeWidth="3"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                points={path}
+              />
+              {item.points.map((point, index) => (
+                <circle
+                  key={`${item.platform}-${point.label}-${index}`}
+                  cx={getX(index, item.points.length)}
+                  cy={getY(point.engagement_rate)}
+                  r="3.5"
+                  fill={chartPalette[seriesIndex % chartPalette.length]}
+                />
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="mt-2 grid grid-cols-4 gap-2 text-[11px] text-slate-500 light:text-slate-600">
+        {labels.slice(-4).map((point) => (
+          <div key={point.label} className="truncate text-center">
+            {point.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 16 },
   animate: { opacity: 1, y: 0 },
@@ -182,6 +309,8 @@ export default function AnalyticsPage() {
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
   const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
+  const [analyticsWindow, setAnalyticsWindow] = useState<"7d" | "30d" | "90d">("30d");
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
   const [exportFormat, setExportFormat] = useState<"pdf" | "presentation" | "client" | "growth">(
     "pdf",
   );
@@ -194,8 +323,8 @@ export default function AnalyticsPage() {
   }, [hasHydrated, router, userId]);
 
   const { data } = useQuery({
-    queryKey: ["analytics", userId],
-    queryFn: () => fetchAnalytics(userId as number),
+    queryKey: ["analytics", userId, analyticsWindow],
+    queryFn: () => fetchAnalytics(userId as number, analyticsWindow),
     enabled: Boolean(userId),
   });
 
@@ -215,6 +344,43 @@ export default function AnalyticsPage() {
   const categoryPerformance = data?.category_intelligence?.length
     ? data.category_intelligence
     : categoryPerformanceFallback;
+  const platformOptions = useMemo(() => {
+    const fromTrends = Object.keys(data?.trend_series ?? {});
+    if (fromTrends.length > 0) {
+      return fromTrends;
+    }
+
+    return Array.from(new Set(engagement.map((item) => item.platform)));
+  }, [data?.trend_series, engagement]);
+  const platformDeltas = useMemo(() => {
+    const fallback = engagement.map((item) => ({
+      platform: item.platform,
+      current_engagement_rate: item.engagement_rate,
+      engagement_delta: 0,
+      current_followers_delta: item.followers_delta,
+      followers_delta_change: 0,
+      caption_effectiveness: item.caption_effectiveness,
+      snapshot_count: 1,
+    }));
+    const base = data?.platform_deltas?.length ? data.platform_deltas : fallback;
+    return selectedPlatform === "all"
+      ? base
+      : base.filter((item) => item.platform === selectedPlatform);
+  }, [data?.platform_deltas, engagement, selectedPlatform]);
+  const displayedTrendSeries = useMemo(() => {
+    const entries = Object.entries(data?.trend_series ?? {});
+    const filtered = selectedPlatform === "all"
+      ? entries.slice(0, 4)
+      : entries.filter(([platform]) => platform === selectedPlatform);
+
+    return filtered.map(([platform, points]) => ({ platform, points }));
+  }, [data?.trend_series, selectedPlatform]);
+
+  useEffect(() => {
+    if (selectedPlatform !== "all" && !platformOptions.includes(selectedPlatform)) {
+      setSelectedPlatform("all");
+    }
+  }, [platformOptions, selectedPlatform]);
 
   const totals = useMemo(() => {
     const reach = engagement.reduce(
@@ -302,6 +468,10 @@ export default function AnalyticsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const openCr8orAi = (seedPrompt: string) => {
+    router.push(`/ai-studio/assistant?prompt=${encodeURIComponent(seedPrompt)}`);
+  };
+
   return (
     <MobileShell title="Analytics Intelligence" subtitle="AI strategist for creator growth.">
       {usingDemoData ? (
@@ -351,6 +521,36 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
+            {[
+              { id: "7d", label: "7 days" },
+              { id: "30d", label: "30 days" },
+              { id: "90d", label: "90 days" },
+            ].map((windowOption) => (
+              <button
+                key={windowOption.id}
+                type="button"
+                onClick={() => setAnalyticsWindow(windowOption.id as typeof analyticsWindow)}
+                className={`rounded-xl px-3 py-2 text-xs font-medium transition ${
+                  analyticsWindow === windowOption.id
+                    ? "bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-400/35 light:bg-cyan-100 light:text-cyan-700"
+                    : "surface-soft text-slate-400 light:text-slate-600"
+                }`}
+              >
+                {windowOption.label}
+              </button>
+            ))}
+            <select
+              value={selectedPlatform}
+              onChange={(event) => setSelectedPlatform(event.target.value)}
+              className="xcr8-input !w-auto min-w-[160px] py-2 text-xs"
+            >
+              <option value="all">All platforms</option>
+              {platformOptions.map((platform) => (
+                <option key={platform} value={platform}>
+                  {platform.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
             {[
               { id: "home", label: "Analytics Home" },
               { id: "audience", label: "Audience Intelligence" },
@@ -408,16 +608,81 @@ export default function AnalyticsPage() {
             </div>
             <button
               type="button"
+              onClick={() =>
+                openCr8orAi(
+                  `Review my ${analyticsWindow} analytics${selectedPlatform !== "all" ? ` for ${selectedPlatform}` : ""} and give me the top 3 strategic recommendations.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               AI Recommendations
             </button>
             <button
               type="button"
+              onClick={() =>
+                openCr8orAi(
+                  `Compare my ${selectedPlatform === "all" ? "platform performance" : `${selectedPlatform} performance`} over the last ${analyticsWindow} and tell me what is improving or dropping.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               Compare Performance
             </button>
+          </div>
+        </div>
+      </motion.section>
+
+      <motion.section {...fadeUp(0.03)} className="mb-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <TrendChart series={displayedTrendSeries} />
+
+        <div className="surface-card rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white light:text-slate-900">
+              Platform Delta Signals
+            </h3>
+            <span className="text-xs text-slate-500 light:text-slate-600">
+              Window: {data?.active_window ?? analyticsWindow}
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {platformDeltas.length > 0 ? (
+              platformDeltas.map((delta) => (
+                <article key={delta.platform} className="surface-soft rounded-xl p-3">
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold capitalize text-white light:text-slate-900">
+                      {delta.platform.replace(/_/g, " ")}
+                    </p>
+                    <p className="text-xs text-cyan-300 light:text-cyan-700">
+                      {(delta.current_engagement_rate * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-400 light:text-slate-600">
+                    <div>
+                      <div>Engagement</div>
+                      <div className={delta.engagement_delta >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                        {delta.engagement_delta >= 0 ? "+" : ""}
+                        {(delta.engagement_delta * 100).toFixed(1)} pts
+                      </div>
+                    </div>
+                    <div>
+                      <div>Followers</div>
+                      <div className={delta.followers_delta_change >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                        {delta.followers_delta_change >= 0 ? "+" : ""}
+                        {delta.followers_delta_change}
+                      </div>
+                    </div>
+                    <div>
+                      <div>Caption fit</div>
+                      <div>{(delta.caption_effectiveness * 100).toFixed(0)}%</div>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-500 light:border-slate-200 light:bg-white/70 light:text-slate-600">
+                More snapshots are needed before delta signals appear.
+              </div>
+            )}
           </div>
         </div>
       </motion.section>
@@ -451,7 +716,11 @@ export default function AnalyticsPage() {
             </button>
             <button
               type="button"
-              onClick={() => router.push("/ai-studio/assistant")}
+              onClick={() =>
+                openCr8orAi(
+                  `Based on my ${analyticsWindow} analytics, create a focused strategy plan for ${selectedPlatform === "all" ? "my strongest platforms" : selectedPlatform}.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               Ask Cr8or AI
@@ -487,6 +756,11 @@ export default function AnalyticsPage() {
             </button>
             <button
               type="button"
+              onClick={() =>
+                openCr8orAi(
+                  `Use my analytics performance signals to tell me how to improve retention, pacing, and replay value in my next post.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               Generate Follow-Up
@@ -528,6 +802,11 @@ export default function AnalyticsPage() {
             </button>
             <button
               type="button"
+              onClick={() =>
+                openCr8orAi(
+                  `Build audience segments from my ${analyticsWindow} analytics and recommend what kind of content each segment will respond to.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               Build Audience Segment
@@ -581,6 +860,11 @@ export default function AnalyticsPage() {
             </button>
             <button
               type="button"
+              onClick={() =>
+                openCr8orAi(
+                  `Create a platform-by-platform posting strategy from my ${analyticsWindow} analytics${selectedPlatform !== "all" ? ` focused on ${selectedPlatform}` : ""}.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               Generate Platform Strategy
@@ -624,6 +908,11 @@ export default function AnalyticsPage() {
             </button>
             <button
               type="button"
+              onClick={() =>
+                openCr8orAi(
+                  `Remix my weaker-performing content based on the latest analytics signals and show me a stronger structure.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               Remix Content
@@ -723,6 +1012,11 @@ export default function AnalyticsPage() {
             </button>
             <button
               type="button"
+              onClick={() =>
+                openCr8orAi(
+                  `Based on my category performance analytics, suggest similar high-upside content categories I should test next.`,
+                )
+              }
               className="surface-soft rounded-xl px-3 py-2 text-sm font-medium text-slate-300 light:text-slate-700"
             >
               Create Similar Content

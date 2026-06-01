@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Bot, MessageSquarePlus, SendHorizontal, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import {
@@ -58,6 +59,7 @@ function isChatItem(value: unknown): value is ChatItem {
 }
 
 export default function AssistantPage() {
+  const searchParams = useSearchParams();
   const userId = useCreatorStore((state) => state.userId);
   const email = useCreatorStore((state) => state.email);
   const displayName = useCreatorStore((state) => state.displayName);
@@ -71,6 +73,17 @@ export default function AssistantPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestedActions, setSuggestedActions] = useState<string[]>(starterPrompts);
+  const lastPromptParamRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const promptParam = searchParams.get("prompt")?.trim() ?? "";
+    if (!promptParam || lastPromptParamRef.current === promptParam) {
+      return;
+    }
+
+    setPrompt(promptParam);
+    lastPromptParamRef.current = promptParam;
+  }, [searchParams]);
 
   useEffect(() => {
     if (!userId) {

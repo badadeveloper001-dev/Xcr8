@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter, defaultdict
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import desc, select
@@ -16,7 +16,7 @@ _MODEL_COST_PER_1M = {
 
 
 @router.get("/overview/{user_id}")
-def analytics_overview(user_id: int, db: Session = Depends(get_db)) -> dict:
+def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(get_db)) -> dict:
     snapshots = db.scalars(
         select(AnalyticsSnapshot)
         .where(AnalyticsSnapshot.user_id == user_id)
@@ -24,6 +24,7 @@ def analytics_overview(user_id: int, db: Session = Depends(get_db)) -> dict:
         .limit(30)
     )
     data = list(snapshots)
+    filtered_data = [snapshot for snapshot in data if snapshot.metric_window == window] or data
 
     posts = list(
         db.scalars(
@@ -57,7 +58,7 @@ def analytics_overview(user_id: int, db: Session = Depends(get_db)) -> dict:
             "followers_delta": snapshot.followers_delta,
             "caption_effectiveness": snapshot.caption_effectiveness,
         }
-        for snapshot in data
+        for snapshot in filtered_data
     ]
 
     avg_engagement = (
@@ -70,7 +71,7 @@ def analytics_overview(user_id: int, db: Session = Depends(get_db)) -> dict:
     audience_growth = sum(item["followers_delta"] for item in engagement)
     top_platform = max(engagement, key=lambda item: item["engagement_rate"], default=None)
 
-    posting_hours = [snapshot.best_posting_hour for snapshot in data if snapshot.best_posting_hour is not None]
+    posting_hours = [snapshot.best_posting_hour for snapshot in filtered_data if snapshot.best_posting_hour is not None]
     posting_time_counts = Counter(posting_hours)
     best_posting_times = [
         f"{hour % 12 or 12}:00 {'AM' if hour < 12 else 'PM'}"
@@ -84,7 +85,7 @@ def analytics_overview(user_id: int, db: Session = Depends(get_db)) -> dict:
     language_counter: Counter[str] = Counter()
     content_type_counter: Counter[str] = Counter()
 
-    for snapshot in data:
+    for snapshot in filtered_data:
         payload = snapshot.payload if isinstance(snapshot.payload, dict) else {}
         top_regions = payload.get("top_regions") if isinstance(payload.get("top_regions"), list) else []
         languages = payload.get("languages") if isinstance(payload.get("languages"), list) else []
@@ -113,6 +114,46 @@ def analytics_overview(user_id: int, db: Session = Depends(get_db)) -> dict:
     latest_post = posts[0] if posts else None
     active_platform_count = len([platform for platform in platforms if platform.is_active])
     ai_generation_count = len(ai_generations)
+
+    trend_series_map: dict[str, list[dict]] = defaultdict(list)
+    platform_snapshot_map: dict[str, list[AnalyticsSnapshot]] = defaultdict(list)
+
+    for snapshot in sorted(filtered_data, key=lambda item: item.created_at):
+        platform_name = snapshot.platform.value
+        trend_series_map[platform_name].append(
+            {
+                "label": snapshot.created_at.strftime("%b %d") if snapshot.created_at else snapshot.metric_window,
+                "created_at": snapshot.created_at.isoformat() if snapshot.created_at else None,
+                "engagement_rate": snapshot.engagement_rate,
+                "followers_delta": snapshot.followers_delta,
+                "caption_effectiveness": snapshot.caption_effectiveness,
+            }
+        )
+        platform_snapshot_map[platform_name].append(snapshot)
+
+    trend_series = {
+        platform: points[-12:]
+        for platform, points in trend_series_map.items()
+    }
+
+    platform_deltas: list[dict] = []
+    for platform, snapshots_for_platform in platform_snapshot_map.items():
+        ordered = sorted(snapshots_for_platform, key=lambda item: item.created_at, reverse=True)
+        current = ordered[0]
+        previous = ordered[1] if len(ordered) > 1 else None
+        platform_deltas.append(
+            {
+                "platform": platform,
+                "current_engagement_rate": current.engagement_rate,
+                "engagement_delta": current.engagement_rate - (previous.engagement_rate if previous else 0.0),
+                "current_followers_delta": current.followers_delta,
+                "followers_delta_change": current.followers_delta - (previous.followers_delta if previous else 0),
+                "caption_effectiveness": current.caption_effectiveness,
+                "snapshot_count": len(ordered),
+            }
+        )
+
+    platform_deltas.sort(key=lambda item: item["current_engagement_rate"], reverse=True)
 
     brain_insights = [
         f"Your strongest platform right now is {(top_platform or {}).get('platform', 'instagram').replace('_', ' ')} with {((top_platform or {}).get('engagement_rate', 0) * 100):.1f}% engagement.",
@@ -182,6 +223,9 @@ def analytics_overview(user_id: int, db: Session = Depends(get_db)) -> dict:
             if engagement
             else "Connect a few more live analytics snapshots to replace demo trend patterns.",
         },
+        "active_window": window,
+        "trend_series": trend_series,
+        "platform_deltas": platform_deltas,
         "brain_insights": brain_insights,
         "audience": {
             "top_regions": top_regions,
