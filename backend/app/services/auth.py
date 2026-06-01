@@ -119,20 +119,37 @@ def supabase_request_email_otp(email: str) -> None:
 
 
 def supabase_verify_email_otp(email: str, token: str) -> dict:
-    with httpx.Client(timeout=15.0) as client:
-        response = client.post(
-            f"{settings.supabase_url}/auth/v1/verify",
-            headers=_auth_headers(),
-            json={
-                "email": email,
-                "token": token,
-                "type": "email",
-            },
-        )
+    # Different Supabase flows may emit OTPs with different verify types.
+    # Try both common types so users can paste the code they received.
+    verify_types = ("email", "signup")
+    last_error: SupabaseAuthError | None = None
 
-    if response.status_code >= 400:
-        _raise_auth_error(response, "Invalid or expired verification code.")
-    return response.json()
+    with httpx.Client(timeout=15.0) as client:
+        for verify_type in verify_types:
+            response = client.post(
+                f"{settings.supabase_url}/auth/v1/verify",
+                headers=_auth_headers(),
+                json={
+                    "email": email,
+                    "token": token,
+                    "type": verify_type,
+                },
+            )
+
+            if response.status_code < 400:
+                return response.json()
+
+            try:
+                payload = response.json()
+                message = payload.get("msg") or payload.get("message") or payload.get("error_description")
+                detail = str(message).strip() if isinstance(message, str) else "Invalid or expired verification code."
+            except ValueError:
+                detail = "Invalid or expired verification code."
+            last_error = SupabaseAuthError(detail=detail, status_code=response.status_code)
+
+    if last_error is not None:
+        raise last_error
+    raise SupabaseAuthError("Invalid or expired verification code.", status_code=400)
 
 
 def supabase_request_password_reset(email: str) -> None:
