@@ -453,9 +453,9 @@ export default function AssistantPage() {
     >
       <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr]">
         <div className="space-y-3.5">
-          <div className="surface-soft rounded-2xl p-4">
+          <div className="xcr8-panel p-4">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <p className="xcr8-eyebrow flex items-center gap-2">
                 <Bot size={11} />
                 Cr8or AI settings
               </p>
@@ -486,8 +486,8 @@ export default function AssistantPage() {
             </div>
           </div>
 
-          <div className="surface-card rounded-2xl p-4">
-            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-white light:text-slate-900">
+          <div className="xcr8-panel rounded-2xl p-4">
+            <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
               <Sparkles size={16} className="text-cyan-300" />
               Cr8or AI chat
             </h2>
@@ -571,8 +571,8 @@ export default function AssistantPage() {
         </div>
 
         <div className="space-y-3.5">
-          <article className="surface-card rounded-2xl p-4">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 light:border-cyan-500/20 light:bg-cyan-50 light:text-cyan-700">
+          <article className="xcr8-panel rounded-2xl p-4">
+            <div className="xcr8-soft-chip mb-3 inline-flex items-center gap-2 px-2.5 py-1 text-[11px] font-medium">
               <Sparkles size={11} />
               Saved chats
             </div>
@@ -647,8 +647,8 @@ export default function AssistantPage() {
             </div>
           </article>
 
-          <article className="surface-soft rounded-2xl p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <article className="xcr8-panel rounded-2xl p-4">
+            <p className="xcr8-eyebrow mb-2">
               Quick prompts
             </p>
             <div className="flex flex-wrap gap-2">
@@ -665,7 +665,7 @@ export default function AssistantPage() {
             </div>
           </article>
 
-          <div className="surface-soft rounded-2xl p-4 text-sm text-slate-400 light:text-slate-600">
+          <div className="xcr8-panel rounded-2xl p-4 text-sm xcr8-subtle">
             Use Cr8or AI to run separate conversations for strategy, content planning, and product
             help without mixing contexts.
           </div>

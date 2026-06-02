@@ -240,9 +240,9 @@ export default function DashboardPage() {
         </div>
 
         {menuOpen ? (
-          <div className="surface-card rounded-[24px] p-4">
+          <div className="xcr8-panel p-4">
             <div className="mb-3 flex items-center justify-between">
-              <p className="section-kicker">Workspace menu</p>
+              <p className="xcr8-eyebrow">Workspace menu</p>
               <button
                 type="button"
                 onClick={() => setMenuOpen(false)}
@@ -272,9 +272,9 @@ export default function DashboardPage() {
         ) : null}
 
         {notificationsOpen ? (
-          <div className="surface-card rounded-[24px] p-4">
+          <div className="xcr8-panel p-4">
             <div className="mb-3 flex items-center justify-between">
-              <p className="section-kicker">Notifications</p>
+              <p className="xcr8-eyebrow">Notifications</p>
               <button
                 type="button"
                 onClick={() => setNotificationsOpen(false)}
@@ -303,14 +303,14 @@ export default function DashboardPage() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-[1.7rem] font-semibold leading-tight text-slate-100 light:text-slate-900 sm:text-[2rem]">
+            <h1 className="xcr8-title-xl text-slate-100 light:text-slate-900">
               Good evening,
               <br />
               <span className="bg-gradient-to-r from-fuchsia-400 via-violet-300 to-cyan-300 bg-clip-text text-transparent light:from-violet-700 light:via-fuchsia-600 light:to-cyan-700">
                 {displayName}
               </span>
             </h1>
-            <p className="mt-2 text-sm text-slate-300 light:text-slate-600">{dynamicGreeting}</p>
+            <p className="xcr8-subtle mt-2 text-sm">{dynamicGreeting}</p>
           </div>
 
           <div className="w-full rounded-2xl border border-white/10 bg-black/25 p-2.5 backdrop-blur-xl light:border-slate-200 light:bg-white sm:max-w-[230px]">
@@ -335,18 +335,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="surface-luxe rounded-[26px] p-4 sm:p-5">
-          <p className="section-kicker text-xs text-fuchsia-300 light:text-violet-700">
+        <div className="xcr8-panel rounded-[26px] p-4 sm:p-5">
+          <p className="xcr8-eyebrow text-xs">
             Create New Post
           </p>
           <div className="mt-2 grid gap-4 sm:grid-cols-[1.3fr_1fr] sm:items-center">
             <div>
-              <h2 className="text-2xl font-semibold leading-tight text-white light:text-slate-900 sm:text-3xl">
+              <h2 className="xcr8-title-lg text-white light:text-slate-900 sm:text-3xl">
                 What are you
                 <br />
                 posting today?
               </h2>
-              <p className="mt-2 text-sm text-slate-300 light:text-slate-600">
+              <p className="xcr8-subtle mt-2 text-sm">
                 Upload once, caption once, publish everywhere.
               </p>
               <Link
@@ -380,7 +380,7 @@ export default function DashboardPage() {
                       : "/analytics",
                 )
               }
-              className="surface-card rounded-2xl border border-white/10 p-3.5 light:border-slate-200"
+              className="xcr8-panel rounded-2xl p-3.5"
             >
               <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500/25 to-violet-500/20 text-fuchsia-200 light:from-violet-100 light:to-fuchsia-100 light:text-violet-700">
                 <card.icon size={18} />
@@ -404,9 +404,9 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white light:text-slate-900">AI Insights</h2>
+            <h2 className="xcr8-title-lg text-white light:text-slate-900">AI Insights</h2>
             <Link
               href="/analytics"
               className="text-sm font-medium text-fuchsia-300 light:text-violet-700"
@@ -454,9 +454,9 @@ export default function DashboardPage() {
           </ul>
         </div>
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white light:text-slate-900">Recent Posts</h2>
+            <h2 className="xcr8-title-lg text-white light:text-slate-900">Recent Posts</h2>
             <Link
               href="/compose"
               className="text-sm font-medium text-fuchsia-300 light:text-violet-700"

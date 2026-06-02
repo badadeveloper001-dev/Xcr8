@@ -164,12 +164,12 @@ export default function SignupPage() {
 
       <div className="relative grid w-full max-w-5xl gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
         <div className="hidden lg:block">
-          <div className="surface-luxe lux-panel cyber-grid rounded-[32px] p-8">
-            <p className="section-kicker mb-3">Creator onboarding</p>
-            <h2 className="text-4xl font-semibold leading-tight text-white light:text-slate-900">
+          <div className="xcr8-panel cyber-grid rounded-[32px] p-8">
+            <p className="xcr8-eyebrow mb-3">Creator onboarding</p>
+            <h2 className="xcr8-title-xl text-white light:text-slate-900">
               Start with a sharp profile and a workspace that feels premium.
             </h2>
-            <p className="mt-4 max-w-lg text-sm text-slate-400 light:text-slate-500">
+            <p className="xcr8-subtle mt-4 max-w-lg text-sm">
               Set up your identity, connect your channels, and let XCR8 adapt your content voice
               from the first session.
             </p>
@@ -197,18 +197,18 @@ export default function SignupPage() {
           </Link>
         </div>
 
-        <div className="surface-luxe lux-panel rounded-[28px] p-7 backdrop-blur-xl">
+        <div className="xcr8-panel rounded-[28px] p-7 backdrop-blur-xl">
           {/* Badge */}
-          <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-400 light:border-violet-500/20 light:bg-violet-50 light:text-violet-600">
+          <div className="xcr8-soft-chip mb-5 inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium">
             <Sparkles size={11} />
             Join thousands of creators
           </div>
 
-          <p className="section-kicker mb-2">Create profile</p>
-          <h1 className="text-3xl font-bold tracking-tight text-white light:text-slate-900 sm:text-[2.05rem]">
+          <p className="xcr8-eyebrow mb-2">Create profile</p>
+          <h1 className="xcr8-title-xl text-white light:text-slate-900">
             {codeSent ? "Verify your email" : "Start your workspace"}
           </h1>
-          <p className="mt-1.5 text-sm text-slate-400 light:text-slate-500">
+          <p className="xcr8-subtle mt-1.5 text-sm">
             {codeSent
               ? "Enter the code sent to your email to continue to onboarding."
               : "Create your account, then verify your email code before onboarding."}

@@ -182,7 +182,7 @@ export default function OnboardingPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="surface-luxe lux-panel relative w-full max-w-[720px] overflow-hidden rounded-[28px] p-6 sm:p-8"
+        className="xcr8-panel relative w-full max-w-[720px] overflow-hidden rounded-[28px] p-6 sm:p-8"
       >
         <div className="mb-5 flex items-center justify-between gap-3">
           <Logo size="md" className="!w-[220px] max-w-full" />
@@ -235,7 +235,7 @@ export default function OnboardingPage() {
 
         {!initializing ? (
           <div className="space-y-4">
-            <h1 className="text-2xl font-bold tracking-tight text-white light:text-slate-900">
+            <h1 className="xcr8-title-lg text-white light:text-slate-900">
               {step === 1 && "What kind of creator are you?"}
               {step === 2 && "Connect your platforms"}
               {step === 3 && "Select your content niche"}
@@ -243,7 +243,7 @@ export default function OnboardingPage() {
               {step === 5 && "What are your goals?"}
               {step === 6 && "Choose your tone and personality"}
             </h1>
-            <p className="text-sm text-slate-400 light:text-slate-500">
+            <p className="xcr8-subtle text-sm">
               Personalizing XCR8 for {fullName}.
             </p>
 
