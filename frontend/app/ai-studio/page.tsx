@@ -15,16 +15,16 @@ export default function AIStudioPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.05 }}
-        className="mb-4 overflow-hidden rounded-3xl border border-indigo-400/30 bg-gradient-to-br from-indigo-900/80 via-blue-900/65 to-cyan-900/65 p-5 shadow-[0_18px_50px_-28px_rgba(56,189,248,0.6)] light:border-indigo-200 light:from-white light:via-indigo-50 light:to-cyan-50"
+        className="xcr8-panel mb-5 overflow-hidden p-6"
       >
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-cyan-200 light:border-cyan-200 light:bg-cyan-100 light:text-cyan-700">
+        <div className="xcr8-soft-chip mb-3 inline-flex items-center gap-2 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em]">
           <Stars size={12} />
           Creator Command Deck
         </div>
-        <h2 className="max-w-2xl text-2xl font-bold leading-tight text-white light:text-slate-900 sm:text-3xl">
+        <h2 className="xcr8-title-xl max-w-2xl text-white light:text-slate-900">
           Build, test, and ship creative outputs from one branded studio flow.
         </h2>
-        <p className="mt-2 max-w-2xl text-sm text-cyan-100/90 light:text-slate-600 sm:text-base">
+        <p className="xcr8-subtle mt-2 max-w-2xl text-sm sm:text-base">
           Pick any tool in the shelf to open a fresh workspace page with focused controls, cleaner
           previews, and faster output iteration.
         </p>
@@ -35,16 +35,16 @@ export default function AIStudioPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.1 }}
-          className="surface-soft rounded-3xl p-5"
+          className="xcr8-panel p-5"
         >
-          <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <p className="xcr8-eyebrow mb-2 inline-flex items-center gap-2">
             <Workflow size={13} />
             Workflow Standard
           </p>
-          <h3 className="text-lg font-semibold text-white light:text-slate-900 sm:text-xl">
+          <h3 className="xcr8-title-lg text-white light:text-slate-900">
             Every tool now opens as its own route-first workspace
           </h3>
-          <div className="mt-4 grid gap-2 text-sm text-slate-300 light:text-slate-700">
+          <div className="mt-4 grid gap-2 text-sm">
             <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 light:border-slate-200 light:bg-white/70">
               1. Choose a tool in the shelf above
             </div>
@@ -61,16 +61,14 @@ export default function AIStudioPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.14 }}
-          className="surface-soft rounded-3xl p-5"
+          className="xcr8-panel p-5"
         >
-          <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <p className="xcr8-eyebrow mb-2 inline-flex items-center gap-2">
             <Compass size={13} />
             Quick Start
           </p>
-          <h3 className="text-lg font-semibold text-white light:text-slate-900">
-            Start with Cr8or AI
-          </h3>
-          <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
+          <h3 className="xcr8-title-lg text-white light:text-slate-900">Start with Cr8or AI</h3>
+          <p className="xcr8-subtle mt-2 text-sm">
             Ask Cr8or AI anything about the app, your content, or your next move.
           </p>
           <Link

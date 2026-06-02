@@ -81,18 +81,16 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <div className="surface-luxe lux-panel rounded-[28px] p-7 backdrop-blur-xl">
+        <div className="xcr8-panel rounded-[28px] p-7 backdrop-blur-xl">
           {/* Badge */}
-          <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-400 light:border-violet-500/20 light:bg-violet-50 light:text-violet-600">
+          <div className="xcr8-soft-chip mb-5 inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium">
             <Sparkles size={11} />
             Creator workspace
           </div>
 
-          <p className="section-kicker mb-2">Welcome back</p>
-          <h1 className="text-3xl font-bold tracking-tight text-white light:text-slate-900 sm:text-[2.05rem]">
-            Welcome back
-          </h1>
-          <p className="mt-1.5 text-sm text-slate-400 light:text-slate-500">
+          <p className="xcr8-eyebrow mb-2">Welcome back</p>
+          <h1 className="xcr8-title-xl text-white light:text-slate-900">Welcome back</h1>
+          <p className="xcr8-subtle mt-1.5 text-sm">
             Sign in to continue to your creator workspace.
           </p>
 
