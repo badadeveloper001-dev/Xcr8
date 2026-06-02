@@ -303,6 +303,9 @@ export default function DashboardPage() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
+            <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+              Phase 5 Live
+            </p>
             <h1 className="xcr8-title-xl text-slate-100 light:text-slate-900">
               Good evening,
               <br />
@@ -313,7 +316,7 @@ export default function DashboardPage() {
             <p className="xcr8-subtle mt-2 text-sm">{dynamicGreeting}</p>
           </div>
 
-          <div className="w-full rounded-2xl border border-white/10 bg-black/25 p-2.5 backdrop-blur-xl light:border-slate-200 light:bg-white sm:max-w-[230px]">
+          <div className="xcr8-panel w-full p-2.5 sm:max-w-[230px]">
             <div className="flex items-center justify-between rounded-xl bg-white/5 p-2 light:bg-slate-100">
               {[
                 { key: "IG", bg: "from-fuchsia-500 to-amber-400" },
@@ -335,10 +338,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="xcr8-panel rounded-[26px] p-4 sm:p-5">
-          <p className="xcr8-eyebrow text-xs">
-            Create New Post
-          </p>
+        <div className="xcr8-panel rounded-[26px] border-2 border-cyan-300/35 p-4 sm:p-5">
+          <p className="xcr8-eyebrow text-xs">Create New Post</p>
           <div className="mt-2 grid gap-4 sm:grid-cols-[1.3fr_1fr] sm:items-center">
             <div>
               <h2 className="xcr8-title-lg text-white light:text-slate-900 sm:text-3xl">

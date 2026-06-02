@@ -42,13 +42,13 @@ export function StudioShell({
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="surface-luxe cyber-grid scanline rounded-2xl p-4"
+        className="xcr8-panel cyber-grid scanline rounded-2xl border-2 border-cyan-300/25 p-4"
       >
         {showToolShelf ? (
           <>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-200 light:border-cyan-300 light:bg-cyan-100 light:text-cyan-700">
               <Sparkles size={12} />
-              Creative AI tool shelf
+              Creative AI tool shelf · Phase 5
             </div>
 
             <div className="mb-4">

@@ -15,8 +15,12 @@ export default function AIStudioPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.05 }}
-        className="xcr8-panel mb-5 overflow-hidden p-6"
+        className="xcr8-panel mb-5 overflow-hidden border-2 border-cyan-300/30 p-6"
       >
+        <div className="xcr8-soft-chip mb-2 inline-flex items-center gap-2 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em]">
+          <Stars size={12} />
+          Phase 5 Live
+        </div>
         <div className="xcr8-soft-chip mb-3 inline-flex items-center gap-2 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em]">
           <Stars size={12} />
           Creator Command Deck
@@ -61,7 +65,7 @@ export default function AIStudioPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.14 }}
-          className="xcr8-panel p-5"
+          className="xcr8-panel border-2 border-indigo-300/30 p-5"
         >
           <p className="xcr8-eyebrow mb-2 inline-flex items-center gap-2">
             <Compass size={13} />
