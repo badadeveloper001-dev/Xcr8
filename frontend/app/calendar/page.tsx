@@ -58,7 +58,7 @@ export default function CalendarPage() {
 
   return (
     <MobileShell title="Scheduled" subtitle="Your upcoming publishing queue.">
-      <p className="section-kicker mb-3">Publishing timeline</p>
+      <p className="xcr8-eyebrow mb-3">Publishing timeline</p>
       {!data && (
         <div className="mb-4 space-y-2" aria-hidden="true">
           <div className="skeleton h-20 rounded-2xl" />
@@ -83,7 +83,7 @@ export default function CalendarPage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: idx * 0.05 }}
-                className="surface-card cyber-grid neon-ring flex items-center gap-4 rounded-2xl p-4"
+                className="xcr8-panel cyber-grid neon-ring flex items-center gap-4 rounded-2xl p-4"
               >
                 {/* Date block */}
                 <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-violet-500/15 light:bg-violet-100">
@@ -133,7 +133,7 @@ export default function CalendarPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="surface-luxe flex flex-col items-center rounded-2xl p-10 text-center"
+          className="xcr8-panel flex flex-col items-center rounded-2xl p-10 text-center"
         >
           <div className="mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-violet-500/15 text-violet-400 light:bg-violet-100 light:text-violet-600">
             <CalendarDays size={28} />
@@ -154,8 +154,8 @@ export default function CalendarPage() {
       )}
 
       {/* Mini calendar hint */}
-      <div className="mt-5 surface-soft rounded-2xl p-4">
-        <p className="section-kicker mb-2">Schedule context</p>
+      <div className="xcr8-panel mt-5 rounded-2xl p-4">
+        <p className="xcr8-eyebrow mb-2">Schedule context</p>
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-500/15 text-violet-400 light:bg-violet-100 light:text-violet-600">
             <Calendar size={16} />

@@ -77,16 +77,16 @@ export default function UploadPage() {
         >
           Back to home
         </Link>
-        <p className="section-kicker">Upload Studio</p>
+        <p className="xcr8-eyebrow">Upload Studio</p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
-        <div className="surface-luxe lux-panel cyber-grid rounded-[28px] p-5 sm:p-6">
-          <p className="section-kicker mb-2">Public image upload</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-white light:text-slate-900 sm:text-4xl">
+        <div className="xcr8-panel cyber-grid rounded-[28px] p-5 sm:p-6">
+          <p className="xcr8-eyebrow mb-2">Public image upload</p>
+          <h1 className="xcr8-title-xl text-white light:text-slate-900 sm:text-4xl">
             Drop an image into your workflow.
           </h1>
-          <p className="mt-3 max-w-2xl text-sm text-slate-400 light:text-slate-500">
+          <p className="xcr8-subtle mt-3 max-w-2xl text-sm">
             Upload once, get a public URL, and reuse it across chat, scheduling, and creation.
           </p>
 
@@ -172,8 +172,8 @@ export default function UploadPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="surface-card rounded-[28px] p-5">
-            <p className="section-kicker mb-2">Workflow hints</p>
+          <div className="xcr8-panel rounded-[28px] p-5">
+            <p className="xcr8-eyebrow mb-2">Workflow hints</p>
             <div className="space-y-3 text-sm text-slate-300 light:text-slate-600">
               <p>1. Upload once, then reuse the URL across the workspace.</p>
               <p>2. Keep crops clean for feed, story, and carousel formats.</p>
@@ -181,8 +181,8 @@ export default function UploadPage() {
             </div>
           </div>
 
-          <div className="surface-card rounded-[28px] p-5">
-            <p className="section-kicker mb-2">Preview state</p>
+          <div className="xcr8-panel rounded-[28px] p-5">
+            <p className="xcr8-eyebrow mb-2">Preview state</p>
             <div className="aspect-[4/3] rounded-[22px] border border-white/10 bg-gradient-to-br from-violet-500/20 via-fuchsia-500/10 to-cyan-500/10 p-4 light:border-slate-200">
               <div className="flex h-full items-end justify-between">
                 <div>

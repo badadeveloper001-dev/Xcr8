@@ -24,17 +24,20 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
       <div className="mx-auto w-full max-w-[460px] lg:max-w-[1120px]">
         {!hideHeader ? (
           <header
-            className="mb-6 flex items-start justify-between rounded-2xl border border-white/10 bg-black/10 p-3 backdrop-blur-sm light:border-slate-200 light:bg-white/70"
+            className="xcr8-panel mb-6 flex items-start justify-between rounded-2xl p-3 backdrop-blur-sm"
             aria-label="Page header"
           >
             <div className="pr-3">
+              <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                UI v2 Live
+              </p>
               {title ? (
-                <h1 className="text-3xl font-semibold tracking-tight text-white dark:text-white light:text-[#111827] sm:text-4xl">
+                <h1 className="xcr8-title-xl text-white dark:text-white light:text-[#111827]">
                   {title}
                 </h1>
               ) : null}
               {subtitle ? (
-                <p className="mt-1.5 text-sm text-slate-300 dark:text-slate-300 light:text-slate-600">
+                <p className="xcr8-subtle mt-1.5 text-sm dark:text-slate-300 light:text-slate-600">
                   {subtitle}
                 </p>
               ) : null}
