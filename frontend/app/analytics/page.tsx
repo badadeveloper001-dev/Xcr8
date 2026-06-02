@@ -225,16 +225,17 @@ function TrendChart({ series }: { series: Array<{ platform: string; points: Tren
     <div className="xcr8-panel rounded-2xl p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="xcr8-title-lg text-white light:text-slate-900">
-            Engagement Trend Lines
-          </h3>
+          <h3 className="xcr8-title-lg text-white light:text-slate-900">Engagement Trend Lines</h3>
           <p className="text-xs text-slate-500 light:text-slate-600">
             Real snapshot history across the selected analytics window.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {series.map((item, index) => (
-            <div key={item.platform} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300 light:text-slate-700">
+            <div
+              key={item.platform}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300 light:text-slate-700"
+            >
               <span
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: chartPalette[index % chartPalette.length] }}
@@ -261,7 +262,9 @@ function TrendChart({ series }: { series: Array<{ platform: string; points: Tren
         })}
         {series.map((item, seriesIndex) => {
           const path = item.points
-            .map((point, index) => `${getX(index, item.points.length)},${getY(point.engagement_rate)}`)
+            .map(
+              (point, index) => `${getX(index, item.points.length)},${getY(point.engagement_rate)}`,
+            )
             .join(" ");
 
           return (
@@ -369,9 +372,10 @@ export default function AnalyticsPage() {
   }, [data?.platform_deltas, engagement, selectedPlatform]);
   const displayedTrendSeries = useMemo(() => {
     const entries = Object.entries(data?.trend_series ?? {});
-    const filtered = selectedPlatform === "all"
-      ? entries.slice(0, 4)
-      : entries.filter(([platform]) => platform === selectedPlatform);
+    const filtered =
+      selectedPlatform === "all"
+        ? entries.slice(0, 4)
+        : entries.filter(([platform]) => platform === selectedPlatform);
 
     return filtered.map(([platform, points]) => ({ platform, points }));
   }, [data?.trend_series, selectedPlatform]);
@@ -474,6 +478,11 @@ export default function AnalyticsPage() {
 
   return (
     <MobileShell title="Analytics Intelligence" subtitle="AI strategist for creator growth.">
+      <div className="mb-4">
+        <p className="xcr8-soft-chip inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+          Phase 6 Live
+        </p>
+      </div>
       {usingDemoData ? (
         <div className="mb-4 rounded-xl border border-violet-500/20 bg-violet-500/10 p-3 text-xs text-violet-300 light:text-violet-700">
           Analytics is warming up. Demo insights are shown until your next live cycle completes.
@@ -481,7 +490,7 @@ export default function AnalyticsPage() {
       ) : null}
 
       <motion.section {...fadeUp(0)} className="mb-5 space-y-4">
-        <div className="xcr8-panel scanline neon-ring rounded-[28px] p-4 sm:p-5">
+        <div className="xcr8-panel scanline neon-ring rounded-[28px] border-2 border-cyan-300/35 p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="xcr8-eyebrow mb-2">Analytics Home</p>
@@ -659,14 +668,22 @@ export default function AnalyticsPage() {
                   <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-400 light:text-slate-600">
                     <div>
                       <div>Engagement</div>
-                      <div className={delta.engagement_delta >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                      <div
+                        className={
+                          delta.engagement_delta >= 0 ? "text-emerald-400" : "text-rose-400"
+                        }
+                      >
                         {delta.engagement_delta >= 0 ? "+" : ""}
                         {(delta.engagement_delta * 100).toFixed(1)} pts
                       </div>
                     </div>
                     <div>
                       <div>Followers</div>
-                      <div className={delta.followers_delta_change >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                      <div
+                        className={
+                          delta.followers_delta_change >= 0 ? "text-emerald-400" : "text-rose-400"
+                        }
+                      >
                         {delta.followers_delta_change >= 0 ? "+" : ""}
                         {delta.followers_delta_change}
                       </div>
@@ -822,7 +839,7 @@ export default function AnalyticsPage() {
       ) : null}
 
       {viewMode === "platforms" ? (
-        <motion.section {...fadeUp(0.08)} className="mb-5 surface-card rounded-2xl p-4">
+        <motion.section {...fadeUp(0.08)} className="mb-5 xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <Globe2 size={16} className="text-violet-400" /> Platform Comparison Screen
@@ -880,7 +897,7 @@ export default function AnalyticsPage() {
       ) : null}
 
       {viewMode === "performance" ? (
-        <motion.section {...fadeUp(0.08)} className="mb-5 surface-card rounded-2xl p-4">
+        <motion.section {...fadeUp(0.08)} className="mb-5 xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <LineChart size={16} className="text-violet-400" /> Content Performance Lab
@@ -934,7 +951,7 @@ export default function AnalyticsPage() {
       ) : null}
 
       <motion.section {...fadeUp(0.12)} className="mb-5 grid gap-5 lg:grid-cols-2">
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <CircleDashed size={16} className="text-violet-400" /> AI Multiverse Performance
@@ -980,7 +997,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <BarChart3 size={16} className="text-violet-400" /> Content Category Intelligence
@@ -1032,7 +1049,7 @@ export default function AnalyticsPage() {
       </motion.section>
 
       <motion.section {...fadeUp(0.16)} className="mb-24 grid gap-5 lg:grid-cols-2">
-        <div className="surface-luxe rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl border-2 border-indigo-300/30 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <Rocket size={16} className="text-violet-400" /> Creator Growth Engine
@@ -1090,7 +1107,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <Target size={16} className="text-violet-400" /> AI Content Strategist
@@ -1127,7 +1144,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <TrendingUp size={16} className="text-violet-400" /> Competitor & Industry Analysis
@@ -1165,7 +1182,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <HeartPulse size={16} className="text-violet-400" /> AI Creator Health System
@@ -1225,7 +1242,6 @@ export default function AnalyticsPage() {
           </div>
         </div>
       </motion.section>
-
     </MobileShell>
   );
 }

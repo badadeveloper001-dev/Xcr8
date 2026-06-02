@@ -61,10 +61,7 @@ export default function SettingsPage() {
   }, []);
 
   const saveAlertSettings = (postReminders: boolean, securityAlerts: boolean) => {
-    localStorage.setItem(
-      "xcr8-settings-alerts",
-      JSON.stringify({ postReminders, securityAlerts }),
-    );
+    localStorage.setItem("xcr8-settings-alerts", JSON.stringify({ postReminders, securityAlerts }));
   };
 
   const { data: connections, isLoading } = useQuery({
@@ -106,6 +103,11 @@ export default function SettingsPage() {
   return (
     <MobileShell title="Settings" subtitle="Profile, accounts & preferences.">
       <div className="space-y-4">
+        <div>
+          <p className="xcr8-soft-chip inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+            Phase 6 Live
+          </p>
+        </div>
         {notice ? (
           <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 light:text-emerald-700">
             {notice}
@@ -124,7 +126,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="xcr8-panel rounded-2xl p-4"
+          className="xcr8-panel rounded-2xl border-2 border-cyan-300/35 p-4"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -195,7 +197,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.08 }}
-          className="xcr8-panel rounded-2xl p-4"
+          className="xcr8-panel rounded-2xl border-2 border-indigo-300/30 p-4"
         >
           <p className="xcr8-eyebrow mb-2">Distribution control</p>
           <p className="mb-3 flex items-center gap-2 text-sm font-bold text-white light:text-slate-900">
@@ -323,9 +325,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={item.toggle}
                 className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
-                  item.enabled
-                    ? "border-cyan-300/40 bg-cyan-500/20"
-                    : "border-white/15 bg-white/5"
+                  item.enabled ? "border-cyan-300/40 bg-cyan-500/20" : "border-white/15 bg-white/5"
                 }`}
                 aria-label={`Toggle ${item.label.toLowerCase()}`}
                 aria-pressed={item.enabled}
