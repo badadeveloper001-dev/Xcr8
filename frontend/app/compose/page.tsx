@@ -236,14 +236,14 @@ export default function ComposePage() {
         transition={{ duration: 0.38 }}
         className="mb-5"
       >
-        <div className="surface-luxe rounded-[28px] p-4 sm:p-5">
+        <div className="xcr8-panel rounded-[28px] p-4 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="section-kicker mb-2">Composer Studio</p>
-              <h1 className="text-3xl font-semibold leading-tight text-white light:text-slate-900">
+              <p className="xcr8-eyebrow mb-2">Composer Studio</p>
+              <h1 className="xcr8-title-xl text-white light:text-slate-900">
                 Create once. Publish everywhere.
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-300 light:text-slate-600">
+              <p className="xcr8-subtle mt-2 max-w-2xl text-sm">
                 Write one master caption, generate channel versions, then approve and schedule.
               </p>
             </div>
@@ -269,7 +269,7 @@ export default function ComposePage() {
       </motion.section>
 
       {/* Workflow steps indicator */}
-      <div className="surface-soft neon-ring sticky top-2 z-20 mb-5 flex flex-wrap items-center gap-2 rounded-2xl px-2.5 py-2.5 backdrop-blur-xl">
+      <div className="xcr8-panel neon-ring sticky top-2 z-20 mb-5 flex flex-wrap items-center gap-2 rounded-2xl px-2.5 py-2.5 backdrop-blur-xl">
         {steps.map((step, idx) => (
           <div key={step.n} className="flex items-center">
             <div
@@ -293,8 +293,8 @@ export default function ComposePage() {
         {/* ── LEFT: Form ────────────────────────────── */}
         <form className="space-y-4" onSubmit={(e) => void createDraft(e)}>
           {/* Title */}
-          <div className="surface-card rounded-2xl p-5">
-            <p className="section-kicker mb-2">Post foundation</p>
+          <div className="xcr8-panel rounded-2xl p-5">
+            <p className="xcr8-eyebrow mb-2">Post foundation</p>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               Post title
             </label>
@@ -307,7 +307,7 @@ export default function ComposePage() {
           </div>
 
           {/* Media URL */}
-          <div className="surface-card rounded-2xl p-5">
+          <div className="xcr8-panel rounded-2xl p-5">
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               <Link2 size={11} /> Media Upload
             </label>
@@ -337,7 +337,7 @@ export default function ComposePage() {
           </div>
 
           {/* Master caption */}
-          <div className="surface-card rounded-2xl p-5">
+          <div className="xcr8-panel rounded-2xl p-5">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               Master caption
             </label>
@@ -351,8 +351,8 @@ export default function ComposePage() {
           </div>
 
           {/* Platform selector */}
-          <div className="surface-card rounded-2xl p-5">
-            <p className="section-kicker mb-2">Distribution map</p>
+          <div className="xcr8-panel rounded-2xl p-5">
+            <p className="xcr8-eyebrow mb-2">Distribution map</p>
             <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               <LayoutGrid size={11} className="mr-1 inline" /> Platforms
             </label>
@@ -393,7 +393,7 @@ export default function ComposePage() {
 
         {/* ── RIGHT: Workflow guide / variants ──────── */}
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <div className="surface-luxe scanline rounded-2xl p-4">
+          <div className="xcr8-panel scanline rounded-2xl p-4">
             <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-white light:text-slate-900">
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-500/20 text-violet-400 light:bg-violet-100 light:text-violet-600">
                 <Sparkles size={15} />
@@ -415,7 +415,7 @@ export default function ComposePage() {
             </ol>
           </div>
 
-          <div className="surface-card rounded-2xl p-4">
+          <div className="xcr8-panel rounded-2xl p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Creator memory active
             </p>
@@ -441,9 +441,9 @@ export default function ComposePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="surface-card mt-5 rounded-2xl p-5"
+          className="xcr8-panel mt-5 rounded-2xl p-5"
         >
-          <p className="section-kicker mb-2">Approval desk</p>
+          <p className="xcr8-eyebrow mb-2">Approval desk</p>
           <h2 className="text-holo mb-4 flex items-center gap-2 text-lg font-bold">
             <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-600">
               <CheckCircle2 size={16} />

@@ -124,7 +124,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="surface-luxe rounded-2xl p-4"
+          className="xcr8-panel rounded-2xl p-4"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -138,7 +138,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="min-w-0">
-                <p className="section-kicker mb-2">Identity</p>
+                <p className="xcr8-eyebrow mb-2">Identity</p>
                 <p className="text-lg font-bold text-white light:text-slate-900">
                   {displayName ?? "Creator"}
                 </p>
@@ -170,10 +170,10 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.05 }}
-          className="surface-card rounded-2xl p-4"
+          className="xcr8-panel rounded-2xl p-4"
         >
           <div className="mb-3 flex items-center justify-between">
-            <p className="section-kicker">Identity details</p>
+            <p className="xcr8-eyebrow">Identity details</p>
             <button
               type="button"
               className="grid h-9 w-9 place-items-center rounded-xl surface-soft text-slate-400 hover:text-slate-200 light:hover:text-slate-700"
@@ -195,9 +195,9 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.08 }}
-          className="surface-card rounded-2xl p-4"
+          className="xcr8-panel rounded-2xl p-4"
         >
-          <p className="section-kicker mb-2">Distribution control</p>
+          <p className="xcr8-eyebrow mb-2">Distribution control</p>
           <p className="mb-3 flex items-center gap-2 text-sm font-bold text-white light:text-slate-900">
             <Globe2 size={15} className="text-violet-400 light:text-violet-600" />
             Connected Platforms
@@ -258,7 +258,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.11 }}
-          className="surface-card flex items-center justify-between rounded-2xl p-4"
+          className="xcr8-panel flex items-center justify-between rounded-2xl p-4"
         >
           <p className="sr-only">Appearance preferences</p>
           <div className="flex items-center gap-3">
@@ -277,10 +277,10 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.14 }}
-          className="surface-card rounded-2xl overflow-hidden"
+          className="xcr8-panel rounded-2xl overflow-hidden"
         >
           <div className="border-b border-white/6 px-4 py-2 light:border-slate-100">
-            <p className="section-kicker">Alerts and safety</p>
+            <p className="xcr8-eyebrow">Alerts and safety</p>
           </div>
           {[
             {

@@ -201,7 +201,7 @@ function TrendChart({ series }: { series: Array<{ platform: string; points: Tren
 
   if (flattened.length === 0) {
     return (
-      <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
+      <div className="xcr8-panel rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
         Trend lines will appear once analytics snapshots start accumulating.
       </div>
     );
@@ -222,10 +222,10 @@ function TrendChart({ series }: { series: Array<{ platform: string; points: Tren
     height - padding - ((value - minValue) / range) * (height - padding * 2);
 
   return (
-    <div className="surface-card rounded-2xl p-4">
+    <div className="xcr8-panel rounded-2xl p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-white light:text-slate-900">
+          <h3 className="xcr8-title-lg text-white light:text-slate-900">
             Engagement Trend Lines
           </h3>
           <p className="text-xs text-slate-500 light:text-slate-600">
@@ -481,14 +481,14 @@ export default function AnalyticsPage() {
       ) : null}
 
       <motion.section {...fadeUp(0)} className="mb-5 space-y-4">
-        <div className="surface-luxe scanline neon-ring rounded-[28px] p-4 sm:p-5">
+        <div className="xcr8-panel scanline neon-ring rounded-[28px] p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="section-kicker mb-2">Analytics Home</p>
+              <p className="xcr8-eyebrow mb-2">Analytics Home</p>
               <h2 className="text-holo text-3xl font-bold tracking-tight sm:text-4xl">
                 Creator Insights
               </h2>
-              <p className="mt-2 max-w-2xl text-sm text-slate-400 light:text-slate-500">
+              <p className="xcr8-subtle mt-2 max-w-2xl text-sm">
                 Live performance view for {displayName}. Smart recommendations are active.
               </p>
             </div>
@@ -635,9 +635,9 @@ export default function AnalyticsPage() {
       <motion.section {...fadeUp(0.03)} className="mb-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <TrendChart series={displayedTrendSeries} />
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white light:text-slate-900">
+            <h3 className="xcr8-title-lg text-white light:text-slate-900">
               Platform Delta Signals
             </h3>
             <span className="text-xs text-slate-500 light:text-slate-600">
@@ -688,7 +688,7 @@ export default function AnalyticsPage() {
       </motion.section>
 
       <motion.section {...fadeUp(0.05)} className="mb-5 grid gap-4 sm:grid-cols-2">
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-500/20 text-violet-400 light:bg-violet-100 light:text-violet-700">
@@ -728,7 +728,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-2xl p-4">
+        <div className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <LineChart size={16} className="text-violet-400" /> Content Performance Lab
@@ -770,7 +770,7 @@ export default function AnalyticsPage() {
       </motion.section>
 
       {viewMode === "audience" ? (
-        <motion.section {...fadeUp(0.08)} className="mb-5 surface-card rounded-2xl p-4">
+        <motion.section {...fadeUp(0.08)} className="mb-5 xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-bold text-white light:text-slate-900">
               <Users size={16} className="text-violet-400" /> Audience Intelligence Screen
