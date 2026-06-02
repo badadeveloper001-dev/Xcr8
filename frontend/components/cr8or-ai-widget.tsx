@@ -10,16 +10,20 @@ export function Cr8orAiWidget() {
   const userId = useCreatorStore((state) => state.userId);
   const pathname = usePathname();
 
+  if (!hasHydrated || !userId) {
+    return null;
+  }
+
   const hideOnboardingWidget =
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/welcome") ||
-    pathname.startsWith("/auth/signup");
+    pathname.startsWith("/auth/");
 
   if (hideOnboardingWidget) {
     return null;
   }
 
-  const href = hasHydrated && !userId ? "/auth/login" : "/ai-studio/assistant";
+  const href = "/ai-studio/assistant";
 
   return (
     <div className="fixed bottom-24 right-4 z-40 sm:bottom-24 sm:right-6 lg:bottom-6 lg:right-8">
