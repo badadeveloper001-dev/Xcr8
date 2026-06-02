@@ -301,158 +301,267 @@ export default function DashboardPage() {
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-              Phase 5 Live
-            </p>
-            <h1 className="xcr8-title-xl text-slate-100 light:text-slate-900">
-              Good evening,
-              <br />
-              <span className="bg-gradient-to-r from-fuchsia-400 via-violet-300 to-cyan-300 bg-clip-text text-transparent light:from-violet-700 light:via-fuchsia-600 light:to-cyan-700">
-                {displayName}
-              </span>
-            </h1>
-            <p className="xcr8-subtle mt-2 text-sm">{dynamicGreeting}</p>
-          </div>
-
-          <div className="xcr8-panel w-full p-2.5 sm:max-w-[230px]">
-            <div className="flex items-center justify-between rounded-xl bg-white/5 p-2 light:bg-slate-100">
-              {[
-                { key: "IG", bg: "from-fuchsia-500 to-amber-400" },
-                { key: "X", bg: "from-slate-950 to-slate-700" },
-                { key: "FB", bg: "from-blue-500 to-cyan-400" },
-              ].map((platform) => (
-                <span
-                  key={platform.key}
-                  className={`grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${platform.bg}`}
-                >
-                  {platform.key}
+        <div className="xcr8-panel rounded-[26px] border-2 border-cyan-300/35 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                Phase 8 Live
+              </p>
+              <h1 className="xcr8-title-xl text-slate-100 light:text-slate-900">
+                Good evening,
+                <br />
+                <span className="bg-gradient-to-r from-fuchsia-400 via-violet-300 to-cyan-300 bg-clip-text text-transparent light:from-violet-700 light:via-fuchsia-600 light:to-cyan-700">
+                  {displayName}
                 </span>
+              </h1>
+              <p className="xcr8-subtle mt-2 text-sm">{dynamicGreeting}</p>
+            </div>
+
+            <div className="xcr8-panel w-full p-2.5 sm:max-w-[230px]">
+              <div className="flex items-center justify-between rounded-xl bg-white/5 p-2 light:bg-slate-100">
+                {[
+                  { key: "IG", bg: "from-fuchsia-500 to-amber-400" },
+                  { key: "X", bg: "from-slate-950 to-slate-700" },
+                  { key: "FB", bg: "from-blue-500 to-cyan-400" },
+                ].map((platform) => (
+                  <span
+                    key={platform.key}
+                    className={`grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${platform.bg}`}
+                  >
+                    {platform.key}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-sm text-slate-300 light:text-slate-600">
+                <span className="mr-2 inline-block h-2 w-2 rounded-full bg-green-400" />
+                {data?.platforms_connected ?? 3} Connected
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.18fr_0.82fr]">
+          <section className="space-y-4">
+            <div className="xcr8-panel rounded-[26px] p-4 sm:p-5">
+              <p className="xcr8-eyebrow text-xs">Create New Post</p>
+              <div className="mt-2 grid gap-4 sm:grid-cols-[1.3fr_1fr] sm:items-center">
+                <div>
+                  <h2 className="xcr8-title-lg text-white light:text-slate-900 sm:text-3xl">
+                    What are you
+                    <br />
+                    posting today?
+                  </h2>
+                  <p className="xcr8-subtle mt-2 text-sm">
+                    Upload once, caption once, publish everywhere.
+                  </p>
+                  <Link
+                    href="/compose"
+                    className="cta-btn mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold"
+                  >
+                    <Plus size={18} />
+                    Create New Post
+                  </Link>
+                </div>
+
+                <div className="relative hidden min-h-[150px] sm:block">
+                  <div className="absolute right-0 top-2 h-24 w-24 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 opacity-90 shadow-xl" />
+                  <div className="absolute right-20 top-8 h-20 w-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 opacity-90 shadow-xl" />
+                  <div className="absolute right-10 top-16 h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-300 to-fuchsia-300 opacity-95 shadow-xl" />
+                </div>
+              </div>
+            </div>
+
+            <div className="xcr8-panel rounded-2xl p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="xcr8-title-lg text-white light:text-slate-900">Recent Posts</h2>
+                <Link
+                  href="/compose"
+                  className="text-sm font-medium text-fuchsia-300 light:text-violet-700"
+                >
+                  View all
+                </Link>
+              </div>
+              <ul className="space-y-2.5">
+                {recentPosts.map((post) => (
+                  <li
+                    key={post.id}
+                    className="surface-soft rounded-xl border border-white/10 px-3 py-2.5 light:border-slate-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => openWorkspaceLink("/compose")}
+                        className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${post.image}`}
+                        aria-label={`Edit ${post.title} in composer`}
+                      >
+                        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[11px] text-white">
+                          {post.runtime}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openWorkspaceLink("/compose")}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="truncate text-base font-semibold text-white light:text-slate-900">
+                          {post.title}
+                        </p>
+                        <p className="text-sm text-slate-400 light:text-slate-600">{post.tags}</p>
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          {post.channels.map((channel) => (
+                            <span
+                              key={channel}
+                              className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white/10 px-1.5 text-[10px] font-semibold text-slate-200 light:bg-slate-100 light:text-slate-600"
+                            >
+                              {channel}
+                            </span>
+                          ))}
+                          <span className="ml-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-200 light:bg-emerald-100 light:text-emerald-700">
+                            {post.status}
+                          </span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActivePostMenu((current) => (current === post.id ? null : post.id))
+                        }
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/10 light:hover:bg-slate-100"
+                        aria-label={`Post options for ${post.title}`}
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+                    </div>
+                    {activePostMenu === post.id ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        {postActions.map((action) => (
+                          <button
+                            key={action.label}
+                            type="button"
+                            onClick={() => {
+                              setActivePostMenu(null);
+                              router.push(action.href);
+                            }}
+                            className="surface-soft rounded-xl px-3 py-2 text-xs font-medium text-slate-300 light:text-slate-700"
+                          >
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              {snapshotCards.map((card) => (
+                <button
+                  key={card.label}
+                  type="button"
+                  onClick={() =>
+                    openWorkspaceLink(
+                      card.label === "Drafts"
+                        ? "/compose"
+                        : card.label === "Scheduled"
+                          ? "/calendar"
+                          : "/analytics",
+                    )
+                  }
+                  className="xcr8-panel rounded-2xl p-3.5 text-left"
+                >
+                  <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500/25 to-violet-500/20 text-fuchsia-200 light:from-violet-100 light:to-fuchsia-100 light:text-violet-700">
+                    <card.icon size={18} />
+                  </div>
+                  <p className="text-3xl font-semibold leading-none text-white light:text-slate-900">
+                    {card.value}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-100 light:text-slate-900">
+                    {card.label}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400 light:text-slate-600">{card.note}</p>
+                </button>
               ))}
             </div>
-            <p className="mt-2 text-sm text-slate-300 light:text-slate-600">
-              <span className="mr-2 inline-block h-2 w-2 rounded-full bg-green-400" />
-              {data?.platforms_connected ?? 3} Connected
-            </p>
-          </div>
-        </div>
 
-        <div className="xcr8-panel rounded-[26px] border-2 border-cyan-300/35 p-4 sm:p-5">
-          <p className="xcr8-eyebrow text-xs">Create New Post</p>
-          <div className="mt-2 grid gap-4 sm:grid-cols-[1.3fr_1fr] sm:items-center">
-            <div>
-              <h2 className="xcr8-title-lg text-white light:text-slate-900 sm:text-3xl">
-                What are you
-                <br />
-                posting today?
-              </h2>
-              <p className="xcr8-subtle mt-2 text-sm">
-                Upload once, caption once, publish everywhere.
-              </p>
-              <Link
-                href="/compose"
-                className="cta-btn mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold"
-              >
-                <Plus size={18} />
-                Create New Post
-              </Link>
+            <div className="xcr8-panel rounded-2xl p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="xcr8-title-lg text-white light:text-slate-900">AI Insights</h2>
+                <Link
+                  href="/analytics"
+                  className="text-sm font-medium text-fuchsia-300 light:text-violet-700"
+                >
+                  View all
+                </Link>
+              </div>
+              <ul className="space-y-2.5">
+                {insightCards.map((trend) => (
+                  <li
+                    key={trend.title}
+                    className="surface-soft flex items-center gap-3 rounded-xl border border-white/10 px-3 py-3 light:border-slate-200"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openWorkspaceLink("/analytics")}
+                      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${trend.tone} text-fuchsia-200 light:text-violet-700`}
+                      aria-label={`Open analytics insight ${trend.title}`}
+                    >
+                      <trend.icon size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openWorkspaceLink("/analytics")}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="text-xs uppercase tracking-[0.08em] text-slate-400 light:text-slate-500">
+                        {trend.subtitle}
+                      </p>
+                      <p className="truncate text-base font-semibold text-white light:text-slate-900">
+                        {trend.title}
+                      </p>
+                      <p className="text-sm text-slate-400 light:text-slate-600">{trend.detail}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openWorkspaceLink("/analytics")}
+                      className="inline-flex items-center justify-center text-slate-500"
+                      aria-label={`Open ${trend.title}`}
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <div className="relative hidden min-h-[150px] sm:block">
-              <div className="absolute right-0 top-2 h-24 w-24 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 opacity-90 shadow-xl" />
-              <div className="absolute right-20 top-8 h-20 w-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 opacity-90 shadow-xl" />
-              <div className="absolute right-10 top-16 h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-300 to-fuchsia-300 opacity-95 shadow-xl" />
+            <div className="xcr8-panel rounded-2xl p-4">
+              <p className="xcr8-eyebrow mb-2">Quick launch</p>
+              <div className="space-y-2">
+                {workspaceLinks.map((item) => (
+                  <button
+                    key={`quick-${item.href}`}
+                    type="button"
+                    onClick={() => openWorkspaceLink(item.href)}
+                    className="surface-soft flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white light:text-slate-900">
+                        {item.label}
+                      </p>
+                      <p className="text-xs text-slate-500 light:text-slate-600">
+                        {item.description}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} className="text-slate-500" />
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          {snapshotCards.map((card) => (
-            <button
-              key={card.label}
-              type="button"
-              onClick={() =>
-                openWorkspaceLink(
-                  card.label === "Drafts"
-                    ? "/compose"
-                    : card.label === "Scheduled"
-                      ? "/calendar"
-                      : "/analytics",
-                )
-              }
-              className="xcr8-panel rounded-2xl p-3.5"
-            >
-              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500/25 to-violet-500/20 text-fuchsia-200 light:from-violet-100 light:to-fuchsia-100 light:text-violet-700">
-                <card.icon size={18} />
-              </div>
-              <p className="text-3xl font-semibold leading-none text-white light:text-slate-900">
-                {card.value}
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-100 light:text-slate-900">
-                {card.label}
-              </p>
-              <p className="mt-1 text-xs text-slate-400 light:text-slate-600">{card.note}</p>
-              {card.meta ? (
-                <p className="text-xs text-slate-500 light:text-slate-500">{card.meta}</p>
-              ) : null}
-              <div className="mt-2 flex justify-end">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-slate-300 light:bg-slate-100 light:text-slate-500">
-                  <ChevronRight size={14} />
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <div className="xcr8-panel rounded-2xl p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="xcr8-title-lg text-white light:text-slate-900">AI Insights</h2>
-            <Link
-              href="/analytics"
-              className="text-sm font-medium text-fuchsia-300 light:text-violet-700"
-            >
-              View all
-            </Link>
-          </div>
-          <ul className="space-y-2.5">
-            {insightCards.map((trend) => (
-              <li
-                key={trend.title}
-                className="surface-soft flex items-center gap-3 rounded-xl border border-white/10 px-3 py-3 light:border-slate-200"
-              >
-                <button
-                  type="button"
-                  onClick={() => openWorkspaceLink("/analytics")}
-                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${trend.tone} text-fuchsia-200 light:text-violet-700`}
-                  aria-label={`Open analytics insight ${trend.title}`}
-                >
-                  <trend.icon size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openWorkspaceLink("/analytics")}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <p className="text-xs uppercase tracking-[0.08em] text-slate-400 light:text-slate-500">
-                    {trend.subtitle}
-                  </p>
-                  <p className="truncate text-base font-semibold text-white light:text-slate-900">
-                    {trend.title}
-                  </p>
-                  <p className="text-sm text-slate-400 light:text-slate-600">{trend.detail}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openWorkspaceLink("/analytics")}
-                  className="inline-flex items-center justify-center text-slate-500"
-                  aria-label={`Open ${trend.title}`}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </li>
-            ))}
-          </ul>
+          </aside>
         </div>
 
         <div className="xcr8-panel rounded-2xl p-4">
@@ -465,79 +574,9 @@ export default function DashboardPage() {
               View all
             </Link>
           </div>
-          <ul className="space-y-2.5">
-            {recentPosts.map((post) => (
-              <li
-                key={post.id}
-                className="surface-soft rounded-xl border border-white/10 px-3 py-2.5 light:border-slate-200"
-              >
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => openWorkspaceLink("/compose")}
-                    className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${post.image}`}
-                    aria-label={`Edit ${post.title} in composer`}
-                  >
-                    <span className="absolute bottom-1.5 right-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[11px] text-white">
-                      {post.runtime}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openWorkspaceLink("/compose")}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p className="truncate text-base font-semibold text-white light:text-slate-900">
-                      {post.title}
-                    </p>
-                    <p className="text-sm text-slate-400 light:text-slate-600">{post.tags}</p>
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      {post.channels.map((channel) => (
-                        <span
-                          key={channel}
-                          className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white/10 px-1.5 text-[10px] font-semibold text-slate-200 light:bg-slate-100 light:text-slate-600"
-                        >
-                          {channel}
-                        </span>
-                      ))}
-                      <span className="ml-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-200 light:bg-emerald-100 light:text-emerald-700">
-                        {post.status}
-                      </span>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setActivePostMenu((current) => (current === post.id ? null : post.id))
-                    }
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/10 light:hover:bg-slate-100"
-                    aria-label={`Post options for ${post.title}`}
-                  >
-                    <MoreVertical size={16} />
-                  </button>
-                </div>
-                {activePostMenu === post.id ? (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    {postActions.map((action) => (
-                      <button
-                        key={action.label}
-                        type="button"
-                        onClick={() => {
-                          setActivePostMenu(null);
-                          router.push(action.href);
-                        }}
-                        className="surface-soft rounded-xl px-3 py-2 text-xs font-medium text-slate-300 light:text-slate-700"
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <p className="xcr8-subtle text-sm">
+            Your latest posts are now pinned in the left workspace rail for faster editing.
+          </p>
         </div>
       </motion.section>
     </MobileShell>
