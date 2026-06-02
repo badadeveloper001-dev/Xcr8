@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bot, Sparkles } from "lucide-react";
 import { useCreatorStore } from "@/lib/store";
 
 export function Cr8orAiWidget() {
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
+  const pathname = usePathname();
+
+  const hideOnboardingWidget =
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/welcome") ||
+    pathname.startsWith("/auth/signup");
+
+  if (hideOnboardingWidget) {
+    return null;
+  }
 
   const href = hasHydrated && !userId ? "/auth/login" : "/ai-studio/assistant";
 

@@ -59,7 +59,7 @@ h2,
 h3,
 h4,
 .section-kicker {
-  font-family: var(--font-display), "Playfair Display", serif;
+  font-family: var(--font-display), "Poppins", "DM Sans", sans-serif;
 }
 
 html,

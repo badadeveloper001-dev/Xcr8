@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
-import { DM_Sans, Playfair_Display } from "next/font/google";
+import { DM_Sans, Poppins } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
-const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-display" });
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-display",
+});
 
 export const metadata: Metadata = {
   title: "Xcr8",
@@ -37,7 +41,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${dmSans.variable} ${playfair.variable} ${dmSans.className}`}>
+      <body className={`${dmSans.variable} ${poppins.variable} ${dmSans.className}`}>
         <Providers>{children}</Providers>
       </body>
     </html>
