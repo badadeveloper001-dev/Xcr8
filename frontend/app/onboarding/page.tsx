@@ -108,6 +108,16 @@ export default function OnboardingPage() {
     return Math.round((step / (wizardSteps.length + 1)) * 100);
   }, [initProgress, initializing, step]);
 
+  const selectedTotal =
+    creatorType.length +
+    platformsUsed.length +
+    contentNiche.length +
+    audienceLocation.length +
+    contentGoals.length +
+    postingFrequency.length +
+    tone.length +
+    personality.length;
+
   if (!hasHydrated || !userId) return null;
 
   const canContinue = () => {
@@ -182,7 +192,7 @@ export default function OnboardingPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="xcr8-panel relative w-full max-w-[720px] overflow-hidden rounded-[28px] p-6 sm:p-8"
+        className="xcr8-panel relative w-full max-w-[980px] overflow-hidden rounded-[28px] border-2 border-cyan-300/25 p-6 sm:p-8"
       >
         <div className="mb-5 flex items-center justify-between gap-3">
           <Logo size="md" className="!w-[220px] max-w-full" />
@@ -208,74 +218,57 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {!initializing && (
-          <div className="mb-5 flex flex-wrap gap-2">
-            {wizardSteps.map((label, index) => {
-              const num = index + 1;
-              const done = step > num;
-              const active = step === num;
-              return (
-                <span
-                  key={label}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                    active
-                      ? "bg-violet-500/20 text-violet-300"
-                      : done
-                        ? "bg-emerald-500/15 text-emerald-300"
-                        : "bg-white/5 text-slate-500"
-                  }`}
-                >
-                  {done ? <CheckCircle2 size={12} /> : <Circle size={12} />}
-                  {label}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
         {!initializing ? (
-          <div className="space-y-4">
-            <h1 className="xcr8-title-lg text-white light:text-slate-900">
-              {step === 1 && "What kind of creator are you?"}
-              {step === 2 && "Connect your platforms"}
-              {step === 3 && "Select your content niche"}
-              {step === 4 && "Where is your audience?"}
-              {step === 5 && "What are your goals?"}
-              {step === 6 && "Choose your tone and personality"}
-            </h1>
-            <p className="xcr8-subtle text-sm">
-              Personalizing XCR8 for {fullName}.
-            </p>
-
-            {step === 1 && (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {creatorTypes.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => toggleMany(item, creatorType, setCreatorType)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                      creatorType.includes(item)
-                        ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40"
-                        : "surface-soft text-slate-300 light:text-slate-700"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
+          <div className="grid gap-5 lg:grid-cols-[0.78fr_1.22fr]">
+            <aside className="xcr8-panel rounded-2xl p-4">
+              <p className="xcr8-eyebrow mb-2">Setup progress</p>
+              <div className="mb-3 rounded-2xl border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700">
+                {selectedTotal} selections made
               </div>
-            )}
+              <div className="space-y-1.5">
+                {wizardSteps.map((label, index) => {
+                  const num = index + 1;
+                  const done = step > num;
+                  const active = step === num;
+                  return (
+                    <div
+                      key={label}
+                      className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-medium ${
+                        active
+                          ? "bg-violet-500/20 text-violet-300"
+                          : done
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-white/5 text-slate-500"
+                      }`}
+                    >
+                      {done ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+                      {label}
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
 
-            {step === 2 && (
-              <>
+            <section className="xcr8-panel rounded-2xl border-2 border-indigo-300/25 p-4">
+              <h1 className="xcr8-title-lg text-white light:text-slate-900">
+                {step === 1 && "What kind of creator are you?"}
+                {step === 2 && "Connect your platforms"}
+                {step === 3 && "Select your content niche"}
+                {step === 4 && "Where is your audience?"}
+                {step === 5 && "What are your goals?"}
+                {step === 6 && "Choose your tone and personality"}
+              </h1>
+              <p className="xcr8-subtle mb-4 text-sm">Personalizing XCR8 for {fullName}.</p>
+
+              {step === 1 && (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {platforms.map((item) => (
+                  {creatorTypes.map((item) => (
                     <button
                       key={item}
                       type="button"
-                      onClick={() => toggleMany(item, platformsUsed, setPlatformsUsed)}
+                      onClick={() => toggleMany(item, creatorType, setCreatorType)}
                       className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                        platformsUsed.includes(item)
+                        creatorType.includes(item)
                           ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40"
                           : "surface-soft text-slate-300 light:text-slate-700"
                       }`}
@@ -284,106 +277,18 @@ export default function OnboardingPage() {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-slate-500">
-                  You can also skip and connect later from Settings.
-                </p>
-              </>
-            )}
+              )}
 
-            {step === 3 && (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {niches.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => toggleMany(item, contentNiche, setContentNiche)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                      contentNiche.includes(item)
-                        ? "bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40"
-                        : "surface-soft text-slate-300 light:text-slate-700"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {step === 4 && (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {audienceLocations.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => toggleMany(item, audienceLocation, setAudienceLocation)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                      audienceLocation.includes(item)
-                        ? "bg-fuchsia-500/20 text-fuchsia-300 ring-1 ring-fuchsia-500/40"
-                        : "surface-soft text-slate-300 light:text-slate-700"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {step === 5 && (
-              <>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {goals.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => toggleMany(item, contentGoals, setContentGoals)}
-                      className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                        contentGoals.includes(item)
-                          ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40"
-                          : "surface-soft text-slate-300 light:text-slate-700"
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Posting frequency
-                  </p>
+              {step === 2 && (
+                <>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {frequencies.map((item) => (
+                    {platforms.map((item) => (
                       <button
                         key={item}
                         type="button"
-                        onClick={() => toggleMany(item, postingFrequency, setPostingFrequency)}
+                        onClick={() => toggleMany(item, platformsUsed, setPlatformsUsed)}
                         className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                          postingFrequency.includes(item)
-                            ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
-                            : "surface-soft text-slate-300 light:text-slate-700"
-                        }`}
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {step === 6 && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Tone
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {tones.map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => toggleMany(item, tone, setTone)}
-                        className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                          tone.includes(item)
+                          platformsUsed.includes(item)
                             ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40"
                             : "surface-soft text-slate-300 light:text-slate-700"
                         }`}
@@ -392,20 +297,61 @@ export default function OnboardingPage() {
                       </button>
                     ))}
                   </div>
-                </div>
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Personality
+                  <p className="mt-2 text-xs text-slate-500">
+                    You can also skip and connect later from Settings.
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {tones.map((item) => (
+                </>
+              )}
+
+              {step === 3 && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {niches.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => toggleMany(item, contentNiche, setContentNiche)}
+                      className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                        contentNiche.includes(item)
+                          ? "bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40"
+                          : "surface-soft text-slate-300 light:text-slate-700"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {step === 4 && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {audienceLocations.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => toggleMany(item, audienceLocation, setAudienceLocation)}
+                      className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                        audienceLocation.includes(item)
+                          ? "bg-fuchsia-500/20 text-fuchsia-300 ring-1 ring-fuchsia-500/40"
+                          : "surface-soft text-slate-300 light:text-slate-700"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {step === 5 && (
+                <>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {goals.map((item) => (
                       <button
-                        key={`p-${item}`}
+                        key={item}
                         type="button"
-                        onClick={() => toggleMany(item, personality, setPersonality)}
+                        onClick={() => toggleMany(item, contentGoals, setContentGoals)}
                         className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                          personality.includes(item)
-                            ? "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40"
+                          contentGoals.includes(item)
+                            ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40"
                             : "surface-soft text-slate-300 light:text-slate-700"
                         }`}
                       >
@@ -413,34 +359,102 @@ export default function OnboardingPage() {
                       </button>
                     ))}
                   </div>
+                  <div className="mt-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Posting frequency
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {frequencies.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => toggleMany(item, postingFrequency, setPostingFrequency)}
+                          className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                            postingFrequency.includes(item)
+                              ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
+                              : "surface-soft text-slate-300 light:text-slate-700"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {step === 6 && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Tone
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {tones.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => toggleMany(item, tone, setTone)}
+                          className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                            tone.includes(item)
+                              ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40"
+                              : "surface-soft text-slate-300 light:text-slate-700"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Personality
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {tones.map((item) => (
+                        <button
+                          key={`p-${item}`}
+                          type="button"
+                          onClick={() => toggleMany(item, personality, setPersonality)}
+                          className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                            personality.includes(item)
+                              ? "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40"
+                              : "surface-soft text-slate-300 light:text-slate-700"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {error ? (
+                <p className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+                  {error}
+                </p>
+              ) : null}
+
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStep((prev) => Math.max(1, prev - 1))}
+                  disabled={step === 1 || loading}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  disabled={loading}
+                  className="cta-btn inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+                >
+                  {step < 6 ? "Continue" : "Initialize AI"}
+                </button>
               </div>
-            )}
-
-            {error ? (
-              <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => setStep((prev) => Math.max(1, prev - 1))}
-                disabled={step === 1 || loading}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={nextStep}
-                disabled={loading}
-                className="cta-btn inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
-              >
-                {step < 6 ? "Continue" : "Initialize AI"}
-              </button>
-            </div>
+            </section>
           </div>
         ) : (
           <div className="py-6 text-center">

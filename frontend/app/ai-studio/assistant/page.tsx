@@ -155,7 +155,7 @@ export default function AssistantPage() {
         const nextChatId =
           storedChatId && sessions.some((session) => session.chat_id === storedChatId)
             ? storedChatId
-            : sessions[0]?.chat_id ?? null;
+            : (sessions[0]?.chat_id ?? null);
         setActiveChatId(nextChatId);
       } catch {
         if (!cancelled) {
@@ -290,7 +290,9 @@ export default function AssistantPage() {
           ...current.filter((session) => session.chat_id !== summary.chat_id),
         ]);
       } catch (err) {
-        setError(getApiErrorMessage(err, "Could not create a new chat right now. Please try again."));
+        setError(
+          getApiErrorMessage(err, "Could not create a new chat right now. Please try again."),
+        );
       }
     };
 
@@ -379,7 +381,10 @@ export default function AssistantPage() {
       );
       currentChatId = created.chat_id;
       setActiveChatId(currentChatId);
-      setChatSessions((current) => [created, ...current.filter((session) => session.chat_id !== created.chat_id)]);
+      setChatSessions((current) => [
+        created,
+        ...current.filter((session) => session.chat_id !== created.chat_id),
+      ]);
     }
 
     const userMessage: ChatItem = { role: "user", content: nextPrompt };
@@ -403,7 +408,10 @@ export default function AssistantPage() {
       const resolvedChatId = data.chat_id ?? currentChatId;
       const assistantMessage: ChatItem = {
         role: "assistant",
-        content: [data.assistant_message, data.follow_up_question].filter(Boolean).join("\n\n").trim(),
+        content: [data.assistant_message, data.follow_up_question]
+          .filter(Boolean)
+          .join("\n\n")
+          .trim(),
       };
       setMessages([...nextMessages, assistantMessage].slice(-MAX_RENDERED_MESSAGES));
       setSuggestedActions(
@@ -451,28 +459,22 @@ export default function AssistantPage() {
       activeToolId="assistant"
       showToolShelf={false}
     >
-      <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr]">
-        <div className="space-y-3.5">
-          <div className="xcr8-panel p-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="xcr8-eyebrow flex items-center gap-2">
-                <Bot size={11} />
-                Cr8or AI settings
+      <div className="space-y-4">
+        <section className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                Workspace v3
               </p>
-              <button
-                type="button"
-                onClick={startNewChat}
-                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
-              >
-                <MessageSquarePlus size={13} />
-                New chat
-              </button>
+              <h2 className="xcr8-title-lg text-white light:text-slate-900">
+                Cr8or AI Command Deck
+              </h2>
             </div>
-            <div className="grid gap-3 sm:grid-cols-1">
+            <div className="flex items-center gap-2">
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="xcr8-input"
+                className="xcr8-input !w-auto min-w-[170px] py-2 text-xs"
               >
                 {languageOptions.map((item) => (
                   <option key={item} value={item}>
@@ -480,16 +482,106 @@ export default function AssistantPage() {
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-slate-500 light:text-slate-600">
-                Tone and vibe adapt automatically based on your profile, message, and app context.
-              </p>
+              <button
+                type="button"
+                onClick={startNewChat}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+              >
+                <MessageSquarePlus size={13} />
+                New chat
+              </button>
             </div>
           </div>
+          <p className="xcr8-subtle mt-2 text-xs">
+            Tone and reply style adapt from your profile, conversation context, and selected
+            language.
+          </p>
+        </section>
 
-          <div className="xcr8-panel rounded-2xl p-4">
+        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr_0.7fr]">
+          <aside className="xcr8-panel rounded-2xl p-4 xl:max-h-[72dvh] xl:overflow-y-auto">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="xcr8-eyebrow flex items-center gap-2">
+                <Sparkles size={11} />
+                Saved chats
+              </p>
+              <span className="text-[11px] text-slate-500">{chatSessions.length}</span>
+            </div>
+            <div className="space-y-2">
+              {chatSessions.length > 0 ? (
+                chatSessions.map((session) => {
+                  const active = session.chat_id === activeChatId;
+
+                  return (
+                    <div
+                      key={session.chat_id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setActiveChatId(session.chat_id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveChatId(session.chat_id);
+                        }
+                      }}
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                        active
+                          ? "border-cyan-300/35 bg-cyan-500/10 light:border-cyan-300 light:bg-cyan-50"
+                          : "border-white/10 bg-white/5 hover:bg-white/10 light:border-slate-200 light:bg-white/70"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white light:text-slate-900">
+                            {session.title}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-xs text-slate-400 light:text-slate-600">
+                            {session.preview}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="text-[11px] text-slate-500 light:text-slate-500">
+                            {new Date(session.updated_at).toLocaleDateString()}
+                          </span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void renameChat(session);
+                              }}
+                              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300 transition hover:bg-white/10 light:text-slate-700"
+                            >
+                              Rename
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void removeChat(session);
+                              }}
+                              className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 transition hover:bg-rose-500/15 light:text-rose-600"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-500 light:border-slate-200 light:bg-white/70 light:text-slate-600">
+                  Your conversations will appear here once you start chatting.
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <section className="xcr8-panel rounded-2xl border-2 border-indigo-300/30 p-4">
             <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
-              <Sparkles size={16} className="text-cyan-300" />
-              Cr8or AI chat
+              <Bot size={16} className="text-cyan-300" />
+              Conversation workspace
             </h2>
 
             <div className="mb-3 flex flex-wrap gap-2">
@@ -508,7 +600,7 @@ export default function AssistantPage() {
 
             <div
               ref={messageListRef}
-              className="mb-3 h-[52dvh] min-h-[300px] max-h-[560px] space-y-3 overflow-y-auto rounded-2xl bg-black/20 p-3 md:h-[420px] light:bg-slate-50"
+              className="mb-3 h-[50dvh] min-h-[320px] max-h-[580px] space-y-3 overflow-y-auto rounded-2xl bg-black/20 p-3 md:h-[450px] light:bg-slate-50"
             >
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
@@ -555,7 +647,9 @@ export default function AssistantPage() {
                 </button>
               </div>
               <p className="px-1 pt-2 text-[11px] text-slate-500 light:text-slate-600">
-                {isMobileInputMode ? "On mobile: tap send to avoid accidental early submits." : "Press Enter to send, Shift+Enter for a new line."}
+                {isMobileInputMode
+                  ? "On mobile: tap send to avoid accidental early submits."
+                  : "Press Enter to send, Shift+Enter for a new line."}
               </p>
             </form>
 
@@ -567,108 +661,30 @@ export default function AssistantPage() {
                 {error}
               </p>
             ) : null}
-          </div>
-        </div>
+          </section>
 
-        <div className="space-y-3.5">
-          <article className="xcr8-panel rounded-2xl p-4">
-            <div className="xcr8-soft-chip mb-3 inline-flex items-center gap-2 px-2.5 py-1 text-[11px] font-medium">
-              <Sparkles size={11} />
-              Saved chats
+          <aside className="space-y-3.5">
+            <article className="xcr8-panel rounded-2xl p-4">
+              <p className="xcr8-eyebrow mb-2">Quick prompts</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestedActions.map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    onClick={() => setPrompt(action)}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:text-slate-700"
+                  >
+                    {action}
+                  </button>
+                ))}
+              </div>
+            </article>
+
+            <div className="xcr8-panel rounded-2xl p-4 text-sm xcr8-subtle">
+              Use separate chats for strategy, planning, and product help so each thread keeps tight
+              context.
             </div>
-            <div className="space-y-2">
-              {chatSessions.length > 0 ? (
-                chatSessions.map((session) => {
-                  const active = session.chat_id === activeChatId;
-
-                  return (
-                    <div
-                      key={session.chat_id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setActiveChatId(session.chat_id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setActiveChatId(session.chat_id);
-                        }
-                      }}
-                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
-                        active
-                          ? "border-cyan-300/35 bg-cyan-500/10 light:border-cyan-300 light:bg-cyan-50"
-                          : "border-white/10 bg-white/5 hover:bg-white/10 light:border-slate-200 light:bg-white/70"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white light:text-slate-900">
-                            {session.title}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
-                            {session.preview}
-                          </p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1.5">
-                          <span className="text-[11px] text-slate-500 light:text-slate-500">
-                            {new Date(session.updated_at).toLocaleDateString()}
-                          </span>
-                          <div className="flex gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void renameChat(session);
-                              }}
-                              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300 transition hover:bg-white/10 light:text-slate-700"
-                            >
-                              Rename
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void removeChat(session);
-                              }}
-                              className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 transition hover:bg-rose-500/15 light:text-rose-600"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-500 light:border-slate-200 light:bg-white/70 light:text-slate-600">
-                  Your conversations will appear here once you start chatting.
-                </div>
-              )}
-            </div>
-          </article>
-
-          <article className="xcr8-panel rounded-2xl p-4">
-            <p className="xcr8-eyebrow mb-2">
-              Quick prompts
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {suggestedActions.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => setPrompt(action)}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:text-slate-700"
-                >
-                  {action}
-                </button>
-              ))}
-            </div>
-          </article>
-
-          <div className="xcr8-panel rounded-2xl p-4 text-sm xcr8-subtle">
-            Use Cr8or AI to run separate conversations for strategy, content planning, and product
-            help without mixing contexts.
-          </div>
+          </aside>
         </div>
       </div>
     </StudioShell>

@@ -112,7 +112,9 @@ export default function SignupPage() {
       });
       router.push("/onboarding");
     } catch (err) {
-      setError(getApiErrorMessage(err, "Invalid or expired code. Request a new code and try again."));
+      setError(
+        getApiErrorMessage(err, "Invalid or expired code. Request a new code and try again."),
+      );
     } finally {
       setLoading(false);
     }
@@ -150,7 +152,9 @@ export default function SignupPage() {
       });
       router.push("/onboarding");
     } catch (err) {
-      setError(getApiErrorMessage(err, "Could not verify with password. Please check your password."));
+      setError(
+        getApiErrorMessage(err, "Could not verify with password. Please check your password."),
+      );
     } finally {
       setLoading(false);
     }
@@ -162,46 +166,16 @@ export default function SignupPage() {
       <div className="lux-orb-b" />
       <div className="lux-orb-c" />
 
-      <div className="relative grid w-full max-w-5xl gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
-        <div className="hidden lg:block">
-          <div className="xcr8-panel cyber-grid rounded-[32px] p-8">
-            <p className="xcr8-eyebrow mb-3">Creator onboarding</p>
-            <h2 className="xcr8-title-xl text-white light:text-slate-900">
-              Start with a sharp profile and a workspace that feels premium.
-            </h2>
-            <p className="xcr8-subtle mt-4 max-w-lg text-sm">
-              Set up your identity, connect your channels, and let XCR8 adapt your content voice
-              from the first session.
-            </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {[
-                "Identity tuned for creators",
-                "AI memory that learns your tone",
-                "Cross-platform publishing ready",
-                "Built for mobile-first workflows",
-              ].map((item) => (
-                <div key={item} className="surface-soft rounded-2xl p-3 text-sm text-slate-200 light:text-slate-700">
-                  {item}
-                </div>
-              ))}
+      <div className="relative grid w-full max-w-6xl gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-start">
+        <section className="xcr8-panel rounded-[30px] border-2 border-cyan-300/30 p-6 sm:p-7">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <Link href="/" className="inline-flex items-center gap-2.5">
+              <Logo size="md" className="!w-[230px] max-w-full" />
+            </Link>
+            <div className="xcr8-soft-chip inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium">
+              <Sparkles size={11} />
+              {codeSent ? "Step 2 of 2" : "Step 1 of 2"}
             </div>
-          </div>
-        </div>
-
-        <div className="relative w-full max-w-[440px] justify-self-center">
-        {/* Brand header */}
-
-        <div className="relative mb-8 flex justify-center">
-          <Link href="/" className="inline-flex items-center gap-2.5">
-            <Logo size="md" className="!w-[260px] max-w-full -mt-8 md:-mt-10" />
-          </Link>
-        </div>
-
-        <div className="xcr8-panel rounded-[28px] p-7 backdrop-blur-xl">
-          {/* Badge */}
-          <div className="xcr8-soft-chip mb-5 inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium">
-            <Sparkles size={11} />
-            Join thousands of creators
           </div>
 
           <p className="xcr8-eyebrow mb-2">Create profile</p>
@@ -218,83 +192,83 @@ export default function SignupPage() {
             {!codeSent ? (
               <>
                 <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
-                Full name
-              </label>
-              <input
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Your full name"
-                className="xcr8-input"
-                autoComplete="name"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
-                Username
-              </label>
-              <input
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="creator.handle"
-                className="xcr8-input"
-                autoComplete="username"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
-                Email address
-              </label>
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="xcr8-input"
-                autoComplete="email"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
-                Password
-              </label>
-              <input
-                required
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 chars with a number"
-                className="xcr8-input"
-                autoComplete="new-password"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
-                Confirm password
-              </label>
-              <input
-                required
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter password"
-                className="xcr8-input"
-                autoComplete="new-password"
-              />
-            </div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                    Full name
+                  </label>
+                  <input
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Your full name"
+                    className="xcr8-input"
+                    autoComplete="name"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                    Username
+                  </label>
+                  <input
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="creator.handle"
+                    className="xcr8-input"
+                    autoComplete="username"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                    Email address
+                  </label>
+                  <input
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="xcr8-input"
+                    autoComplete="email"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                    Password
+                  </label>
+                  <input
+                    required
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 8 chars with a number"
+                    className="xcr8-input"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-400 light:text-slate-500">
+                    Confirm password
+                  </label>
+                  <input
+                    required
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    className="xcr8-input"
+                    autoComplete="new-password"
+                  />
+                </div>
 
-            <label className="flex items-start gap-2 text-xs text-slate-500 light:text-slate-400">
-              <input
-                type="checkbox"
-                checked={agreeTerms}
-                onChange={(e) => setAgreeTerms(e.target.checked)}
-                className="mt-0.5"
-              />
-              I agree to the Terms of Service and Privacy Policy.
-            </label>
+                <label className="flex items-start gap-2 text-xs text-slate-500 light:text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  I agree to the Terms of Service and Privacy Policy.
+                </label>
               </>
             ) : (
               <div>
@@ -321,7 +295,11 @@ export default function SignupPage() {
               className="cta-btn inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold disabled:opacity-60"
             >
               {loading ? (
-                codeSent ? "Verifying code..." : "Sending code..."
+                codeSent ? (
+                  "Verifying code..."
+                ) : (
+                  "Sending code..."
+                )
               ) : (
                 <>
                   {codeSent ? "Verify code" : "Send email code"} <ArrowRight size={16} />
@@ -387,8 +365,34 @@ export default function SignupPage() {
               Sign in
             </Link>
           </p>
-        </div>
-        </div>
+        </section>
+
+        <aside className="xcr8-panel cyber-grid rounded-[30px] p-6 sm:p-7 lg:sticky lg:top-6">
+          <p className="xcr8-eyebrow mb-3">Creator onboarding</p>
+          <h2 className="xcr8-title-xl text-white light:text-slate-900">
+            Build your creator command center from day one.
+          </h2>
+          <p className="xcr8-subtle mt-4 text-sm">
+            XCR8 learns your channels, voice, goals, and audience so every assistant reply and
+            content workflow feels aligned from the first session.
+          </p>
+
+          <div className="mt-5 space-y-2.5">
+            {[
+              { title: "Identity", detail: "Creator profile tuned for your workspace" },
+              { title: "Voice memory", detail: "Assistant responses adapt to your style" },
+              { title: "Distribution", detail: "Multi-platform planning from one command flow" },
+              { title: "Mobile-first", detail: "Built for quick capture and publishing loops" },
+            ].map((item) => (
+              <div key={item.title} className="surface-soft rounded-2xl px-3 py-2.5">
+                <p className="text-sm font-semibold text-white light:text-slate-900">
+                  {item.title}
+                </p>
+                <p className="mt-1 text-xs text-slate-400 light:text-slate-600">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
     </main>
   );
