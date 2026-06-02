@@ -30,6 +30,18 @@ const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_s
 const MAX_RENDERED_MESSAGES = 240;
 const MAX_SENT_MESSAGES = 40;
 
+function activeChatStorageKey(userId: number) {
+  return `xcr8-assistant-active-chat:${userId}`;
+}
+
+function draftStorageKey(userId: number, chatId: string) {
+  return `xcr8-assistant-draft:${userId}:${chatId}`;
+}
+
+function messagesStorageKey(userId: number, chatId: string) {
+  return `xcr8-assistant-messages:${userId}:${chatId}`;
+}
+
 function buildChatTitle(value: string) {
   return value.trim().slice(0, 56) || "New chat";
 }
@@ -71,6 +83,35 @@ export default function AssistantPage() {
   const [error, setError] = useState<string | null>(null);
   const [suggestedActions, setSuggestedActions] = useState<string[]>(starterPrompts);
   const lastPromptParamRef = useRef<string | null>(null);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
+  const [isMobileInputMode, setIsMobileInputMode] = useState(false);
+  const [isHistoryReady, setIsHistoryReady] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 1024px), (pointer: coarse)");
+    const updateMode = () => setIsMobileInputMode(mediaQuery.matches);
+    updateMode();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateMode);
+      return () => mediaQuery.removeEventListener("change", updateMode);
+    }
+
+    mediaQuery.addListener(updateMode);
+    return () => mediaQuery.removeListener(updateMode);
+  }, []);
+
+  useEffect(() => {
+    const list = messageListRef.current;
+    if (!list) {
+      return;
+    }
+    list.scrollTop = list.scrollHeight;
+  }, [messages, loading]);
 
   useEffect(() => {
     const promptParam = new URLSearchParams(window.location.search).get("prompt")?.trim() ?? "";
@@ -109,7 +150,7 @@ export default function AssistantPage() {
         }
 
         setChatSessions(sessions);
-        const storageKey = `xcr8-assistant-active-chat:${userId}`;
+        const storageKey = activeChatStorageKey(userId);
         const storedChatId = localStorage.getItem(storageKey);
         const nextChatId =
           storedChatId && sessions.some((session) => session.chat_id === storedChatId)
@@ -137,7 +178,7 @@ export default function AssistantPage() {
       return;
     }
 
-    localStorage.setItem(`xcr8-assistant-active-chat:${userId}`, activeChatId);
+    localStorage.setItem(activeChatStorageKey(userId), activeChatId);
   }, [activeChatId, userId]);
 
   useEffect(() => {
@@ -145,9 +186,57 @@ export default function AssistantPage() {
       return;
     }
 
+    const draft = localStorage.getItem(draftStorageKey(userId, activeChatId));
+    if (typeof draft === "string") {
+      setPrompt(draft);
+    }
+
+    const cachedMessagesRaw = localStorage.getItem(messagesStorageKey(userId, activeChatId));
+    if (cachedMessagesRaw) {
+      try {
+        const parsed = JSON.parse(cachedMessagesRaw) as unknown;
+        if (Array.isArray(parsed)) {
+          const restored = parsed.filter(isChatItem).slice(-MAX_RENDERED_MESSAGES);
+          if (restored.length > 0) {
+            setMessages(restored);
+          }
+        }
+      } catch {
+        // Ignore invalid cache and rely on server history.
+      }
+    }
+  }, [activeChatId, userId]);
+
+  useEffect(() => {
+    if (!userId || !activeChatId) {
+      return;
+    }
+
+    localStorage.setItem(draftStorageKey(userId, activeChatId), prompt);
+  }, [activeChatId, prompt, userId]);
+
+  useEffect(() => {
+    if (!userId || !activeChatId) {
+      return;
+    }
+
+    localStorage.setItem(
+      messagesStorageKey(userId, activeChatId),
+      JSON.stringify(messages.slice(-MAX_RENDERED_MESSAGES)),
+    );
+  }, [activeChatId, messages, userId]);
+
+  useEffect(() => {
+    if (!userId || !activeChatId) {
+      return;
+    }
+
+    setIsHistoryReady(false);
+
     const hasServerChat = chatSessions.some((session) => session.chat_id === activeChatId);
     if (!hasServerChat) {
       setMessages([welcomeMessage]);
+      setIsHistoryReady(true);
       return;
     }
 
@@ -162,9 +251,11 @@ export default function AssistantPage() {
 
         const restored = history.messages.filter(isChatItem).slice(-MAX_RENDERED_MESSAGES);
         setMessages(restored.length > 0 ? restored : [welcomeMessage]);
+        setIsHistoryReady(true);
       } catch {
         if (!cancelled) {
           setMessages([welcomeMessage]);
+          setIsHistoryReady(true);
         }
       }
     };
@@ -192,6 +283,7 @@ export default function AssistantPage() {
         setMessages([welcomeMessage]);
         setError(null);
         setPrompt("");
+        localStorage.removeItem(draftStorageKey(userId, summary.chat_id));
         setSuggestedActions(starterPrompts);
         setChatSessions((current) => [
           summary,
@@ -259,6 +351,15 @@ export default function AssistantPage() {
   };
 
   const submitPrompt = async (value: string) => {
+    if (loading) {
+      return;
+    }
+
+    if (!isHistoryReady) {
+      setError("Please wait a moment while your chat history loads.");
+      return;
+    }
+
     const nextPrompt = value.trim();
     if (!nextPrompt) {
       setError("Type a question so I can respond naturally.");
@@ -302,7 +403,7 @@ export default function AssistantPage() {
       const resolvedChatId = data.chat_id ?? currentChatId;
       const assistantMessage: ChatItem = {
         role: "assistant",
-        content: `${data.assistant_message} ${data.follow_up_question}`.trim(),
+        content: [data.assistant_message, data.follow_up_question].filter(Boolean).join("\n\n").trim(),
       };
       setMessages([...nextMessages, assistantMessage].slice(-MAX_RENDERED_MESSAGES));
       setSuggestedActions(
@@ -324,6 +425,7 @@ export default function AssistantPage() {
         return [updatedSession, ...current.filter((session) => session.chat_id !== resolvedChatId)];
       });
       setPrompt("");
+      localStorage.removeItem(draftStorageKey(userId, resolvedChatId));
     } catch (err) {
       const errorMessage = getApiErrorMessage(
         err,
@@ -396,7 +498,7 @@ export default function AssistantPage() {
                   key={item}
                   type="button"
                   onClick={() => void submitPrompt(item)}
-                  disabled={loading}
+                  disabled={loading || !isHistoryReady}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-left text-xs text-slate-300 transition hover:bg-white/10 disabled:opacity-60"
                 >
                   {item}
@@ -404,11 +506,14 @@ export default function AssistantPage() {
               ))}
             </div>
 
-            <div className="mb-3 h-[420px] space-y-3 overflow-y-auto rounded-2xl bg-black/20 p-3 light:bg-slate-50">
+            <div
+              ref={messageListRef}
+              className="mb-3 h-[52dvh] min-h-[300px] max-h-[560px] space-y-3 overflow-y-auto rounded-2xl bg-black/20 p-3 md:h-[420px] light:bg-slate-50"
+            >
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
-                    className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm leading-6 ${
+                    className={`max-w-[92%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm leading-6 md:max-w-[88%] ${
                       message.role === "user"
                         ? "ml-auto bg-cyan-500/15 text-cyan-100 light:text-cyan-900"
                         : "mr-auto bg-black/20 text-slate-200 light:bg-white light:text-slate-800"
@@ -432,7 +537,7 @@ export default function AssistantPage() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
+                    if (!isMobileInputMode && e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       void submitPrompt(prompt);
                     }
@@ -442,13 +547,16 @@ export default function AssistantPage() {
                 />
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !isHistoryReady}
                   className="cta-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl disabled:opacity-60"
                   aria-label="Send message"
                 >
                   <SendHorizontal size={15} />
                 </button>
               </div>
+              <p className="px-1 pt-2 text-[11px] text-slate-500 light:text-slate-600">
+                {isMobileInputMode ? "On mobile: tap send to avoid accidental early submits." : "Press Enter to send, Shift+Enter for a new line."}
+              </p>
             </form>
 
             {error ? (
