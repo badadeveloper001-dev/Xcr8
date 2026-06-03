@@ -455,7 +455,7 @@ export default function AssistantPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Cr8or AI chat, simplified for faster thinking and execution."
+      subtitle="Cr8or AI chat."
       activeToolId="assistant"
       showToolShelf={false}
     >
@@ -489,9 +489,6 @@ export default function AssistantPage() {
               </button>
             </div>
           </div>
-          <p className="xcr8-subtle mt-2 text-sm">
-            Keep separate chats for strategy, writing, and execution.
-          </p>
         </section>
 
         <div className="grid gap-4 xl:grid-cols-[0.86fr_1.14fr]">
@@ -528,36 +525,28 @@ export default function AssistantPage() {
                           <p className="truncate text-sm font-semibold text-white light:text-slate-900">
                             {session.title}
                           </p>
-                          <p className="mt-1 line-clamp-2 text-xs text-slate-400 light:text-slate-600">
-                            {session.preview}
-                          </p>
                         </div>
-                        <div className="flex flex-col items-end gap-1.5">
-                          <span className="text-[11px] text-slate-500 light:text-slate-500">
-                            {new Date(session.updated_at).toLocaleDateString()}
-                          </span>
-                          <div className="flex gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void renameChat(session);
-                              }}
-                              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300 transition hover:bg-white/10 light:text-slate-700"
-                            >
-                              Rename
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void removeChat(session);
-                              }}
-                              className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 transition hover:bg-rose-500/15 light:text-rose-600"
-                            >
-                              Delete
-                            </button>
-                          </div>
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void renameChat(session);
+                            }}
+                            className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300 transition hover:bg-white/10 light:text-slate-700"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void removeChat(session);
+                            }}
+                            className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 transition hover:bg-rose-500/15 light:text-rose-600"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -575,22 +564,8 @@ export default function AssistantPage() {
             <div className="ai-stage p-4">
             <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
               <Bot size={16} className="text-cyan-300" />
-              Active conversation
+              Conversation
             </h2>
-
-            <div className="mb-3 flex flex-wrap gap-2">
-              {starterPrompts.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => void submitPrompt(item)}
-                  disabled={loading || !isHistoryReady}
-                  className="ai-prompt-btn text-left disabled:opacity-60"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
 
             <div
               ref={messageListRef}
@@ -640,11 +615,6 @@ export default function AssistantPage() {
                   <SendHorizontal size={15} />
                 </button>
               </div>
-              <p className="px-1 pt-2 text-[11px] text-slate-500 light:text-slate-600">
-                {isMobileInputMode
-                  ? "On mobile: tap send to avoid accidental early submits."
-                  : "Press Enter to send, Shift+Enter for a new line."}
-              </p>
             </form>
 
             {error ? (
@@ -657,21 +627,18 @@ export default function AssistantPage() {
             ) : null}
             </div>
 
-            <article className="ai-stage p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Quick prompts</p>
-              <div className="flex flex-wrap gap-2">
-                {suggestedActions.map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    onClick={() => setPrompt(action)}
-                      className="ai-prompt-btn"
-                  >
-                    {action}
-                  </button>
-                ))}
-              </div>
-            </article>
+            <div className="flex flex-wrap gap-2">
+              {suggestedActions.slice(0, 3).map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => setPrompt(action)}
+                  className="ai-prompt-btn"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
           </section>
         </div>
       </div>

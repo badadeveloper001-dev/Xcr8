@@ -11,12 +11,6 @@ type ChatItem = {
   content: string;
 };
 
-const starterPrompts = [
-  "Turn my idea into a LinkedIn post about how I plan my content week.",
-  "I want a short, punchy Instagram post about staying consistent without burnout.",
-  "Help me write a Thread about my creator workflow in a conversational tone.",
-];
-
 export default function ComposerPage() {
   const userId = useCreatorStore((state) => state.userId);
   const [messages, setMessages] = useState<ChatItem[]>([
@@ -74,7 +68,7 @@ export default function ComposerPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Composer chat with clear controls and a focused output panel."
+      subtitle="Composer chat."
       activeToolId="composer"
       showToolShelf={false}
     >
@@ -133,20 +127,6 @@ export default function ComposerPage() {
               Composer chat
             </h2>
 
-            <div className="mb-3 flex flex-wrap gap-2">
-              {starterPrompts.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => void submitPrompt(item)}
-                  disabled={loading}
-                  className="ai-prompt-btn text-left disabled:opacity-60"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-
             <div className="ai-chat-log mb-3 h-[420px] space-y-3 overflow-y-auto p-3">
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
@@ -175,7 +155,7 @@ export default function ComposerPage() {
                     }
                   }}
                   className="xcr8-input h-14 min-h-14 resize-none border-none bg-transparent shadow-none"
-                  placeholder="Ask for an idea, angle, hook, or full content direction..."
+                  placeholder="Describe the post you want to create..."
                 />
                 <button
                   type="button"
@@ -205,7 +185,7 @@ export default function ComposerPage() {
             <article className="ai-stage p-4">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                 <Wand2 size={11} />
-                Content plan
+                Draft
               </div>
               <h3 className="text-lg font-semibold text-white light:text-slate-900">
                 {result.content_plan.title}
@@ -219,36 +199,14 @@ export default function ComposerPage() {
                   {result.content_plan.hook}
                 </p>
                 <p className="text-sm text-slate-200 light:text-slate-800">
-                  <span className="font-semibold text-violet-300 light:text-violet-700">
-                    Intro:
-                  </span>{" "}
-                  {result.content_plan.intro}
-                </p>
-                <div className="space-y-1 text-sm text-slate-200 light:text-slate-800">
-                  <p className="font-semibold text-violet-300 light:text-violet-700">Body:</p>
-                  {result.content_plan.body.map((line, index) => (
-                    <p key={`${line}-${index}`}>{line}</p>
-                  ))}
-                </div>
-                <p className="text-sm text-slate-200 light:text-slate-800">
                   <span className="font-semibold text-violet-300 light:text-violet-700">CTA:</span>{" "}
                   {result.content_plan.cta}
                 </p>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {result.content_plan.hashtags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-400"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
             </article>
           ) : (
             <div className="ai-stage p-4 text-sm text-slate-500 light:text-slate-600">
-              Your content plan will appear here after you send a prompt.
+              Your draft appears here.
             </div>
           )}
         </div>

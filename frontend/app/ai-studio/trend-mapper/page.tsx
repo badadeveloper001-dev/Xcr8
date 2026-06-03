@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowRight, TrendingUp } from "lucide-react";
@@ -77,14 +77,13 @@ export default function TrendMapperPage() {
   };
 
   const signalCount = trendResult?.signals.length ?? 0;
-  const sourceStats = useMemo(() => trendResult?.source_stats ?? {}, [trendResult]);
 
   if (!hasHydrated || !userId) return null;
 
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Turn trend signals into clear content actions."
+      subtitle="Trend Mapper."
       activeToolId="trend-mapper"
       showToolShelf={false}
     >
@@ -92,12 +91,8 @@ export default function TrendMapperPage() {
         <section className="ai-stage p-5">
           <h2 className="flex items-center gap-2 text-xl font-semibold text-white light:text-slate-900">
             <TrendingUp size={18} className="text-cyan-300" />
-            Trend intelligence for {displayName}
+            {displayName}
           </h2>
-          <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
-            Pick a topic, time window, and platform. Trend Mapper will return high-confidence
-            trend signals with a usable hook and action plan.
-          </p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <input
@@ -167,53 +162,16 @@ export default function TrendMapperPage() {
           ) : null}
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <article className="ai-stage p-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Signals</p>
-            <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">{signalCount}</p>
-          </article>
-          <article className="ai-stage p-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Snapshots</p>
-            <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
-              {sourceStats.snapshots ?? 0}
-            </p>
-          </article>
-          <article className="ai-stage p-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Posts scanned</p>
-            <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
-              {sourceStats.posts ?? 0}
-            </p>
-          </article>
-          <article className="ai-stage p-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">AI Generations</p>
-            <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
-              {sourceStats.ai_generations ?? 0}
-            </p>
-          </article>
-        </section>
-
         {trendResult ? (
           <section className="ai-stage p-4">
-            <p className="text-sm text-slate-400 light:text-slate-600">{trendResult.summary}</p>
+            <p className="text-sm text-slate-400 light:text-slate-600">{signalCount} signals found</p>
             <div className="mt-3 space-y-3">
               {trendResult.signals.map((signal, index) => (
                 <article key={`${signal.title}-${index}`} className="ai-chat-log rounded-2xl p-4">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-white light:text-slate-900">{signal.title}</p>
-                    <span className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-300 light:border-cyan-300 light:bg-cyan-100 light:text-cyan-700">
-                      {(signal.confidence_score * 100).toFixed(0)}% confidence
-                    </span>
                   </div>
-                  <p className="text-sm text-slate-300 light:text-slate-700">{signal.why_now}</p>
-                  <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
-                    <span className="font-semibold text-slate-200 light:text-slate-800">Angle:</span> {signal.angle}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400 light:text-slate-600">
-                    <span className="font-semibold text-slate-200 light:text-slate-800">Hook:</span> {signal.hook}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400 light:text-slate-600">
-                    <span className="font-semibold text-slate-200 light:text-slate-800">Action:</span> {signal.action}
-                  </p>
+                  <p className="text-sm text-slate-300 light:text-slate-700">{signal.action}</p>
                   <div className="mt-3">
                     <button
                       type="button"
@@ -233,7 +191,7 @@ export default function TrendMapperPage() {
           </section>
         ) : (
           <section className="ai-stage p-5 text-sm text-slate-500 light:text-slate-600">
-            Run Trend Mapper to generate live trend-to-angle recommendations.
+            Run Trend Mapper to see results.
           </section>
         )}
       </div>

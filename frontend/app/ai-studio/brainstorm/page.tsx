@@ -6,12 +6,6 @@ import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { generateAiBrainstorm, getApiErrorMessage, type AiBrainstormResponse } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
-const brainstormPrompts = [
-  "Weekly content system for creators",
-  "How local brands can make better short-form content",
-  "A creator-friendly content series around consistency without burnout",
-];
-
 export default function BrainstormPage() {
   const userId = useCreatorStore((state) => state.userId);
   const [platform, setPlatform] = useState("instagram");
@@ -57,7 +51,7 @@ export default function BrainstormPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Brainstorm ideas quickly, then choose the strongest direction."
+      subtitle="Brainstorm ideas."
       activeToolId="brainstorm"
       showToolShelf={false}
     >
@@ -111,13 +105,11 @@ export default function BrainstormPage() {
                 placeholder="Goal"
               />
               <select value={tone} onChange={(e) => setTone(e.target.value)} className="xcr8-input">
-                {["conversational", "bold", "educational", "funny", "luxury", "motivational"].map(
-                  (item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ),
-                )}
+                {["conversational", "bold", "educational", "funny", "luxury", "motivational"].map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -147,23 +139,6 @@ export default function BrainstormPage() {
             ) : null}
           </form>
 
-            <div className="ai-stage p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Fast topic starters
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {brainstormPrompts.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setTopic(item)}
-                  className="ai-prompt-btn text-left"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="space-y-3.5">
@@ -177,10 +152,10 @@ export default function BrainstormPage() {
                 {result.topic}
               </h3>
               <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
-                Goal: {result.goal} - Platform: {result.platform}
+                {result.platform}
               </p>
               <div className="mt-4 space-y-3">
-                {result.ideas.map((idea, index) => (
+                {result.ideas.slice(0, 3).map((idea, index) => (
                   <div
                     key={`${idea.title}-${index}`}
                     className="ai-chat-log rounded-2xl p-4"
@@ -188,42 +163,19 @@ export default function BrainstormPage() {
                     <h4 className="text-sm font-semibold text-white light:text-slate-900">
                       {idea.title}
                     </h4>
-                    <p className="mt-1 text-sm text-slate-300 light:text-slate-700">{idea.angle}</p>
                     <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
                       <span className="font-semibold text-violet-300 light:text-violet-700">
                         Hook:
                       </span>{" "}
                       {idea.hook}
                     </p>
-                    <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
-                      <span className="font-semibold text-violet-300 light:text-violet-700">
-                        Caption seed:
-                      </span>{" "}
-                      {idea.caption_seed}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
-                      <span className="font-semibold text-violet-300 light:text-violet-700">
-                        CTA:
-                      </span>{" "}
-                      {idea.cta}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {idea.hashtags.map((tag) => (
-                        <span
-                          key={`${idea.title}-${tag}`}
-                          className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-400"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                 ))}
               </div>
             </article>
           ) : (
             <div className="ai-stage p-4 text-sm text-slate-500 light:text-slate-600">
-              Your brainstorm pack will appear here after you generate ideas.
+              Ideas appear here.
             </div>
           )}
         </div>
