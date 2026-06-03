@@ -339,10 +339,10 @@ export default function ComposePage() {
         <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
           Studio Flow
         </p>
-        <h1 className="text-base font-semibold text-white light:text-slate-900 sm:text-lg">
+        <h1 className="text-xs font-semibold text-white light:text-slate-900 sm:text-sm">
           From idea to scheduled post
         </h1>
-        <p className="xcr8-subtle mt-1.5 text-xs sm:text-sm">
+        <p className="xcr8-subtle mt-1 text-[10px] sm:text-[11px]">
           Follow the steps in order. Each section only shows what you need right now.
         </p>
       </motion.section>
