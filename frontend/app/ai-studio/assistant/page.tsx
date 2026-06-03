@@ -664,7 +664,7 @@ export default function AssistantPage() {
               }}
               className="rounded-2xl border border-white/10 bg-white/5 p-2 light:border-slate-300 light:bg-white/80"
             >
-              <div className="flex items-end gap-2">
+              <div className="flex w-full min-w-0 items-end gap-2">
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -674,7 +674,7 @@ export default function AssistantPage() {
                       void submitPrompt(prompt);
                     }
                   }}
-                  className="xcr8-input h-14 min-h-14 resize-none border-none bg-transparent shadow-none"
+                  className="xcr8-input h-14 min-h-14 min-w-0 flex-1 resize-none border-none bg-transparent shadow-none"
                   placeholder="Ask about your app, your content, or the next best move..."
                 />
                 <button
