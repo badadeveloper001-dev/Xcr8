@@ -153,7 +153,7 @@ export default function DashboardPage() {
   if (!hasHydrated || !userId) return null;
 
   return (
-    <MobileShell>
+    <MobileShell hideHeader>
       <div className="space-y-4">
         <motion.section
           {...fadeUp(0)}
