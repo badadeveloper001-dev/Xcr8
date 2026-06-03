@@ -1,5 +1,5 @@
 /**
- * Logo — renders the repository-provided XCR8.svg as-is.
+ * Logo — renders the latest provided XCR8 brand image as-is.
  *
  * The asset already contains the full centered mark, so the component only
  * controls the display width and preserves the SVG aspect ratio.
@@ -24,9 +24,8 @@ export function Logo({ size = "md", className = "" }: { size?: LogoSize; classNa
       aria-label="XCR8"
       role="img"
     >
-      { }
       <img
-        src="/XCR8.svg"
+        src="/5d03bb27-9df6-417f-b28f-5984e329bdc0-removebg-preview.png"
         alt="XCR8"
         style={{ width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
         draggable={false}
