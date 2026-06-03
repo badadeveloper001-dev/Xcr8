@@ -530,8 +530,8 @@ export default function AssistantPage() {
           </div>
         </section>
 
-        <section className="space-y-3.5">
-            <div className="ai-stage p-4">
+        <section className="min-w-0 space-y-3.5">
+          <div className="ai-stage min-w-0 overflow-x-hidden p-4">
             <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
               <Bot size={16} className="text-cyan-300" />
               Conversation
@@ -539,12 +539,12 @@ export default function AssistantPage() {
 
             <div
               ref={messageListRef}
-              className="ai-chat-log mb-3 h-[50dvh] min-h-[320px] max-h-[580px] space-y-3 overflow-y-auto p-3 md:h-[450px]"
+              className="ai-chat-log mb-3 h-[50dvh] min-h-[320px] max-h-[580px] space-y-3 overflow-x-hidden overflow-y-auto p-3 md:h-[450px]"
             >
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
-                    className={`ai-msg max-w-[92%] whitespace-pre-wrap break-words md:max-w-[88%] ${
+                    className={`ai-msg min-w-0 max-w-[92%] whitespace-pre-wrap break-all [overflow-wrap:anywhere] md:max-w-[88%] ${
                       message.role === "user"
                         ? "ai-msg-user ml-auto"
                         : "ai-msg-assistant mr-auto"
