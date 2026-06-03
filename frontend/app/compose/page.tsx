@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { CheckCircle2, ChevronRight, LayoutGrid, Link2, Pencil, Sparkles } from "lucide-react";
+import { CheckCircle2, Link2, Sparkles } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   approveDistribution,
@@ -23,13 +23,6 @@ const platformOptions = [
   { id: "facebook", label: "Facebook", cls: "badge-fb" },
   { id: "youtube_shorts", label: "YouTube Shorts", cls: "badge-yt" },
   { id: "threads", label: "Threads", cls: "badge-th" },
-];
-
-const steps = [
-  { n: 1, icon: <Pencil size={14} />, label: "Write caption" },
-  { n: 2, icon: <LayoutGrid size={14} />, label: "Pick platforms" },
-  { n: 3, icon: <Sparkles size={14} />, label: "AI generates" },
-  { n: 4, icon: <CheckCircle2 size={14} />, label: "Approve & schedule" },
 ];
 
 function getUploadUrl(payload: unknown): string {
@@ -87,11 +80,11 @@ export default function ComposePage() {
   const createDraft = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!caption.trim()) {
-      setError("Please add a master caption before generating adaptations.");
+      setError("Please add a caption before generating.");
       return;
     }
     if (!mediaUrl.trim()) {
-      setError("Add a media URL from upload before generating.");
+      setError("Add media before generating.");
       return;
     }
     if (!selectedPlatforms.length) {
@@ -135,9 +128,9 @@ export default function ComposePage() {
       });
 
       await queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
-      setNotice("Draft saved and adaptations generated. Review variants below and approve when ready.");
+      setNotice("Draft generated. Review below, then approve and queue.");
     } catch (err) {
-      setError(getApiErrorMessage(err, "Could not generate adaptations. Please try again."));
+      setError(getApiErrorMessage(err, "Could not generate this draft."));
     } finally {
       setLoading(false);
     }
@@ -176,7 +169,7 @@ export default function ComposePage() {
         queryClient.invalidateQueries({ queryKey: ["dashboard", userId] }),
         queryClient.invalidateQueries({ queryKey: ["calendar", userId] }),
       ]);
-      setNotice("Approved and queued successfully. Redirecting to calendar...");
+      setNotice("Approved and queued. Redirecting to calendar...");
       router.push("/calendar");
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not approve and queue this post."));
@@ -222,215 +215,141 @@ export default function ComposePage() {
   };
 
   return (
-    <MobileShell title="Create Post" subtitle="One caption, everywhere.">
+    <MobileShell title="Compose" subtitle="Simple 3-step workflow.">
       <motion.section
-        initial={{ opacity: 0, y: 14 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.38 }}
-        className="mb-5"
+        transition={{ duration: 0.35 }}
+        className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
       >
-        <div className="xcr8-panel rounded-[28px] border-2 border-cyan-300/30 p-4 sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="xcr8-eyebrow mb-2">Composer Studio</p>
-              <h1 className="xcr8-title-xl text-white light:text-slate-900">
-                Create once. Publish everywhere.
-              </h1>
-              <p className="xcr8-subtle mt-2 max-w-2xl text-sm">
-                The workspace is now arranged into drafting, guidance, and review zones so the flow feels more like a production desk.
-              </p>
-            </div>
-            <div className="grid min-w-[180px] grid-cols-2 gap-2.5">
-              {[
-                { label: "Platforms", value: `${selectedPlatforms.length}` },
-                { label: "Memory", value: "On" },
-                { label: "AI Variants", value: distributionDraft ? "Ready" : "Pending" },
-                { label: "Queue", value: scheduleAt ? "Set" : "Open" },
-              ].map((item) => (
-                <div key={item.label} className="surface-soft rounded-xl p-3 text-left">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500 light:text-slate-600">
-                    {item.label}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
-                    {item.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+          Cleaner Composer
+        </p>
+        <h1 className="xcr8-title-xl text-white light:text-slate-900">Create in three steps</h1>
+        <p className="xcr8-subtle mt-2 text-sm">
+          Fill details, choose channels, then review AI adaptations. Nothing hidden.
+        </p>
       </motion.section>
 
-      <div className="xcr8-panel neon-ring sticky top-2 z-20 mb-5 flex flex-wrap items-center gap-2 rounded-2xl px-2.5 py-2.5 backdrop-blur-xl">
-        {steps.map((step, index) => (
-          <div key={step.n} className="flex items-center">
-            <div
-              className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition ${
-                step.n <= (distributionDraft ? 4 : 1)
-                  ? "bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/30 light:bg-violet-100 light:text-violet-700"
-                  : "text-slate-500 light:text-slate-600"
-              }`}
-            >
-              {step.icon}
-              <span>{step.label}</span>
-            </div>
-            {index < steps.length - 1 && (
-              <ChevronRight size={13} className="mx-0.5 text-slate-700 light:text-slate-300" />
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.35fr_0.9fr]">
-        <aside className="xcr8-panel rounded-2xl p-4 xl:sticky xl:top-20 xl:self-start">
-          <p className="xcr8-eyebrow mb-2">Draft rail</p>
-          <div className="space-y-3">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Post title
-              </label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="xcr8-input"
-                placeholder="Give this post a title"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                <Link2 size={11} /> Media Upload
-              </label>
-              <input
-                type="file"
-                accept="image/*,video/*"
-                className="xcr8-input"
-                disabled={uploading}
-                onChange={handleFileChange}
-              />
-              <p className="mt-1.5 text-xs text-slate-500">
-                {uploading ? "Uploading..." : mediaUrl ? "Media uploaded!" : "Upload an image or video from your device."}
-              </p>
-            </div>
-            {mediaUrl ? (
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                {mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
-                  <video src={mediaUrl} controls className="max-h-60 w-full" />
-                ) : (
-                  <img src={mediaUrl} alt="upload preview" className="max-h-60 w-full object-cover" />
-                )}
+      <form className="mt-4 space-y-4" onSubmit={(e) => void createDraft(e)}>
+        <section className="xcr8-panel rounded-2xl p-4">
+          <p className="xcr8-eyebrow mb-2">Step 1: Content</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Post title
+                </label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="xcr8-input"
+                  placeholder="Give this post a title"
+                />
               </div>
-            ) : (
-              <div className="surface-soft rounded-2xl px-4 py-5 text-sm text-slate-500">
-                Your upload preview will appear here.
+              <div>
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  <Link2 size={11} /> Upload media
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  className="xcr8-input"
+                  disabled={uploading}
+                  onChange={handleFileChange}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  {uploading
+                    ? "Uploading..."
+                    : mediaUrl
+                      ? "Media uploaded."
+                      : "Add one file to continue."}
+                </p>
               </div>
-            )}
-          </div>
-        </aside>
+            </div>
 
-        <form className="space-y-4" onSubmit={(e) => void createDraft(e)}>
-          <div className="xcr8-panel rounded-2xl p-5">
-            <p className="xcr8-eyebrow mb-2">Main editor</p>
+            <div>
+              {mediaUrl ? (
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                  {mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
+                    <video src={mediaUrl} controls className="max-h-72 w-full" />
+                  ) : (
+                    <img
+                      src={mediaUrl}
+                      alt="upload preview"
+                      className="max-h-72 w-full object-cover"
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="surface-soft grid h-full min-h-[180px] place-items-center rounded-2xl px-4 py-5 text-sm text-slate-500">
+                  Preview appears here
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               Master caption
             </label>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              className="xcr8-input h-44 resize-none"
+              className="xcr8-input h-36 resize-none"
               placeholder="Write one caption. Xcr8 adapts it for each platform."
             />
-            <p className="mt-1.5 text-right text-[11px] text-slate-600">{caption.length} chars</p>
+            <p className="mt-1 text-right text-[11px] text-slate-500">{caption.length} chars</p>
           </div>
+        </section>
 
-          <div className="xcr8-panel rounded-2xl p-5">
-            <p className="xcr8-eyebrow mb-2">Distribution map</p>
-            <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              <LayoutGrid size={11} className="mr-1 inline" /> Platforms
-            </label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
-              {platformOptions.map((platform) => {
-                const active = selectedPlatforms.includes(platform.id);
-                return (
-                  <button
-                    key={platform.id}
-                    type="button"
-                    onClick={() => toggleItem(platform.id, selectedPlatforms, setSelectedPlatforms)}
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                      active
-                        ? "bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/40 light:bg-violet-100 light:text-violet-700 light:ring-violet-300"
-                        : "surface-soft text-slate-400 hover:text-slate-300 light:hover:text-slate-600"
-                    }`}
+        <section className="xcr8-panel rounded-2xl p-4">
+          <p className="xcr8-eyebrow mb-2">Step 2: Channels</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {platformOptions.map((platform) => {
+              const active = selectedPlatforms.includes(platform.id);
+              return (
+                <button
+                  key={platform.id}
+                  type="button"
+                  onClick={() => toggleItem(platform.id, selectedPlatforms, setSelectedPlatforms)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                    active
+                      ? "bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/40 light:bg-violet-100 light:text-violet-700"
+                      : "surface-soft text-slate-400 hover:text-slate-300 light:hover:text-slate-700"
+                  }`}
+                >
+                  <span
+                    className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${platform.cls}`}
                   >
-                    <span
-                      className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${platform.cls}`}
-                    >
-                      {platform.label.slice(0, 2).toUpperCase()}
-                    </span>
-                    {platform.label}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="cta-btn mt-4 w-full rounded-2xl py-3.5 text-[15px] font-semibold disabled:opacity-60"
-            >
-              {loading ? "Generating AI adaptations…" : "✦ Generate AI Adaptations"}
-            </button>
-          </div>
-        </form>
-
-        <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
-          <div className="xcr8-panel scanline rounded-2xl p-4">
-            <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-white light:text-slate-900">
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-500/20 text-violet-400 light:bg-violet-100 light:text-violet-600">
-                <Sparkles size={15} />
-              </span>
-              Workflow guide
-            </h3>
-            <ol className="space-y-2">
-              {steps.map((step) => (
-                <li key={step.n} className="surface-soft flex items-center gap-3 rounded-xl px-3 py-2.5">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-violet-500/20 text-xs font-bold text-violet-400 light:bg-violet-100 light:text-violet-600">
-                    {step.n}
+                    {platform.label.slice(0, 2).toUpperCase()}
                   </span>
-                  <span className="text-sm text-slate-300 light:text-slate-600">{step.label}</span>
-                </li>
-              ))}
-            </ol>
+                  {platform.label}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="xcr8-panel rounded-2xl p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Creator memory active
-            </p>
-            <p className="mt-2 text-sm text-slate-300 light:text-slate-600">
-              Xcr8 learns your tone, emoji usage, and slang to keep every adaptation sounding like <em>you</em>.
-            </p>
-            <div className="mt-3 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-xs text-indigo-300 light:text-indigo-700">
-              Language is auto-detected from your master caption. No manual language selection needed.
-            </div>
-            <div className="mt-3 rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-xs text-violet-300 light:text-violet-700">
-              Pro tip: Start with a strong hook in your master caption. AI keeps that energy per platform.
-            </div>
-          </div>
-        </aside>
-      </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="cta-btn mt-4 w-full rounded-xl py-3 text-sm font-semibold disabled:opacity-60"
+          >
+            {loading ? "Generating adaptations..." : "Generate AI Adaptations"}
+          </button>
+        </section>
+      </form>
 
       {distributionDraft ? (
         <motion.section
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="xcr8-panel mt-5 rounded-2xl p-5"
+          transition={{ duration: 0.35 }}
+          className="xcr8-panel mt-4 rounded-2xl p-4"
         >
-          <p className="xcr8-eyebrow mb-2">Approval desk</p>
-          <h2 className="text-holo mb-4 flex items-center gap-2 text-lg font-bold">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-600">
-              <CheckCircle2 size={16} />
-            </span>
-            AI Adaptations — Ready to review
+          <p className="xcr8-eyebrow mb-2">Step 3: Review and Queue</p>
+          <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
+            <CheckCircle2 size={18} className="text-emerald-400" /> AI Adaptations
           </h2>
 
           <div className="space-y-3">
@@ -442,19 +361,21 @@ export default function ComposePage() {
                 {variants.map((variant) => (
                   <article
                     key={`${variant.platform}-${variant.language}`}
-                    className="mb-2.5 rounded-xl border border-white/8 bg-black/20 p-3 light:border-slate-100 light:bg-white"
+                    className="mb-2 rounded-xl border border-white/8 bg-black/20 p-3 light:border-slate-100 light:bg-white"
                   >
                     <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                       {variant.language.replace(/_/g, " ")}
                     </p>
                     {variant.hook ? (
-                      <p className="mb-1.5 text-sm font-semibold text-white light:text-slate-900">
-                        🪝 {variant.hook}
+                      <p className="mb-1 text-sm font-semibold text-white light:text-slate-900">
+                        {variant.hook}
                       </p>
                     ) : null}
-                    <p className="text-sm text-slate-300 light:text-slate-600">{variant.adaptedCaption}</p>
+                    <p className="text-sm text-slate-300 light:text-slate-600">
+                      {variant.adaptedCaption}
+                    </p>
                     {variant.hashtags.length > 0 ? (
-                      <p className="mt-1.5 text-xs text-violet-400 light:text-violet-600">
+                      <p className="mt-1 text-xs text-violet-400 light:text-violet-600">
                         {variant.hashtags.join(" ")}
                       </p>
                     ) : null}
@@ -464,10 +385,10 @@ export default function ComposePage() {
             ))}
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Schedule for (optional)
+                Schedule time (optional)
               </label>
               <input
                 type="datetime-local"
@@ -480,9 +401,9 @@ export default function ComposePage() {
               type="button"
               onClick={() => void approveAndSchedule()}
               disabled={approving}
-              className="w-full rounded-2xl bg-emerald-500 py-3.5 text-[15px] font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
+              className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
             >
-              {approving ? "Approving and queueing..." : "✓ Approve and Queue Publishing"}
+              {approving ? "Approving..." : "Approve and Queue"}
             </button>
           </div>
         </motion.section>
@@ -493,11 +414,19 @@ export default function ComposePage() {
           {notice}
         </p>
       ) : null}
+
       {error ? (
-        <p role="status" className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 light:text-rose-700">
+        <p
+          role="status"
+          className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 light:text-rose-700"
+        >
           {error}
         </p>
       ) : null}
+
+      <div className="xcr8-panel mt-4 rounded-2xl p-4 text-sm xcr8-subtle">
+        Replies and adaptations automatically align to the language and style from your caption.
+      </div>
     </MobileShell>
   );
 }
