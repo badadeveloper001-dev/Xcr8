@@ -508,13 +508,13 @@ export default function ImageGeneratorPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Image Generator now creates fresh ultrarealistic images from your prompt."
+      subtitle="Image Generator now has a cleaner creative flow with clearer controls and output review."
       activeToolId="image-generator"
       showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
         <form onSubmit={(e) => void handleGenerate(e)} className="space-y-3.5">
-          <div className="surface-soft rounded-2xl p-4">
+          <div className="ai-stage p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Quick presets
@@ -540,7 +540,7 @@ export default function ImageGeneratorPage() {
             </div>
           </div>
 
-          <div className="surface-soft rounded-2xl p-4">
+          <div className="ai-stage p-4">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               What should the image show?
             </label>
@@ -665,7 +665,7 @@ export default function ImageGeneratorPage() {
           </p>
 
           {promptPreview ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400 light:border-slate-200 light:bg-white light:text-slate-600">
+            <div className="ai-chat-log px-3 py-2 text-xs text-slate-400 light:text-slate-600">
               Prompt brief: {promptPreview}
             </div>
           ) : null}
@@ -674,7 +674,7 @@ export default function ImageGeneratorPage() {
         <div className="space-y-3.5">
           {images.length ? (
             images.map((image, index) => (
-              <article key={image.id} className="surface-card rounded-2xl p-4">
+              <article key={image.id} className="ai-stage p-4">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                   <ImagePlus size={11} />
                   {image.title}
@@ -712,7 +712,7 @@ export default function ImageGeneratorPage() {
               </article>
             ))
           ) : (
-            <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
+            <div className="ai-stage p-4 text-sm text-slate-500 light:text-slate-600">
               Generated images will appear here with one-click download.
             </div>
           )}

@@ -57,14 +57,14 @@ export default function BrainstormPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Brainstorm now has a dedicated page for idea-batch generation."
+      subtitle="Brainstorm is tuned for cleaner idea generation and easier shortlist review."
       activeToolId="brainstorm"
       showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-3.5">
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3.5">
-            <div className="surface-soft rounded-2xl p-4">
+            <div className="ai-stage p-4">
               <label className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <Lightbulb size={11} /> Topic to expand
               </label>
@@ -147,7 +147,7 @@ export default function BrainstormPage() {
             ) : null}
           </form>
 
-          <div className="surface-soft rounded-2xl p-4">
+            <div className="ai-stage p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               Fast topic starters
             </p>
@@ -157,7 +157,7 @@ export default function BrainstormPage() {
                   key={item}
                   type="button"
                   onClick={() => setTopic(item)}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-left text-xs text-slate-300 transition hover:bg-white/10"
+                  className="ai-prompt-btn text-left"
                 >
                   {item}
                 </button>
@@ -168,7 +168,7 @@ export default function BrainstormPage() {
 
         <div className="space-y-3.5">
           {result ? (
-            <article className="surface-card rounded-2xl p-4">
+            <article className="ai-stage p-4">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                 <Lightbulb size={11} />
                 Brainstorm pack
@@ -183,7 +183,7 @@ export default function BrainstormPage() {
                 {result.ideas.map((idea, index) => (
                   <div
                     key={`${idea.title}-${index}`}
-                    className="rounded-2xl bg-black/20 p-4 light:bg-slate-50"
+                    className="ai-chat-log rounded-2xl p-4"
                   >
                     <h4 className="text-sm font-semibold text-white light:text-slate-900">
                       {idea.title}
@@ -222,7 +222,7 @@ export default function BrainstormPage() {
               </div>
             </article>
           ) : (
-            <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
+            <div className="ai-stage p-4 text-sm text-slate-500 light:text-slate-600">
               Your brainstorm pack will appear here after you generate ideas.
             </div>
           )}

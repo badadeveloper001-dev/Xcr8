@@ -84,12 +84,12 @@ export default function TrendMapperPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Map current trend signals to concrete creator angles, hooks, and next actions."
+      subtitle="Map trend signals into cleaner, actionable content moves in one focused workspace."
       activeToolId="trend-mapper"
       showToolShelf={false}
     >
       <div className="space-y-4">
-        <section className="surface-luxe rounded-2xl p-5">
+        <section className="ai-stage p-5">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700">
             <Sparkles size={12} />
             Trend Mapper Live
@@ -172,23 +172,23 @@ export default function TrendMapperPage() {
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <article className="surface-soft rounded-2xl p-3">
+          <article className="ai-stage p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Signals</p>
             <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">{signalCount}</p>
           </article>
-          <article className="surface-soft rounded-2xl p-3">
+          <article className="ai-stage p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Snapshots</p>
             <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
               {sourceStats.snapshots ?? 0}
             </p>
           </article>
-          <article className="surface-soft rounded-2xl p-3">
+          <article className="ai-stage p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Posts scanned</p>
             <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
               {sourceStats.posts ?? 0}
             </p>
           </article>
-          <article className="surface-soft rounded-2xl p-3">
+          <article className="ai-stage p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">AI Generations</p>
             <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
               {sourceStats.ai_generations ?? 0}
@@ -197,11 +197,11 @@ export default function TrendMapperPage() {
         </section>
 
         {trendResult ? (
-          <section className="surface-card rounded-2xl p-4">
+          <section className="ai-stage p-4">
             <p className="text-sm text-slate-400 light:text-slate-600">{trendResult.summary}</p>
             <div className="mt-3 space-y-3">
               {trendResult.signals.map((signal, index) => (
-                <article key={`${signal.title}-${index}`} className="surface-soft rounded-2xl p-4">
+                <article key={`${signal.title}-${index}`} className="ai-chat-log rounded-2xl p-4">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-white light:text-slate-900">{signal.title}</p>
                     <span className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-300 light:border-cyan-300 light:bg-cyan-100 light:text-cyan-700">
@@ -236,7 +236,7 @@ export default function TrendMapperPage() {
             </div>
           </section>
         ) : (
-          <section className="surface-soft rounded-2xl p-5 text-sm text-slate-500 light:text-slate-600">
+          <section className="ai-stage p-5 text-sm text-slate-500 light:text-slate-600">
             Run Trend Mapper to generate live trend-to-angle recommendations.
           </section>
         )}

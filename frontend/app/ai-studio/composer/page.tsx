@@ -74,13 +74,16 @@ export default function ComposerPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Composer is now on its own page so you can focus on chat-based creation."
+      subtitle="Composer is optimized for cleaner chat creation with instant content-plan output."
       activeToolId="composer"
       showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-3.5">
-          <div className="surface-soft rounded-2xl p-4">
+          <div className="ai-stage p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="ai-chip">Compose setup</p>
+            </div>
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
               Settings
             </p>
@@ -129,7 +132,7 @@ export default function ComposerPage() {
             </div>
           </div>
 
-          <div className="surface-card rounded-2xl p-4">
+          <div className="ai-stage p-4">
             <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-white light:text-slate-900">
               <MessageSquareQuote size={16} className="text-violet-400" />
               Composer chat
@@ -142,21 +145,21 @@ export default function ComposerPage() {
                   type="button"
                   onClick={() => void submitPrompt(item)}
                   disabled={loading}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-left text-xs text-slate-300 transition hover:bg-white/10 disabled:opacity-60"
+                  className="ai-prompt-btn text-left disabled:opacity-60"
                 >
                   {item}
                 </button>
               ))}
             </div>
 
-            <div className="mb-3 h-[420px] space-y-3 overflow-y-auto rounded-2xl bg-black/20 p-3 light:bg-slate-50">
+            <div className="ai-chat-log mb-3 h-[420px] space-y-3 overflow-y-auto p-3">
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
-                    className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm ${
+                    className={`ai-msg max-w-[88%] ${
                       message.role === "user"
-                        ? "ml-auto bg-violet-500/15 text-violet-100 light:text-violet-900"
-                        : "mr-auto bg-black/20 text-slate-200 light:bg-white light:text-slate-800"
+                        ? "ai-msg-user ml-auto"
+                        : "ai-msg-assistant mr-auto"
                     }`}
                   >
                     {message.content}
@@ -204,7 +207,7 @@ export default function ComposerPage() {
 
         <div className="space-y-3.5">
           {result ? (
-            <article className="surface-card rounded-2xl p-4">
+            <article className="ai-stage p-4">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                 <Wand2 size={11} />
                 Content plan
@@ -249,7 +252,7 @@ export default function ComposerPage() {
               </div>
             </article>
           ) : (
-            <div className="surface-soft rounded-2xl p-4 text-sm text-slate-500 light:text-slate-600">
+            <div className="ai-stage p-4 text-sm text-slate-500 light:text-slate-600">
               Your content plan will appear here after you send a prompt.
             </div>
           )}

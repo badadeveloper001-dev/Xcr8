@@ -455,16 +455,16 @@ export default function AssistantPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Cr8or AI keeps separate chats, remembers context, and stays tied to your creator workspace."
+      subtitle="Cr8or AI is now tuned for cleaner conversation flow, stronger focus, and faster prompt-to-action replies."
       activeToolId="assistant"
       showToolShelf={false}
     >
       <div className="space-y-4">
-        <section className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-4">
+        <section className="ai-stage p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-                Workspace v3
+              <p className="ai-chip mb-2">
+                Workspace v4
               </p>
               <h2 className="xcr8-title-lg text-white light:text-slate-900">
                 Cr8or Workspace
@@ -493,8 +493,7 @@ export default function AssistantPage() {
             </div>
           </div>
           <p className="xcr8-subtle mt-2 text-xs">
-            Ask naturally. Replies stay aligned with your language, profile context, and recent
-            conversation.
+            Ask naturally. Replies stay aligned with your language, profile context, and recent history.
           </p>
         </section>
 
@@ -583,7 +582,7 @@ export default function AssistantPage() {
           </aside>
 
           <section className="space-y-3.5">
-            <div className="xcr8-panel rounded-2xl border-2 border-indigo-300/30 p-4">
+            <div className="ai-stage p-4">
             <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
               <Bot size={16} className="text-cyan-300" />
               Active conversation
@@ -596,7 +595,7 @@ export default function AssistantPage() {
                   type="button"
                   onClick={() => void submitPrompt(item)}
                   disabled={loading || !isHistoryReady}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-left text-xs text-slate-300 transition hover:bg-white/10 disabled:opacity-60"
+                  className="ai-prompt-btn text-left disabled:opacity-60"
                 >
                   {item}
                 </button>
@@ -605,15 +604,15 @@ export default function AssistantPage() {
 
             <div
               ref={messageListRef}
-              className="mb-3 h-[50dvh] min-h-[320px] max-h-[580px] space-y-3 overflow-y-auto rounded-2xl bg-black/20 p-3 md:h-[450px] light:bg-slate-50"
+              className="ai-chat-log mb-3 h-[50dvh] min-h-[320px] max-h-[580px] space-y-3 overflow-y-auto p-3 md:h-[450px]"
             >
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
-                    className={`max-w-[92%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm leading-6 md:max-w-[88%] ${
+                    className={`ai-msg max-w-[92%] whitespace-pre-wrap break-words md:max-w-[88%] ${
                       message.role === "user"
-                        ? "ml-auto bg-cyan-500/15 text-cyan-100 light:text-cyan-900"
-                        : "mr-auto bg-black/20 text-slate-200 light:bg-white light:text-slate-800"
+                        ? "ai-msg-user ml-auto"
+                        : "ai-msg-assistant mr-auto"
                     }`}
                   >
                     {message.content}
@@ -627,7 +626,7 @@ export default function AssistantPage() {
                 event.preventDefault();
                 void submitPrompt(prompt);
               }}
-              className="rounded-2xl border border-white/10 bg-white/5 p-2"
+              className="rounded-2xl border border-white/10 bg-white/5 p-2 light:border-slate-300 light:bg-white/80"
             >
               <div className="flex items-end gap-2">
                 <textarea
@@ -676,7 +675,7 @@ export default function AssistantPage() {
                     key={action}
                     type="button"
                     onClick={() => setPrompt(action)}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 light:text-slate-700"
+                      className="ai-prompt-btn"
                   >
                     {action}
                   </button>
