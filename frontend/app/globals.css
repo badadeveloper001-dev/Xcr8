@@ -279,6 +279,27 @@ html:not(.dark) .lux-orb-c {
   will-change: transform;
 }
 
+.xcr8-logo-wrap {
+  isolation: isolate;
+}
+
+.xcr8-logo-img {
+  position: relative;
+  z-index: 1;
+}
+
+html:not(.dark) .xcr8-logo-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -6px -10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.93) 0%, rgba(15, 23, 42, 0.82) 100%);
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  z-index: 0;
+}
+
 /* ─── Gradient CTA ───────────────────────────────── */
 .cta-btn {
   background: linear-gradient(100deg, #8b5cf6 0%, #a855f7 44%, #22d3ee 100%);

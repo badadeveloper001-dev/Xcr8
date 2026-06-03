@@ -19,12 +19,13 @@ export function Logo({ size = "md", className = "" }: { size?: LogoSize; classNa
 
   return (
     <div
-      className={`relative shrink-0 ${className}`}
+      className={`xcr8-logo-wrap relative shrink-0 ${className}`}
       style={{ width }}
       aria-label="XCR8"
       role="img"
     >
       <img
+        className="xcr8-logo-img"
         src="/5d03bb27-9df6-417f-b28f-5984e329bdc0-removebg-preview.png"
         alt="XCR8"
         style={{ width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
