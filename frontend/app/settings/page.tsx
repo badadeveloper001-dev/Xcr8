@@ -141,6 +141,18 @@ export default function SettingsPage() {
             role="status"
             className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 light:text-rose-700"
           >
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              { label: "Plan", value: "Creator" },
+              { label: "Status", value: "Active" },
+              { label: "Security", value: "Protected" },
+            ].map((chip) => (
+              <div key={chip.label} className="surface-soft rounded-xl px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{chip.label}</p>
+                <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">{chip.value}</p>
+              </div>
+            ))}
+          </div>
             {error}
           </p>
         ) : null}
@@ -149,7 +161,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.32, delay: 0.04 }}
-          className="xcr8-panel rounded-2xl p-4"
+          className="xcr8-panel rounded-2xl border-2 border-indigo-300/25 p-4"
         >
           <p className="xcr8-eyebrow mb-3">Preferences</p>
 
@@ -295,6 +307,10 @@ export default function SettingsPage() {
               );
             })}
           </div>
+
+          <p className="mt-3 text-xs text-slate-500">
+            Connect only channels you actively publish to this week for cleaner recommendations.
+          </p>
         </motion.section>
 
         <motion.div

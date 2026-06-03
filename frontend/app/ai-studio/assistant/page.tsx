@@ -467,7 +467,7 @@ export default function AssistantPage() {
                 Workspace v3
               </p>
               <h2 className="xcr8-title-lg text-white light:text-slate-900">
-                Cr8or AI Command Deck
+                Cr8or Workspace
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -493,17 +493,17 @@ export default function AssistantPage() {
             </div>
           </div>
           <p className="xcr8-subtle mt-2 text-xs">
-            Tone and reply style adapt from your profile, conversation context, and selected
-            language.
+            Ask naturally. Replies stay aligned with your language, profile context, and recent
+            conversation.
           </p>
         </section>
 
-        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr_0.7fr]">
+        <div className="grid gap-4 xl:grid-cols-[0.86fr_1.14fr]">
           <aside className="xcr8-panel rounded-2xl p-4 xl:max-h-[72dvh] xl:overflow-y-auto">
             <div className="mb-3 flex items-center justify-between">
               <p className="xcr8-eyebrow flex items-center gap-2">
                 <Sparkles size={11} />
-                Saved chats
+                Conversations
               </p>
               <span className="text-[11px] text-slate-500">{chatSessions.length}</span>
             </div>
@@ -572,16 +572,21 @@ export default function AssistantPage() {
                 })
               ) : (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-500 light:border-slate-200 light:bg-white/70 light:text-slate-600">
-                  Your conversations will appear here once you start chatting.
+                  Your chat list appears here as soon as you send your first message.
                 </div>
               )}
             </div>
+
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-400 light:border-slate-200 light:bg-white/70 light:text-slate-600">
+              Tip: keep separate chats for planning, content writing, and app questions.
+            </div>
           </aside>
 
-          <section className="xcr8-panel rounded-2xl border-2 border-indigo-300/30 p-4">
+          <section className="space-y-3.5">
+            <div className="xcr8-panel rounded-2xl border-2 border-indigo-300/30 p-4">
             <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
               <Bot size={16} className="text-cyan-300" />
-              Conversation workspace
+              Active conversation
             </h2>
 
             <div className="mb-3 flex flex-wrap gap-2">
@@ -661,9 +666,8 @@ export default function AssistantPage() {
                 {error}
               </p>
             ) : null}
-          </section>
+            </div>
 
-          <aside className="space-y-3.5">
             <article className="xcr8-panel rounded-2xl p-4">
               <p className="xcr8-eyebrow mb-2">Quick prompts</p>
               <div className="flex flex-wrap gap-2">
@@ -679,12 +683,7 @@ export default function AssistantPage() {
                 ))}
               </div>
             </article>
-
-            <div className="xcr8-panel rounded-2xl p-4 text-sm xcr8-subtle">
-              Use separate chats for strategy, planning, and product help so each thread keeps tight
-              context.
-            </div>
-          </aside>
+          </section>
         </div>
       </div>
     </StudioShell>
