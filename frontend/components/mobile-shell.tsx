@@ -28,9 +28,6 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
             aria-label="Page header"
           >
             <div className="pr-3">
-              <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-                UI v2 Live
-              </p>
               {title ? (
                 <h1 className="xcr8-title-xl text-white dark:text-white light:text-[#111827]">
                   {title}

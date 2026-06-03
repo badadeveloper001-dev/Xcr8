@@ -161,7 +161,7 @@ export default function DashboardPage() {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <Logo size="sm" className="mb-2" />
+              <Logo size="sm" className="mb-2 origin-left scale-110" />
               <p className="text-sm font-medium text-slate-300 light:text-slate-700">
                 Welcome back, {displayName}
               </p>
