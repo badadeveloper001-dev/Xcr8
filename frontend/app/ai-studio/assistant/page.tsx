@@ -30,6 +30,10 @@ const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_s
 const MAX_RENDERED_MESSAGES = 240;
 const MAX_SENT_MESSAGES = 40;
 
+function chatSessionsStorageKey(userId: number) {
+  return `xcr8-assistant-chat-summaries:${userId}`;
+}
+
 function activeChatStorageKey(userId: number) {
   return `xcr8-assistant-active-chat:${userId}`;
 }
@@ -65,6 +69,26 @@ function isChatItem(value: unknown): value is ChatItem {
     (candidate.role === "user" || candidate.role === "assistant") &&
     typeof candidate.content === "string" &&
     candidate.content.trim().length > 0
+  );
+}
+
+function isChatSummary(value: unknown): value is AiAssistantChatSummary {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as {
+    chat_id?: unknown;
+    title?: unknown;
+    preview?: unknown;
+    updated_at?: unknown;
+  };
+
+  return (
+    typeof candidate.chat_id === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.preview === "string" &&
+    typeof candidate.updated_at === "string"
   );
 }
 
@@ -131,10 +155,40 @@ export default function AssistantPage() {
     let cancelled = false;
 
     const loadChatSessions = async () => {
+      const storageKey = activeChatStorageKey(userId);
+      const sessionsKey = chatSessionsStorageKey(userId);
+
+      let cachedSessions: AiAssistantChatSummary[] = [];
+      const cachedRaw = localStorage.getItem(sessionsKey);
+      if (cachedRaw) {
+        try {
+          const parsed = JSON.parse(cachedRaw) as unknown;
+          if (Array.isArray(parsed)) {
+            cachedSessions = parsed.filter(isChatSummary);
+          }
+        } catch {
+          cachedSessions = [];
+        }
+      }
+
+      if (cachedSessions.length > 0) {
+        setChatSessions(cachedSessions);
+        const storedChatId = localStorage.getItem(storageKey);
+        const cachedActive =
+          storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+            ? storedChatId
+            : (cachedSessions[0]?.chat_id ?? null);
+        setActiveChatId(cachedActive);
+      }
+
       try {
         let sessions = await listAiAssistantChats(userId, email ?? undefined);
         if (cancelled) {
           return;
+        }
+
+        if (sessions.length === 0 && cachedSessions.length > 0) {
+          sessions = cachedSessions;
         }
 
         if (sessions.length === 0) {
@@ -150,7 +204,6 @@ export default function AssistantPage() {
         }
 
         setChatSessions(sessions);
-        const storageKey = activeChatStorageKey(userId);
         const storedChatId = localStorage.getItem(storageKey);
         const nextChatId =
           storedChatId && sessions.some((session) => session.chat_id === storedChatId)
@@ -159,9 +212,19 @@ export default function AssistantPage() {
         setActiveChatId(nextChatId);
       } catch {
         if (!cancelled) {
-          setChatSessions([]);
-          setActiveChatId(null);
-          setMessages([welcomeMessage]);
+          if (cachedSessions.length > 0) {
+            setChatSessions(cachedSessions);
+            const storedChatId = localStorage.getItem(storageKey);
+            const nextChatId =
+              storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+                ? storedChatId
+                : (cachedSessions[0]?.chat_id ?? null);
+            setActiveChatId(nextChatId);
+          } else {
+            setChatSessions([]);
+            setActiveChatId(null);
+            setMessages([welcomeMessage]);
+          }
         }
       }
     };
@@ -172,6 +235,14 @@ export default function AssistantPage() {
       cancelled = true;
     };
   }, [email, userId, welcomeMessage]);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    localStorage.setItem(chatSessionsStorageKey(userId), JSON.stringify(chatSessions));
+  }, [chatSessions, userId]);
 
   useEffect(() => {
     if (!userId || !activeChatId) {

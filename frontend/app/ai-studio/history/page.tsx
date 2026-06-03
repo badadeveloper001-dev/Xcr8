@@ -19,7 +19,7 @@ const HISTORY_LIMIT = 30;
 
 export default function ImageHistoryPage() {
   const userId = useCreatorStore((s) => s.userId);
-  const historyStorageKey = useMemo(() => `xcr8-image-history:v1:${userId ?? "anon"}`, [userId]);
+  const historyStorageKey = useMemo(() => "xcr8-image-history:v2", []);
 
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
@@ -27,7 +27,18 @@ export default function ImageHistoryPage() {
     if (typeof window === "undefined") return;
 
     try {
-      const raw = window.localStorage.getItem(historyStorageKey);
+      let raw = window.localStorage.getItem(historyStorageKey);
+
+      // Migrate from legacy per-user key when available.
+      if (!raw) {
+        const legacyKey = `xcr8-image-history:v1:${userId ?? "anon"}`;
+        const legacyRaw = window.localStorage.getItem(legacyKey);
+        if (legacyRaw) {
+          raw = legacyRaw;
+          window.localStorage.setItem(historyStorageKey, legacyRaw);
+        }
+      }
+
       if (!raw) {
         setHistory([]);
         return;
@@ -63,7 +74,7 @@ export default function ImageHistoryPage() {
     } catch {
       setHistory([]);
     }
-  }, [historyStorageKey]);
+  }, [historyStorageKey, userId]);
 
   const handleDownload = (src: string, fileName: string) => {
     const anchor = document.createElement("a");

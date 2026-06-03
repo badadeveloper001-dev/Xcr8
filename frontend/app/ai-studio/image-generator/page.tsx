@@ -163,9 +163,54 @@ const cleanText = (value: string) => value.trim().replace(/\s+/g, " ");
 const defaultPreset = generationPresets[0]!;
 const HISTORY_LIMIT = 30;
 
+function buildHistoryStorageKey() {
+  return "xcr8-image-history:v2";
+}
+
+function blobToPreviewDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const image = new Image();
+
+    image.onload = () => {
+      try {
+        const maxSize = 640;
+        const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("canvas_context_unavailable"));
+          return;
+        }
+
+        ctx.drawImage(image, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        URL.revokeObjectURL(objectUrl);
+        resolve(dataUrl);
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error instanceof Error ? error : new Error("preview_encode_failed"));
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("image_load_failed"));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
 export default function ImageGeneratorPage() {
   const userId = useCreatorStore((s) => s.userId);
-  const historyStorageKey = useMemo(() => `xcr8-image-history:v1:${userId ?? "anon"}`, [userId]);
+  const historyStorageKey = useMemo(() => buildHistoryStorageKey(), []);
 
   const [subject, setSubject] = useState(defaultPreset.subject);
   const [style, setStyle] = useState<StyleKey>(defaultPreset.style);
@@ -273,9 +318,18 @@ export default function ImageGeneratorPage() {
 
     const sourceHeader = response.headers.get("X-Xcr8-Image-Source")?.trim();
     const blobUrl = URL.createObjectURL(blob);
+    let historySrc = sourceHeader && sourceHeader.startsWith("http") ? sourceHeader : "";
+    if (!historySrc) {
+      try {
+        historySrc = await blobToPreviewDataUrl(blob);
+      } catch {
+        historySrc = blobUrl;
+      }
+    }
+
     return {
       blobUrl,
-      historySrc: sourceHeader && sourceHeader.startsWith("http") ? sourceHeader : blobUrl,
+      historySrc,
     };
   };
 
