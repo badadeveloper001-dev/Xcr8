@@ -97,11 +97,19 @@ html:not(.dark) body {
   border: 1px solid var(--surface-card-border);
   box-shadow: var(--surface-card-shadow);
   backdrop-filter: blur(10px);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.22s ease,
+    background-color 0.2s ease;
 }
 
 .surface-soft {
   background: var(--surface-soft-bg);
   border: 1px solid var(--surface-soft-border);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .surface-luxe {
@@ -392,20 +400,21 @@ html:not(.dark) .xcr8-eyebrow {
 
 .xcr8-title-xl {
   font-size: clamp(1.8rem, 2.8vw, 2.5rem);
-  line-height: 1.08;
+  line-height: 1.12;
   letter-spacing: -0.015em;
   font-weight: 700;
 }
 
 .xcr8-title-lg {
   font-size: clamp(1.35rem, 2.1vw, 1.9rem);
-  line-height: 1.16;
+  line-height: 1.2;
   letter-spacing: -0.012em;
   font-weight: 700;
 }
 
 .xcr8-subtle {
-  color: rgba(148, 163, 184, 0.92);
+  color: rgba(148, 163, 184, 0.9);
+  line-height: 1.52;
 }
 
 html:not(.dark) .xcr8-subtle {
@@ -422,6 +431,10 @@ html:not(.dark) .xcr8-subtle {
   box-shadow:
     0 22px 46px rgba(7, 12, 28, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.24s ease,
+    background-color 0.22s ease;
 }
 
 html:not(.dark) .xcr8-panel {
@@ -448,6 +461,10 @@ html:not(.dark) .xcr8-soft-chip {
   border: 1px solid color-mix(in srgb, var(--surface-card-border) 88%, rgba(148, 163, 184, 0.2));
   background: var(--surface-card-bg);
   box-shadow: 0 12px 24px rgba(8, 15, 34, 0.16);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.22s ease,
+    background-color 0.2s ease;
 }
 
 html:not(.dark) .ai-stage {
