@@ -223,7 +223,9 @@ export default function ComposePage() {
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-3">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Title</label>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Title
+              </label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -235,9 +237,19 @@ export default function ComposePage() {
               <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 <Link2 size={11} /> Media
               </label>
-              <input type="file" accept="image/*,video/*" className="xcr8-input" disabled={uploading} onChange={handleFileChange} />
+              <input
+                type="file"
+                accept="image/*,video/*"
+                className="xcr8-input"
+                disabled={uploading}
+                onChange={handleFileChange}
+              />
               <p className="mt-1 text-xs text-slate-500">
-                {uploading ? "Uploading..." : mediaUrl ? "Media added." : "Add one file to continue."}
+                {uploading
+                  ? "Uploading..."
+                  : mediaUrl
+                    ? "Media added."
+                    : "Add one file to continue."}
               </p>
             </div>
           </div>
@@ -247,7 +259,11 @@ export default function ComposePage() {
                 {mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
                   <video src={mediaUrl} controls className="max-h-72 w-full" />
                 ) : (
-                  <img src={mediaUrl} alt="upload preview" className="max-h-72 w-full object-cover" />
+                  <img
+                    src={mediaUrl}
+                    alt="upload preview"
+                    className="max-h-72 w-full object-cover"
+                  />
                 )}
               </div>
             ) : (
@@ -257,7 +273,9 @@ export default function ComposePage() {
             )}
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Caption</label>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Caption
+            </label>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
@@ -288,7 +306,9 @@ export default function ComposePage() {
                       : "surface-soft text-slate-400 hover:text-slate-300 light:hover:text-slate-700"
                   }`}
                 >
-                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${platform.cls}`}>
+                  <span
+                    className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${platform.cls}`}
+                  >
                     <SocialPlatformIcon platform={platform.id as SocialPlatformId} size={12} />
                   </span>
                   {platform.label}
@@ -319,8 +339,10 @@ export default function ComposePage() {
         <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
           Studio Flow
         </p>
-        <h1 className="xcr8-title-xl text-white light:text-slate-900">From idea to scheduled post</h1>
-        <p className="xcr8-subtle mt-2 text-sm">
+        <h1 className="text-base font-semibold text-white light:text-slate-900 sm:text-lg">
+          From idea to scheduled post
+        </h1>
+        <p className="xcr8-subtle mt-1.5 text-xs sm:text-sm">
           Follow the steps in order. Each section only shows what you need right now.
         </p>
       </motion.section>
@@ -365,11 +387,17 @@ export default function ComposePage() {
                       {variant.language.replace(/_/g, " ")}
                     </p>
                     {variant.hook ? (
-                      <p className="mb-1 text-sm font-semibold text-white light:text-slate-900">{variant.hook}</p>
+                      <p className="mb-1 text-sm font-semibold text-white light:text-slate-900">
+                        {variant.hook}
+                      </p>
                     ) : null}
-                    <p className="text-sm text-slate-300 light:text-slate-600">{variant.adaptedCaption}</p>
+                    <p className="text-sm text-slate-300 light:text-slate-600">
+                      {variant.adaptedCaption}
+                    </p>
                     {variant.hashtags.length > 0 ? (
-                      <p className="mt-1 text-xs text-violet-400 light:text-violet-600">{variant.hashtags.join(" ")}</p>
+                      <p className="mt-1 text-xs text-violet-400 light:text-violet-600">
+                        {variant.hashtags.join(" ")}
+                      </p>
                     ) : null}
                   </article>
                 ))}
@@ -379,7 +407,9 @@ export default function ComposePage() {
 
           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Schedule (optional)</label>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Schedule (optional)
+              </label>
               <input
                 type="datetime-local"
                 value={scheduleAt}
@@ -419,7 +449,8 @@ export default function ComposePage() {
           <Sparkles size={12} />
           Smart assist
         </div>
-        Xcr8 keeps your voice and language style consistent automatically across all platform variants.
+        Xcr8 keeps your voice and language style consistent automatically across all platform
+        variants.
       </div>
     </MobileShell>
   );
