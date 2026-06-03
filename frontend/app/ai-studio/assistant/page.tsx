@@ -1,16 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, MessageSquarePlus, SendHorizontal } from "lucide-react";
+import { Bot, History, MessageSquarePlus, SendHorizontal } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import {
   createAiAssistantChat,
   chatWithAiAssistant,
-  deleteAiAssistantChat,
   getAiAssistantChatHistory,
   getApiErrorMessage,
   listAiAssistantChats,
-  updateAiAssistantChat,
   type AiAssistantChatSummary,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -107,6 +106,7 @@ export default function AssistantPage() {
   const [error, setError] = useState<string | null>(null);
   const [suggestedActions, setSuggestedActions] = useState<string[]>(starterPrompts);
   const lastPromptParamRef = useRef<string | null>(null);
+  const requestedChatParamRef = useRef<string | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const [isMobileInputMode, setIsMobileInputMode] = useState(false);
   const [isHistoryReady, setIsHistoryReady] = useState(true);
@@ -139,6 +139,11 @@ export default function AssistantPage() {
 
   useEffect(() => {
     const promptParam = new URLSearchParams(window.location.search).get("prompt")?.trim() ?? "";
+    const requestedChatId =
+      new URLSearchParams(window.location.search).get("chat")?.trim() ?? null;
+
+    requestedChatParamRef.current = requestedChatId;
+
     if (!promptParam || lastPromptParamRef.current === promptParam) {
       return;
     }
@@ -174,8 +179,11 @@ export default function AssistantPage() {
       if (cachedSessions.length > 0) {
         setChatSessions(cachedSessions);
         const storedChatId = localStorage.getItem(storageKey);
+        const requestedChatId = requestedChatParamRef.current;
         const cachedActive =
-          storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+          requestedChatId && cachedSessions.some((session) => session.chat_id === requestedChatId)
+            ? requestedChatId
+            : storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
             ? storedChatId
             : (cachedSessions[0]?.chat_id ?? null);
         setActiveChatId(cachedActive);
@@ -205,8 +213,11 @@ export default function AssistantPage() {
 
         setChatSessions(sessions);
         const storedChatId = localStorage.getItem(storageKey);
+        const requestedChatId = requestedChatParamRef.current;
         const nextChatId =
-          storedChatId && sessions.some((session) => session.chat_id === storedChatId)
+          requestedChatId && sessions.some((session) => session.chat_id === requestedChatId)
+            ? requestedChatId
+            : storedChatId && sessions.some((session) => session.chat_id === storedChatId)
             ? storedChatId
             : (sessions[0]?.chat_id ?? null);
         setActiveChatId(nextChatId);
@@ -215,8 +226,11 @@ export default function AssistantPage() {
           if (cachedSessions.length > 0) {
             setChatSessions(cachedSessions);
             const storedChatId = localStorage.getItem(storageKey);
+            const requestedChatId = requestedChatParamRef.current;
             const nextChatId =
-              storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+              requestedChatId && cachedSessions.some((session) => session.chat_id === requestedChatId)
+                ? requestedChatId
+                : storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
                 ? storedChatId
                 : (cachedSessions[0]?.chat_id ?? null);
             setActiveChatId(nextChatId);
@@ -370,59 +384,6 @@ export default function AssistantPage() {
     void createChat();
   };
 
-  const renameChat = async (session: AiAssistantChatSummary) => {
-    if (!userId) {
-      return;
-    }
-
-    const nextTitle = window.prompt("Rename this chat", session.title)?.trim();
-    if (!nextTitle || nextTitle === session.title) {
-      return;
-    }
-
-    try {
-      const updated = await updateAiAssistantChat(
-        userId,
-        session.chat_id,
-        { title: nextTitle },
-        email ?? undefined,
-      );
-      setChatSessions((current) =>
-        current.map((item) => (item.chat_id === updated.chat_id ? updated : item)),
-      );
-    } catch (err) {
-      setError(getApiErrorMessage(err, "Could not rename that chat right now. Please try again."));
-    }
-  };
-
-  const removeChat = async (session: AiAssistantChatSummary) => {
-    if (!userId) {
-      return;
-    }
-
-    if (!window.confirm(`Delete "${session.title}"? This cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      await deleteAiAssistantChat(userId, session.chat_id, email ?? undefined);
-      setChatSessions((current) => {
-        const remaining = current.filter((item) => item.chat_id !== session.chat_id);
-        if (session.chat_id === activeChatId) {
-          const nextActive = remaining[0]?.chat_id ?? null;
-          setActiveChatId(nextActive);
-          if (!nextActive) {
-            setMessages([welcomeMessage]);
-            setSuggestedActions(starterPrompts);
-          }
-        }
-        return remaining;
-      });
-    } catch (err) {
-      setError(getApiErrorMessage(err, "Could not delete that chat right now. Please try again."));
-    }
-  };
-
   const submitPrompt = async (value: string) => {
     if (loading) {
       return;
@@ -539,6 +500,13 @@ export default function AssistantPage() {
               </h2>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                href="/ai-studio/assistant/history"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-medium text-violet-300 transition hover:bg-violet-500/20"
+              >
+                <History size={13} />
+                History
+              </Link>
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
@@ -562,76 +530,7 @@ export default function AssistantPage() {
           </div>
         </section>
 
-        <div className="grid gap-4 xl:grid-cols-[0.86fr_1.14fr]">
-          <aside className="ai-stage p-4 xl:max-h-[72dvh] xl:overflow-y-auto">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversations</p>
-              <span className="text-[11px] text-slate-500">{chatSessions.length}</span>
-            </div>
-            <div className="space-y-2">
-              {chatSessions.length > 0 ? (
-                chatSessions.map((session) => {
-                  const active = session.chat_id === activeChatId;
-
-                  return (
-                    <div
-                      key={session.chat_id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setActiveChatId(session.chat_id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setActiveChatId(session.chat_id);
-                        }
-                      }}
-                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
-                        active
-                          ? "border-cyan-300/35 bg-cyan-500/10 light:border-cyan-300 light:bg-cyan-50"
-                          : "border-white/10 bg-white/5 hover:bg-white/10 light:border-slate-200 light:bg-white/70"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white light:text-slate-900">
-                            {session.title}
-                          </p>
-                        </div>
-                        <div className="flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void renameChat(session);
-                            }}
-                            className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300 transition hover:bg-white/10 light:text-slate-700"
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void removeChat(session);
-                            }}
-                            className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 transition hover:bg-rose-500/15 light:text-rose-600"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-500 light:border-slate-200 light:bg-white/70 light:text-slate-600">
-                  Your chat list appears here as soon as you send your first message.
-                </div>
-              )}
-            </div>
-          </aside>
-
-          <section className="space-y-3.5">
+        <section className="space-y-3.5">
             <div className="ai-stage p-4">
             <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
               <Bot size={16} className="text-cyan-300" />
@@ -710,8 +609,7 @@ export default function AssistantPage() {
                 </button>
               ))}
             </div>
-          </section>
-        </div>
+        </section>
       </div>
     </StudioShell>
   );
