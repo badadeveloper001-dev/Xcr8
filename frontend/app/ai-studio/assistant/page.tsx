@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, MessageSquarePlus, SendHorizontal, Sparkles } from "lucide-react";
+import { Bot, MessageSquarePlus, SendHorizontal } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import {
   createAiAssistantChat,
@@ -455,7 +455,7 @@ export default function AssistantPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Cr8or AI is now tuned for cleaner conversation flow, stronger focus, and faster prompt-to-action replies."
+      subtitle="Cr8or AI chat, simplified for faster thinking and execution."
       activeToolId="assistant"
       showToolShelf={false}
     >
@@ -463,9 +463,6 @@ export default function AssistantPage() {
         <section className="ai-stage p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="ai-chip mb-2">
-                Workspace v4
-              </p>
               <h2 className="xcr8-title-lg text-white light:text-slate-900">
                 Cr8or Workspace
               </h2>
@@ -492,18 +489,15 @@ export default function AssistantPage() {
               </button>
             </div>
           </div>
-          <p className="xcr8-subtle mt-2 text-xs">
-            Ask naturally. Replies stay aligned with your language, profile context, and recent history.
+          <p className="xcr8-subtle mt-2 text-sm">
+            Keep separate chats for strategy, writing, and execution.
           </p>
         </section>
 
         <div className="grid gap-4 xl:grid-cols-[0.86fr_1.14fr]">
-          <aside className="xcr8-panel rounded-2xl p-4 xl:max-h-[72dvh] xl:overflow-y-auto">
+          <aside className="ai-stage p-4 xl:max-h-[72dvh] xl:overflow-y-auto">
             <div className="mb-3 flex items-center justify-between">
-              <p className="xcr8-eyebrow flex items-center gap-2">
-                <Sparkles size={11} />
-                Conversations
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversations</p>
               <span className="text-[11px] text-slate-500">{chatSessions.length}</span>
             </div>
             <div className="space-y-2">
@@ -574,10 +568,6 @@ export default function AssistantPage() {
                   Your chat list appears here as soon as you send your first message.
                 </div>
               )}
-            </div>
-
-            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-400 light:border-slate-200 light:bg-white/70 light:text-slate-600">
-              Tip: keep separate chats for planning, content writing, and app questions.
             </div>
           </aside>
 
@@ -667,8 +657,8 @@ export default function AssistantPage() {
             ) : null}
             </div>
 
-            <article className="xcr8-panel rounded-2xl p-4">
-              <p className="xcr8-eyebrow mb-2">Quick prompts</p>
+            <article className="ai-stage p-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Quick prompts</p>
               <div className="flex flex-wrap gap-2">
                 {suggestedActions.map((action) => (
                   <button

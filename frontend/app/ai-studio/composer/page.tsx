@@ -74,19 +74,14 @@ export default function ComposerPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Composer is optimized for cleaner chat creation with instant content-plan output."
+      subtitle="Composer chat with clear controls and a focused output panel."
       activeToolId="composer"
       showToolShelf={false}
     >
       <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-3.5">
           <div className="ai-stage p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="ai-chip">Compose setup</p>
-            </div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Settings
-            </p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Setup</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <select
                 value={platform}

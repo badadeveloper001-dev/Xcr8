@@ -57,7 +57,7 @@ export default function BrainstormPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Brainstorm is tuned for cleaner idea generation and easier shortlist review."
+      subtitle="Brainstorm ideas quickly, then choose the strongest direction."
       activeToolId="brainstorm"
       showToolShelf={false}
     >
@@ -169,9 +169,9 @@ export default function BrainstormPage() {
         <div className="space-y-3.5">
           {result ? (
             <article className="ai-stage p-4">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-slate-300/25 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-300 light:border-slate-300/60 light:bg-slate-100 light:text-slate-700">
                 <Lightbulb size={11} />
-                Brainstorm pack
+                Idea pack
               </div>
               <h3 className="text-lg font-semibold text-white light:text-slate-900">
                 {result.topic}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRight, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowRight, TrendingUp } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import {
   generateAiTrendMap,
@@ -84,16 +84,12 @@ export default function TrendMapperPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Map trend signals into cleaner, actionable content moves in one focused workspace."
+      subtitle="Turn trend signals into clear content actions."
       activeToolId="trend-mapper"
       showToolShelf={false}
     >
       <div className="space-y-4">
         <section className="ai-stage p-5">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700">
-            <Sparkles size={12} />
-            Trend Mapper Live
-          </div>
           <h2 className="flex items-center gap-2 text-xl font-semibold text-white light:text-slate-900">
             <TrendingUp size={18} className="text-cyan-300" />
             Trend intelligence for {displayName}
