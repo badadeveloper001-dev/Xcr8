@@ -214,85 +214,49 @@ export default function ComposePage() {
     })();
   };
 
-  return (
-    <MobileShell title="Compose" subtitle="Simple 3-step workflow.">
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
-      >
-        <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-          Cleaner Composer
-        </p>
-        <h1 className="xcr8-title-xl text-white light:text-slate-900">Create in three steps</h1>
-        <p className="xcr8-subtle mt-2 text-sm">
-          Fill details, choose channels, then review AI adaptations. Nothing hidden.
-        </p>
-      </motion.section>
-
-      <form className="mt-4 space-y-4" onSubmit={(e) => void createDraft(e)}>
-        <section className="xcr8-panel rounded-2xl p-4">
-          <p className="xcr8-eyebrow mb-2">Step 1: Content</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Post title
-                </label>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="xcr8-input"
-                  placeholder="Give this post a title"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  <Link2 size={11} /> Upload media
-                </label>
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  className="xcr8-input"
-                  disabled={uploading}
-                  onChange={handleFileChange}
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  {uploading
-                    ? "Uploading..."
-                    : mediaUrl
-                      ? "Media uploaded."
-                      : "Add one file to continue."}
-                </p>
-              </div>
-            </div>
-
+  const steps = [
+    {
+      title: "Step 1",
+      subtitle: "Create your base post",
+      content: (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-3">
             <div>
-              {mediaUrl ? (
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                  {mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
-                    <video src={mediaUrl} controls className="max-h-72 w-full" />
-                  ) : (
-                    <img
-                      src={mediaUrl}
-                      alt="upload preview"
-                      className="max-h-72 w-full object-cover"
-                    />
-                  )}
-                </div>
-              ) : (
-                <div className="surface-soft grid h-full min-h-[180px] place-items-center rounded-2xl px-4 py-5 text-sm text-slate-500">
-                  Preview appears here
-                </div>
-              )}
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Title</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="xcr8-input"
+                placeholder="Give this post a title"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <Link2 size={11} /> Media
+              </label>
+              <input type="file" accept="image/*,video/*" className="xcr8-input" disabled={uploading} onChange={handleFileChange} />
+              <p className="mt-1 text-xs text-slate-500">
+                {uploading ? "Uploading..." : mediaUrl ? "Media added." : "Add one file to continue."}
+              </p>
             </div>
           </div>
-
-          <div className="mt-3">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Master caption
-            </label>
+          <div>
+            {mediaUrl ? (
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                {mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
+                  <video src={mediaUrl} controls className="max-h-72 w-full" />
+                ) : (
+                  <img src={mediaUrl} alt="upload preview" className="max-h-72 w-full object-cover" />
+                )}
+              </div>
+            ) : (
+              <div className="surface-soft grid h-full min-h-[180px] place-items-center rounded-2xl px-4 py-5 text-sm text-slate-500">
+                Preview appears here
+              </div>
+            )}
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Caption</label>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
@@ -301,10 +265,14 @@ export default function ComposePage() {
             />
             <p className="mt-1 text-right text-[11px] text-slate-500">{caption.length} chars</p>
           </div>
-        </section>
-
-        <section className="xcr8-panel rounded-2xl p-4">
-          <p className="xcr8-eyebrow mb-2">Step 2: Channels</p>
+        </div>
+      ),
+    },
+    {
+      title: "Step 2",
+      subtitle: "Choose channels",
+      content: (
+        <div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {platformOptions.map((platform) => {
               const active = selectedPlatforms.includes(platform.id);
@@ -319,9 +287,7 @@ export default function ComposePage() {
                       : "surface-soft text-slate-400 hover:text-slate-300 light:hover:text-slate-700"
                   }`}
                 >
-                  <span
-                    className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${platform.cls}`}
-                  >
+                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${platform.cls}`}>
                     {platform.label.slice(0, 2).toUpperCase()}
                   </span>
                   {platform.label}
@@ -329,7 +295,6 @@ export default function ComposePage() {
               );
             })}
           </div>
-
           <button
             type="submit"
             disabled={loading}
@@ -337,19 +302,48 @@ export default function ComposePage() {
           >
             {loading ? "Generating adaptations..." : "Generate AI Adaptations"}
           </button>
-        </section>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <MobileShell title="Compose" subtitle="Creative flow without the noise.">
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.32 }}
+        className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
+      >
+        <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+          Studio Flow
+        </p>
+        <h1 className="xcr8-title-xl text-white light:text-slate-900">From idea to scheduled post</h1>
+        <p className="xcr8-subtle mt-2 text-sm">
+          Follow the steps in order. Each section only shows what you need right now.
+        </p>
+      </motion.section>
+
+      <form className="mt-4 space-y-4" onSubmit={(e) => void createDraft(e)}>
+        {steps.map((step) => (
+          <section key={step.title} className="xcr8-panel rounded-2xl p-4">
+            <p className="xcr8-eyebrow mb-1">{step.title}</p>
+            <h2 className="xcr8-title-lg mb-3 text-white light:text-slate-900">{step.subtitle}</h2>
+            {step.content}
+          </section>
+        ))}
       </form>
 
       {distributionDraft ? (
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="xcr8-panel mt-4 rounded-2xl p-4"
+          transition={{ duration: 0.32 }}
+          className="xcr8-panel mt-4 rounded-2xl border-2 border-emerald-300/30 p-4"
         >
-          <p className="xcr8-eyebrow mb-2">Step 3: Review and Queue</p>
+          <p className="xcr8-eyebrow mb-1">Step 3</p>
           <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
-            <CheckCircle2 size={18} className="text-emerald-400" /> AI Adaptations
+            <CheckCircle2 size={18} className="text-emerald-400" /> Review and queue
           </h2>
 
           <div className="space-y-3">
@@ -367,17 +361,11 @@ export default function ComposePage() {
                       {variant.language.replace(/_/g, " ")}
                     </p>
                     {variant.hook ? (
-                      <p className="mb-1 text-sm font-semibold text-white light:text-slate-900">
-                        {variant.hook}
-                      </p>
+                      <p className="mb-1 text-sm font-semibold text-white light:text-slate-900">{variant.hook}</p>
                     ) : null}
-                    <p className="text-sm text-slate-300 light:text-slate-600">
-                      {variant.adaptedCaption}
-                    </p>
+                    <p className="text-sm text-slate-300 light:text-slate-600">{variant.adaptedCaption}</p>
                     {variant.hashtags.length > 0 ? (
-                      <p className="mt-1 text-xs text-violet-400 light:text-violet-600">
-                        {variant.hashtags.join(" ")}
-                      </p>
+                      <p className="mt-1 text-xs text-violet-400 light:text-violet-600">{variant.hashtags.join(" ")}</p>
                     ) : null}
                   </article>
                 ))}
@@ -387,9 +375,7 @@ export default function ComposePage() {
 
           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Schedule time (optional)
-              </label>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Schedule (optional)</label>
               <input
                 type="datetime-local"
                 value={scheduleAt}
@@ -425,7 +411,11 @@ export default function ComposePage() {
       ) : null}
 
       <div className="xcr8-panel mt-4 rounded-2xl p-4 text-sm xcr8-subtle">
-        Replies and adaptations automatically align to the language and style from your caption.
+        <div className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <Sparkles size={12} />
+          Smart assist
+        </div>
+        Xcr8 keeps your voice and language style consistent automatically across all platform variants.
       </div>
     </MobileShell>
   );
