@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import { useCreatorStore } from "@/lib/store";
 import { ToolShelf } from "@/components/ai-studio/tool-shelf";
@@ -46,9 +45,8 @@ export function StudioShell({
       >
         {showToolShelf ? (
           <>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-200 light:border-cyan-300 light:bg-cyan-100 light:text-cyan-700">
-              <Sparkles size={12} />
-              Creative AI tool shelf · Phase 5
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Tools
             </div>
 
             <div className="mb-4">

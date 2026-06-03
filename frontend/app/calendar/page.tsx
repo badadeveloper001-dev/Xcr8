@@ -9,6 +9,7 @@ import Link from "next/link";
 import { MobileShell } from "@/components/mobile-shell";
 import { getCalendar } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
 
 const platformColors: Record<string, string> = {
   instagram: "badge-ig",
@@ -18,15 +19,6 @@ const platformColors: Record<string, string> = {
   linkedin: "badge-li",
   youtube_shorts: "badge-yt",
 };
-const platformShort: Record<string, string> = {
-  instagram: "IG",
-  tiktok: "TK",
-  x: "X",
-  facebook: "f",
-  linkedin: "LI",
-  youtube_shorts: "YT",
-};
-
 function formatSchedule(iso: string) {
   const d = new Date(iso);
   return {
@@ -76,7 +68,6 @@ export default function CalendarPage() {
           {items.map((item, idx) => {
             const { date, time } = formatSchedule(item.scheduled_for);
             const badgeCls = platformColors[item.platform] ?? "bg-slate-700";
-            const short = platformShort[item.platform] ?? item.platform.slice(0, 2).toUpperCase();
             return (
               <motion.article
                 key={item.schedule_id}
@@ -101,9 +92,9 @@ export default function CalendarPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span
-                      className={`grid h-6 w-6 place-items-center rounded-full text-[9px] font-bold text-white ${badgeCls}`}
+                      className={`grid h-6 w-6 place-items-center rounded-full text-white ${badgeCls}`}
                     >
-                      {short}
+                      <SocialPlatformIcon platform={item.platform as SocialPlatformId} size={12} />
                     </span>
                     <p className="text-sm font-semibold text-white light:text-slate-900">
                       Post #{item.post_id}

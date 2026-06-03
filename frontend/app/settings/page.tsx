@@ -15,13 +15,14 @@ import {
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
 
 const platforms = [
-  { id: "instagram", label: "Instagram", cls: "badge-ig", short: "IG" },
-  { id: "tiktok", label: "TikTok", cls: "badge-tk", short: "TK" },
-  { id: "x", label: "X / Twitter", cls: "badge-x", short: "X" },
-  { id: "facebook", label: "Facebook", cls: "badge-fb", short: "FB" },
-  { id: "linkedin", label: "LinkedIn", cls: "badge-li", short: "LI" },
+  { id: "instagram", label: "Instagram", cls: "badge-ig" },
+  { id: "tiktok", label: "TikTok", cls: "badge-tk" },
+  { id: "x", label: "X / Twitter", cls: "badge-x" },
+  { id: "facebook", label: "Facebook", cls: "badge-fb" },
+  { id: "linkedin", label: "LinkedIn", cls: "badge-li" },
 ];
 
 export default function SettingsPage() {
@@ -141,21 +142,22 @@ export default function SettingsPage() {
             role="status"
             className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 light:text-rose-700"
           >
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {[
-              { label: "Plan", value: "Creator" },
-              { label: "Status", value: "Active" },
-              { label: "Security", value: "Protected" },
-            ].map((chip) => (
-              <div key={chip.label} className="surface-soft rounded-xl px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{chip.label}</p>
-                <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">{chip.value}</p>
-              </div>
-            ))}
-          </div>
             {error}
           </p>
         ) : null}
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            { label: "Plan", value: "Creator" },
+            { label: "Status", value: "Active" },
+            { label: "Security", value: "Protected" },
+          ].map((chip) => (
+            <div key={chip.label} className="surface-soft rounded-xl px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{chip.label}</p>
+              <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">{chip.value}</p>
+            </div>
+          ))}
+        </div>
 
         <motion.section
           initial={{ opacity: 0, y: 12 }}
@@ -274,7 +276,7 @@ export default function SettingsPage() {
                   <span
                     className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${platform.cls}`}
                   >
-                    {platform.short}
+                    <SocialPlatformIcon platform={platform.id as SocialPlatformId} size={14} />
                   </span>
                   <span className="flex-1 text-sm font-medium text-slate-300 light:text-slate-700">
                     {platform.label}

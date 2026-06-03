@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { CheckCircle2, Link2, Sparkles } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
+import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
 import {
   approveDistribution,
   createDistributionDraft,
@@ -288,7 +289,7 @@ export default function ComposePage() {
                   }`}
                 >
                   <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${platform.cls}`}>
-                    {platform.label.slice(0, 2).toUpperCase()}
+                    <SocialPlatformIcon platform={platform.id as SocialPlatformId} size={12} />
                   </span>
                   {platform.label}
                 </button>
@@ -350,7 +351,10 @@ export default function ComposePage() {
             {Object.entries(groupedVariants).map(([platform, variants]) => (
               <div key={platform} className="surface-soft rounded-2xl p-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-violet-400 light:text-violet-600">
-                  {platform}
+                  <span className="inline-flex items-center gap-1.5">
+                    <SocialPlatformIcon platform={platform as SocialPlatformId} size={12} />
+                    {platform}
+                  </span>
                 </p>
                 {variants.map((variant) => (
                   <article

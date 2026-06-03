@@ -9,7 +9,6 @@ import {
   MessageSquareQuote,
   Mic2,
   Stars,
-  Workflow,
 } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 
@@ -27,15 +26,11 @@ export default function AIStudioPage() {
       >
         <div className="xcr8-soft-chip mb-3 inline-flex items-center gap-2 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em]">
           <Stars size={12} />
-          Studio Focus Mode
+          AI Studio
         </div>
         <h2 className="xcr8-title-xl max-w-2xl text-white light:text-slate-900">
-          Pick a creation lane and move from idea to output in minutes.
+          Pick a tool and start.
         </h2>
-        <p className="xcr8-subtle mt-2 max-w-2xl text-sm sm:text-base">
-          AI Studio is now organized by intent: planning, writing, and production. No clutter,
-          just clear next actions.
-        </p>
       </motion.div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -51,8 +46,7 @@ export default function AIStudioPage() {
           </p>
           <h3 className="xcr8-title-lg text-white light:text-slate-900">Cr8or Workspace</h3>
           <p className="xcr8-subtle mt-2 text-sm">
-            Brainstorm direction, ask questions, and refine strategy with your persistent workspace
-            memory.
+            Plan with AI chat.
           </p>
           <Link
             href="/ai-studio/assistant"
@@ -74,16 +68,9 @@ export default function AIStudioPage() {
             Create
           </p>
           <h3 className="xcr8-title-lg text-white light:text-slate-900">
-            Generate visual and written assets faster
+            Create
           </h3>
-          <div className="mt-4 grid gap-2 text-sm text-slate-300 light:text-slate-700">
-            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 light:border-slate-200 light:bg-white/70">
-              Use Composer for multi-platform caption variants.
-            </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 light:border-slate-200 light:bg-white/70">
-              Use Image Generator for visual concepts and prompts.
-            </div>
-          </div>
+          <p className="xcr8-subtle mt-2 text-sm">Composer, Brainstorm, and Image Generator.</p>
         </motion.section>
 
         <motion.section
@@ -97,33 +84,9 @@ export default function AIStudioPage() {
             Produce
           </p>
           <h3 className="xcr8-title-lg text-white light:text-slate-900">Turn ideas into final outputs</h3>
-          <p className="xcr8-subtle mt-2 text-sm">
-            Move from plan to voiceover, trend mapping, and export without bouncing across
-            unrelated screens.
-          </p>
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-300 light:border-slate-200 light:bg-white/70 light:text-slate-700">
-            Tip: Start in Cr8or Workspace, then open one tool at a time from the shelf for a
-            cleaner, faster session.
-          </div>
+          <p className="xcr8-subtle mt-2 text-sm">Trend Mapper and Voiceover.</p>
         </motion.section>
       </div>
-
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.2 }}
-        className="xcr8-panel mt-4 rounded-2xl p-4"
-      >
-        <p className="xcr8-eyebrow mb-2 inline-flex items-center gap-2">
-          <Workflow size={13} />
-          Workflow Path
-        </p>
-        <div className="grid gap-2 text-sm sm:grid-cols-3">
-          <div className="surface-soft rounded-xl px-3 py-2.5">1. Plan in Cr8or Workspace</div>
-          <div className="surface-soft rounded-xl px-3 py-2.5">2. Create with focused tools</div>
-          <div className="surface-soft rounded-xl px-3 py-2.5">3. Ship to Compose/Calendar</div>
-        </div>
-      </motion.section>
     </StudioShell>
   );
 }
