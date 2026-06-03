@@ -5,7 +5,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowRight, CalendarClock, CheckCircle2, FileText, Sparkles, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  Bot,
+  CalendarClock,
+  Compass,
+  FileText,
+  ImageIcon,
+  PenSquare,
+  Sparkles,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
+import { Logo } from "@/components/logo";
 import { MobileShell } from "@/components/mobile-shell";
 import { getDashboardOverview, type DashboardOverviewPayload } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -49,9 +62,75 @@ export default function DashboardPage() {
   }, [data?.ai_insights]);
 
   const quickStats = [
-    { label: "Drafts", value: data?.drafts ?? 12, icon: FileText },
-    { label: "Scheduled", value: data?.scheduled ?? 8, icon: CalendarClock },
-    { label: "AI Suggestions", value: data?.ai_suggestions ?? 0, icon: Zap },
+    {
+      label: "Drafts",
+      value: data?.drafts ?? 12,
+      icon: FileText,
+      accent: "bg-cyan-500/15 text-cyan-300 light:bg-cyan-100 light:text-cyan-700",
+    },
+    {
+      label: "Scheduled",
+      value: data?.scheduled ?? 8,
+      icon: CalendarClock,
+      accent: "bg-violet-500/15 text-violet-300 light:bg-violet-100 light:text-violet-700",
+    },
+    {
+      label: "AI Suggestions",
+      value: data?.ai_suggestions ?? 0,
+      icon: Zap,
+      accent: "bg-amber-500/15 text-amber-300 light:bg-amber-100 light:text-amber-700",
+    },
+    {
+      label: "In Motion",
+      value: (data?.drafts ?? 0) + (data?.scheduled ?? 0),
+      icon: TrendingUp,
+      accent: "bg-emerald-500/15 text-emerald-300 light:bg-emerald-100 light:text-emerald-700",
+    },
+  ];
+
+  const quickActions = [
+    {
+      title: "Compose",
+      subtitle: "Draft post",
+      href: "/compose",
+      icon: PenSquare,
+      accent: "bg-cyan-500/15 text-cyan-300 light:bg-cyan-100 light:text-cyan-700",
+    },
+    {
+      title: "Calendar",
+      subtitle: "Plan schedule",
+      href: "/calendar",
+      icon: CalendarClock,
+      accent: "bg-violet-500/15 text-violet-300 light:bg-violet-100 light:text-violet-700",
+    },
+    {
+      title: "Cr8or AI",
+      subtitle: "Ask assistant",
+      href: "/ai-studio/assistant",
+      icon: Bot,
+      accent: "bg-fuchsia-500/15 text-fuchsia-300 light:bg-fuchsia-100 light:text-fuchsia-700",
+    },
+    {
+      title: "Analytics",
+      subtitle: "Read signals",
+      href: "/analytics",
+      icon: BarChart3,
+      accent: "bg-emerald-500/15 text-emerald-300 light:bg-emerald-100 light:text-emerald-700",
+    },
+    {
+      title: "Image AI",
+      subtitle: "Visuals",
+      href: "/ai-studio/image-generator",
+      icon: ImageIcon,
+      accent: "bg-rose-500/15 text-rose-300 light:bg-rose-100 light:text-rose-700",
+    },
+    {
+      title: "Studio",
+      subtitle: "All tools",
+      href: "/ai-studio",
+      icon: Compass,
+      accent: "bg-indigo-500/15 text-indigo-300 light:bg-indigo-100 light:text-indigo-700",
+    },
   ];
 
   const recentPosts = useMemo(() => {
@@ -74,40 +153,78 @@ export default function DashboardPage() {
   if (!hasHydrated || !userId) return null;
 
   return (
-    <MobileShell title="Dashboard" subtitle="Clear plan. Fast execution.">
+    <MobileShell>
       <div className="space-y-4">
-        <motion.section {...fadeUp(0)} className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5">
-          <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-            Elevated Flow
-          </p>
-          <h1 className="xcr8-title-xl text-white light:text-slate-900">Good to see you, {displayName}</h1>
-          <p className="xcr8-subtle mt-2 max-w-2xl text-sm">
-            Everything important is reduced to one simple sequence: pick your next action, execute, then review progress.
-          </p>
+        <motion.section
+          {...fadeUp(0)}
+          className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <Logo size="sm" className="mb-2" />
+              <p className="text-sm font-medium text-slate-300 light:text-slate-700">
+                Welcome back, {displayName}
+              </p>
+            </div>
+            <Link href="/compose" className="cta-btn rounded-xl px-4 py-2.5 text-sm font-semibold">
+              New Post
+            </Link>
+          </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            <Link href="/compose" className="cta-btn rounded-xl px-4 py-3 text-center text-sm font-semibold">
-              Start New Post
-            </Link>
-            <Link href="/calendar" className="surface-soft rounded-xl px-4 py-3 text-center text-sm font-semibold text-slate-200 light:text-slate-800">
-              Check Schedule
-            </Link>
-            <Link href="/ai-studio/assistant" className="surface-soft rounded-xl px-4 py-3 text-center text-sm font-semibold text-slate-200 light:text-slate-800">
-              Open Cr8or AI
-            </Link>
+          <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-4">
+            {quickStats.map((item) => (
+              <article key={`mini-${item.label}`} className="surface-soft rounded-xl px-3 py-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">{item.label}</p>
+                <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
+                  {item.value}
+                </p>
+              </article>
+            ))}
           </div>
         </motion.section>
 
-        <motion.section {...fadeUp(0.05)} className="grid gap-3 sm:grid-cols-3">
+        <motion.section {...fadeUp(0.05)} className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {quickStats.map((item) => (
             <article key={item.label} className="xcr8-panel rounded-2xl p-4">
-              <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300 light:bg-violet-100 light:text-violet-700">
+              <div
+                className={`mb-2 inline-flex h-10 w-10 items-center justify-center rounded-xl ${item.accent}`}
+              >
                 <item.icon size={16} />
               </div>
               <p className="text-2xl font-semibold text-white light:text-slate-900">{item.value}</p>
-              <p className="mt-1 text-sm text-slate-500 light:text-slate-600">{item.label}</p>
+              <p className="mt-1 text-xs uppercase tracking-wide text-slate-500 light:text-slate-600">
+                {item.label}
+              </p>
             </article>
           ))}
+        </motion.section>
+
+        <motion.section {...fadeUp(0.08)} className="xcr8-panel rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="xcr8-title-lg text-white light:text-slate-900">Quick Actions</h2>
+            <Sparkles size={16} className="text-cyan-300" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {quickActions.map((action) => (
+              <Link
+                key={action.title}
+                href={action.href}
+                className="surface-soft rounded-xl px-3 py-3 transition hover:bg-white/10 light:hover:bg-white"
+              >
+                <div
+                  className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg ${action.accent}`}
+                >
+                  <action.icon size={16} />
+                </div>
+                <p className="text-sm font-semibold text-white light:text-slate-900">
+                  {action.title}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500 light:text-slate-600">
+                  {action.subtitle}
+                </p>
+              </Link>
+            ))}
+          </div>
         </motion.section>
 
         <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
@@ -116,10 +233,15 @@ export default function DashboardPage() {
               <Sparkles size={16} className="text-cyan-300" />
               Your Focus Today
             </h2>
-            <div className="space-y-2.5">
-              {focusList.map((item) => (
-                <div key={item} className="surface-soft flex items-start gap-2.5 rounded-xl px-3 py-3">
-                  <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-400" />
+            <div className="grid gap-2.5">
+              {focusList.map((item, index) => (
+                <div
+                  key={item}
+                  className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
+                >
+                  <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-xs font-semibold text-emerald-300 light:bg-emerald-100 light:text-emerald-700">
+                    {index + 1}
+                  </div>
                   <p className="text-sm text-slate-200 light:text-slate-800">{item}</p>
                 </div>
               ))}
@@ -136,7 +258,10 @@ export default function DashboardPage() {
           <motion.section {...fadeUp(0.12)} className="xcr8-panel rounded-2xl p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="xcr8-title-lg text-white light:text-slate-900">Continue Working</h2>
-              <Link href="/compose" className="text-sm font-medium text-violet-300 light:text-violet-700">
+              <Link
+                href="/compose"
+                className="text-sm font-medium text-violet-300 light:text-violet-700"
+              >
                 View all
               </Link>
             </div>
@@ -149,8 +274,12 @@ export default function DashboardPage() {
                   className="surface-soft flex w-full items-center justify-between rounded-xl px-3 py-3 text-left"
                 >
                   <div>
-                    <p className="text-sm font-semibold text-white light:text-slate-900">{post.title}</p>
-                    <p className="mt-1 text-xs text-slate-500 light:text-slate-600">{post.status}</p>
+                    <p className="text-sm font-semibold text-white light:text-slate-900">
+                      {post.title}
+                    </p>
+                    <div className="mt-1 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 light:border-slate-200 light:bg-slate-50 light:text-slate-600">
+                      {post.status}
+                    </div>
                   </div>
                   <ArrowRight size={14} className="text-slate-500" />
                 </button>
