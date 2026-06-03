@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -244,6 +245,39 @@ def _normalize_email(value: str | None) -> str:
     return str(value or "").strip().lower()
 
 
+def _derive_display_name_from_email(email: str) -> str:
+    local_part = email.split("@", 1)[0].strip()
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", " ", local_part).strip()
+    if not cleaned:
+        return "Creator"
+    compact = " ".join(cleaned.split())
+    return _compact_text(compact.title(), 120) or "Creator"
+
+
+def _get_or_create_user_by_email(db: Session, email: str | None) -> User | None:
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return None
+
+    existing = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
+    if existing:
+        return existing
+
+    candidate = User(email=normalized_email, display_name=_derive_display_name_from_email(normalized_email))
+    db.add(candidate)
+    try:
+        db.commit()
+        db.refresh(candidate)
+        return candidate
+    except IntegrityError:
+        db.rollback()
+        return db.scalar(select(User).where(func.lower(User.email) == normalized_email))
+    except Exception:
+        db.rollback()
+        logger.exception("Unable to create fallback user for assistant email lookup.")
+        return None
+
+
 def _parse_chat_memory_record(memory_record: CreatorMemory | None) -> dict | None:
     if not memory_record or not memory_record.memory_value:
         return None
@@ -376,21 +410,14 @@ def _resolve_assistant_user(db: Session, payload: AIAssistantRequest) -> User | 
     if user:
         return user
 
-    if payload.email:
-        normalized_email = _normalize_email(payload.email)
-        return db.scalar(select(User).where(func.lower(User.email) == normalized_email))
-
-    return None
+    return _get_or_create_user_by_email(db, payload.email)
 
 
 def _resolve_user_by_identity(db: Session, user_id: int, email: str | None) -> User | None:
     user = db.get(User, user_id)
     if user:
         return user
-    if email:
-        normalized_email = _normalize_email(email)
-        return db.scalar(select(User).where(func.lower(User.email) == normalized_email))
-    return None
+    return _get_or_create_user_by_email(db, email)
 
 
 def _build_chat_history_response(memory_record: CreatorMemory, fallback_chat_id: str) -> AIAssistantChatHistory:

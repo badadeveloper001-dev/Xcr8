@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, History, MessageSquarePlus, SendHorizontal } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import {
-  createAiAssistantChat,
   chatWithAiAssistant,
   getAiAssistantChatHistory,
   getApiErrorMessage,
@@ -47,6 +46,13 @@ function messagesStorageKey(userId: number, chatId: string) {
 
 function buildChatTitle(value: string) {
   return value.trim().slice(0, 56) || "New chat";
+}
+
+function buildClientChatId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `chat-${crypto.randomUUID().slice(0, 12)}`;
+  }
+  return `chat-${Math.random().toString(36).slice(2, 14)}`;
 }
 
 function buildWelcomeMessage(displayName: string | null): ChatItem {
@@ -95,7 +101,6 @@ export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
   const email = useCreatorStore((state) => state.email);
   const displayName = useCreatorStore((state) => state.displayName);
-  const clearSession = useCreatorStore((state) => state.clearSession);
   const welcomeMessage = useMemo(() => buildWelcomeMessage(displayName), [displayName]);
   const [messages, setMessages] = useState<ChatItem[]>([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState<AiAssistantChatSummary[]>([]);
@@ -139,8 +144,7 @@ export default function AssistantPage() {
 
   useEffect(() => {
     const promptParam = new URLSearchParams(window.location.search).get("prompt")?.trim() ?? "";
-    const requestedChatId =
-      new URLSearchParams(window.location.search).get("chat")?.trim() ?? null;
+    const requestedChatId = new URLSearchParams(window.location.search).get("chat")?.trim() ?? null;
 
     requestedChatParamRef.current = requestedChatId;
 
@@ -184,8 +188,8 @@ export default function AssistantPage() {
           requestedChatId && cachedSessions.some((session) => session.chat_id === requestedChatId)
             ? requestedChatId
             : storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
-            ? storedChatId
-            : (cachedSessions[0]?.chat_id ?? null);
+              ? storedChatId
+              : (cachedSessions[0]?.chat_id ?? null);
         setActiveChatId(cachedActive);
       }
 
@@ -199,18 +203,6 @@ export default function AssistantPage() {
           sessions = cachedSessions;
         }
 
-        if (sessions.length === 0) {
-          const created = await createAiAssistantChat(
-            userId,
-            { title: "New chat" },
-            email ?? undefined,
-          );
-          if (cancelled) {
-            return;
-          }
-          sessions = [created];
-        }
-
         setChatSessions(sessions);
         const storedChatId = localStorage.getItem(storageKey);
         const requestedChatId = requestedChatParamRef.current;
@@ -218,8 +210,8 @@ export default function AssistantPage() {
           requestedChatId && sessions.some((session) => session.chat_id === requestedChatId)
             ? requestedChatId
             : storedChatId && sessions.some((session) => session.chat_id === storedChatId)
-            ? storedChatId
-            : (sessions[0]?.chat_id ?? null);
+              ? storedChatId
+              : (sessions[0]?.chat_id ?? null);
         setActiveChatId(nextChatId);
       } catch {
         if (!cancelled) {
@@ -228,11 +220,12 @@ export default function AssistantPage() {
             const storedChatId = localStorage.getItem(storageKey);
             const requestedChatId = requestedChatParamRef.current;
             const nextChatId =
-              requestedChatId && cachedSessions.some((session) => session.chat_id === requestedChatId)
+              requestedChatId &&
+              cachedSessions.some((session) => session.chat_id === requestedChatId)
                 ? requestedChatId
                 : storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
-                ? storedChatId
-                : (cachedSessions[0]?.chat_id ?? null);
+                  ? storedChatId
+                  : (cachedSessions[0]?.chat_id ?? null);
             setActiveChatId(nextChatId);
           } else {
             setChatSessions([]);
@@ -357,31 +350,24 @@ export default function AssistantPage() {
       return;
     }
 
-    const createChat = async () => {
-      try {
-        const summary = await createAiAssistantChat(
-          userId,
-          { title: "New chat" },
-          email ?? undefined,
-        );
-        setActiveChatId(summary.chat_id);
-        setMessages([welcomeMessage]);
-        setError(null);
-        setPrompt("");
-        localStorage.removeItem(draftStorageKey(userId, summary.chat_id));
-        setSuggestedActions(starterPrompts);
-        setChatSessions((current) => [
-          summary,
-          ...current.filter((session) => session.chat_id !== summary.chat_id),
-        ]);
-      } catch (err) {
-        setError(
-          getApiErrorMessage(err, "Could not create a new chat right now. Please try again."),
-        );
-      }
+    const chatId = buildClientChatId();
+    const summary: AiAssistantChatSummary = {
+      chat_id: chatId,
+      title: "New chat",
+      preview: "Start a fresh conversation with Cr8or AI.",
+      updated_at: new Date().toISOString(),
     };
 
-    void createChat();
+    setActiveChatId(chatId);
+    setMessages([welcomeMessage]);
+    setError(null);
+    setPrompt("");
+    localStorage.removeItem(draftStorageKey(userId, chatId));
+    setSuggestedActions(starterPrompts);
+    setChatSessions((current) => [
+      summary,
+      ...current.filter((session) => session.chat_id !== chatId),
+    ]);
   };
 
   const submitPrompt = async (value: string) => {
@@ -404,18 +390,17 @@ export default function AssistantPage() {
       return;
     }
 
-    let currentChatId = activeChatId;
-    if (!currentChatId) {
-      const created = await createAiAssistantChat(
-        userId,
-        { title: buildChatTitle(nextPrompt) },
-        email ?? undefined,
-      );
-      currentChatId = created.chat_id;
+    const currentChatId = activeChatId ?? buildClientChatId();
+    if (!activeChatId) {
       setActiveChatId(currentChatId);
       setChatSessions((current) => [
-        created,
-        ...current.filter((session) => session.chat_id !== created.chat_id),
+        {
+          chat_id: currentChatId,
+          title: buildChatTitle(nextPrompt),
+          preview: nextPrompt.slice(0, 90),
+          updated_at: new Date().toISOString(),
+        },
+        ...current.filter((session) => session.chat_id !== currentChatId),
       ]);
     }
 
@@ -473,8 +458,7 @@ export default function AssistantPage() {
       );
 
       if (errorMessage.toLowerCase().includes("user not found")) {
-        clearSession();
-        setError("Your session has expired. Please log in again.");
+        setError("We could not load your assistant profile yet. Please retry in a moment.");
         return;
       }
 
@@ -495,9 +479,7 @@ export default function AssistantPage() {
         <section className="ai-stage p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="xcr8-title-lg text-white light:text-slate-900">
-                Cr8or Workspace
-              </h2>
+              <h2 className="xcr8-title-lg text-white light:text-slate-900">Cr8or Workspace</h2>
             </div>
             <div className="flex items-center gap-2">
               <Link
@@ -545,9 +527,7 @@ export default function AssistantPage() {
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
                     className={`ai-msg min-w-0 max-w-[92%] whitespace-pre-wrap break-all [overflow-wrap:anywhere] md:max-w-[88%] ${
-                      message.role === "user"
-                        ? "ai-msg-user ml-auto"
-                        : "ai-msg-assistant mr-auto"
+                      message.role === "user" ? "ai-msg-user ml-auto" : "ai-msg-assistant mr-auto"
                     }`}
                   >
                     {message.content}
@@ -595,20 +575,20 @@ export default function AssistantPage() {
                 {error}
               </p>
             ) : null}
-            </div>
+          </div>
 
-            <div className="flex flex-wrap gap-2">
-              {suggestedActions.slice(0, 3).map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => setPrompt(action)}
-                  className="ai-prompt-btn"
-                >
-                  {action}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-2">
+            {suggestedActions.slice(0, 3).map((action) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => setPrompt(action)}
+                className="ai-prompt-btn"
+              >
+                {action}
+              </button>
+            ))}
+          </div>
         </section>
       </div>
     </StudioShell>
