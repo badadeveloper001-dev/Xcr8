@@ -26,7 +26,7 @@
 .dark {
   --background: 228 46% 7%;
   --foreground: 210 38% 96%;
-  --primary: 196 86% 55%;
+  --primary: 267 84% 64%;
   --primary-foreground: 0 0% 100%;
   --border: 230 24% 22%;
   --input: 229 26% 14%;
@@ -77,10 +77,10 @@ body {
 /* ─── Backgrounds ────────────────────────────────── */
 .dark body {
   background-image:
-    radial-gradient(ellipse at 8% 8%, rgba(56, 189, 248, 0.18), transparent 34%),
-    radial-gradient(ellipse at 92% 12%, rgba(14, 165, 233, 0.16), transparent 34%),
-    radial-gradient(ellipse at 48% 96%, rgba(30, 64, 175, 0.12), transparent 40%),
-    linear-gradient(165deg, #060a14 0%, #0b1220 52%, #070d17 100%);
+    radial-gradient(ellipse at 8% 8%, rgba(139, 92, 246, 0.28), transparent 36%),
+    radial-gradient(ellipse at 92% 12%, rgba(168, 85, 247, 0.2), transparent 34%),
+    radial-gradient(ellipse at 50% 96%, rgba(34, 211, 238, 0.1), transparent 40%),
+    linear-gradient(165deg, #050712 0%, #0b0f24 52%, #060914 100%);
 }
 
 html:not(.dark) body {
@@ -118,13 +118,13 @@ html:not(.dark) body {
 
 .dark .surface-luxe {
   background:
-    radial-gradient(circle at 14% 12%, rgba(14, 165, 233, 0.14), transparent 36%),
-    radial-gradient(circle at 85% 84%, rgba(59, 130, 246, 0.12), transparent 34%),
-    radial-gradient(circle at 72% 16%, rgba(15, 23, 42, 0.1), transparent 28%),
+    radial-gradient(circle at 14% 12%, rgba(139, 92, 246, 0.18), transparent 36%),
+    radial-gradient(circle at 85% 84%, rgba(168, 85, 247, 0.15), transparent 34%),
+    radial-gradient(circle at 72% 16%, rgba(34, 211, 238, 0.08), transparent 28%),
     var(--surface-card-bg);
-  border: 1px solid color-mix(in srgb, var(--surface-card-border) 76%, rgba(56, 189, 248, 0.24));
+  border: 1px solid color-mix(in srgb, var(--surface-card-border) 76%, rgba(139, 92, 246, 0.26));
   box-shadow:
-    0 22px 46px rgba(15, 23, 42, 0.34),
+    0 22px 46px rgba(34, 20, 60, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -263,12 +263,12 @@ html:not(.dark) .lux-orb-c {
 }
 
 .dark .cta-btn {
-  background: linear-gradient(100deg, #0ea5e9 0%, #2563eb 52%, #06b6d4 100%);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.3);
+  background: linear-gradient(100deg, #7c3aed 0%, #a855f7 52%, #22d3ee 100%);
+  box-shadow: 0 12px 30px rgba(124, 58, 237, 0.32);
 }
 
 .dark .cta-btn:hover {
-  box-shadow: 0 16px 40px rgba(14, 165, 233, 0.28);
+  box-shadow: 0 16px 40px rgba(168, 85, 247, 0.3);
 }
 .cta-btn:hover {
   opacity: 0.96;
@@ -346,7 +346,7 @@ html:not(.dark) [class*="bg-violet-"] {
 }
 
 .dark [class*="bg-violet-"] {
-  filter: saturate(0.72) hue-rotate(12deg);
+  filter: saturate(0.9) hue-rotate(30deg);
 }
 
 /* ─── Insight icon tints ─────────────────────────── */
