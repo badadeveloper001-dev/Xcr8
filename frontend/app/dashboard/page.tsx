@@ -7,10 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
-  BarChart3,
-  Bot,
   CalendarClock,
-  Compass,
   FileText,
   ImageIcon,
   PenSquare,
@@ -90,46 +87,18 @@ export default function DashboardPage() {
 
   const quickActions = [
     {
-      title: "Compose",
-      subtitle: "Draft post",
+      title: "Composer",
+      subtitle: "Draft a post",
       href: "/compose",
       icon: PenSquare,
       accent: "bg-cyan-500/15 text-cyan-300 light:bg-cyan-100 light:text-cyan-700",
     },
     {
-      title: "Calendar",
-      subtitle: "Plan schedule",
-      href: "/calendar",
-      icon: CalendarClock,
-      accent: "bg-violet-500/15 text-violet-300 light:bg-violet-100 light:text-violet-700",
-    },
-    {
-      title: "Cr8or AI",
-      subtitle: "Ask assistant",
-      href: "/ai-studio/assistant",
-      icon: Bot,
-      accent: "bg-fuchsia-500/15 text-fuchsia-300 light:bg-fuchsia-100 light:text-fuchsia-700",
-    },
-    {
-      title: "Analytics",
-      subtitle: "Read signals",
-      href: "/analytics",
-      icon: BarChart3,
-      accent: "bg-emerald-500/15 text-emerald-300 light:bg-emerald-100 light:text-emerald-700",
-    },
-    {
       title: "Image AI",
-      subtitle: "Visuals",
+      subtitle: "Generate visuals",
       href: "/ai-studio/image-generator",
       icon: ImageIcon,
       accent: "bg-rose-500/15 text-rose-300 light:bg-rose-100 light:text-rose-700",
-    },
-    {
-      title: "Studio",
-      subtitle: "All tools",
-      href: "/ai-studio",
-      icon: Compass,
-      accent: "bg-indigo-500/15 text-indigo-300 light:bg-indigo-100 light:text-indigo-700",
     },
   ];
 
@@ -202,9 +171,17 @@ export default function DashboardPage() {
         <motion.section {...fadeUp(0.08)} className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="xcr8-title-lg text-white light:text-slate-900">Quick Actions</h2>
-            <Sparkles size={16} className="text-cyan-300" />
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-cyan-300" />
+              <Link
+                href="/ai-studio"
+                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:hover:bg-slate-50"
+              >
+                See all tools
+              </Link>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3">
             {quickActions.map((action) => (
               <Link
                 key={action.title}
