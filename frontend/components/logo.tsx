@@ -26,7 +26,7 @@ export function Logo({ size = "md", className = "" }: { size?: LogoSize; classNa
     >
       <img
         className="block dark:hidden"
-        src="/XCR8.jpg"
+        src="/Xcr8_black-removebg-preview.png"
         alt="XCR8"
         style={{ width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
         draggable={false}
