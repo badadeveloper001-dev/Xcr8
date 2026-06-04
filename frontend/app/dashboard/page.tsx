@@ -138,7 +138,7 @@ export default function DashboardPage() {
                 New Post
               </Link>
             </div>
-            <p className="mt-2 pl-5 text-sm font-medium text-slate-300 light:text-slate-700">
+            <p className="mt-2 pl-3 text-sm font-medium text-slate-300 light:text-slate-700">
               Welcome back, {displayName}
             </p>
           </div>
@@ -153,6 +153,22 @@ export default function DashboardPage() {
               </article>
             ))}
           </div>
+        </motion.section>
+
+        <motion.section {...fadeUp(0.05)} className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          {quickStats.map((item) => (
+            <article key={item.label} className="xcr8-panel rounded-2xl p-4">
+              <div
+                className={`mb-2 inline-flex h-10 w-10 items-center justify-center rounded-xl ${item.accent}`}
+              >
+                <item.icon size={16} />
+              </div>
+              <p className="text-2xl font-semibold text-white light:text-slate-900">{item.value}</p>
+              <p className="mt-1 text-xs uppercase tracking-wide text-slate-500 light:text-slate-600">
+                {item.label}
+              </p>
+            </article>
+          ))}
         </motion.section>
 
         <motion.section {...fadeUp(0.08)} className="xcr8-panel rounded-2xl p-4">
