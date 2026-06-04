@@ -9,9 +9,9 @@ type LogoSize = "sm" | "md";
 
 const sizes: Record<LogoSize, number> = {
   // standard nav / card header
-  md: 180,
+  md: 220,
   // compact (e.g. mobile nav, onboarding step)
-  sm: 132,
+  sm: 160,
 };
 
 export function Logo({ size = "md", className = "" }: { size?: LogoSize; className?: string }) {
