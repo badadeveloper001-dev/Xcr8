@@ -63,25 +63,25 @@ export default function DashboardPage() {
       label: "Drafts",
       value: data?.drafts ?? 12,
       icon: FileText,
-      accent: "bg-cyan-500/15 text-cyan-300 light:bg-cyan-100 light:text-cyan-700",
+      accent: "bg-cyan-500/15 text-cyan-300 light:bg-[#6E16F2] light:text-white",
     },
     {
       label: "Scheduled",
       value: data?.scheduled ?? 8,
       icon: CalendarClock,
-      accent: "bg-violet-500/15 text-violet-300 light:bg-violet-100 light:text-violet-700",
+      accent: "bg-violet-500/15 text-violet-300 light:bg-[#6E16F2] light:text-white",
     },
     {
       label: "AI Suggestions",
       value: data?.ai_suggestions ?? 0,
       icon: Zap,
-      accent: "bg-amber-500/15 text-amber-300 light:bg-amber-100 light:text-amber-700",
+      accent: "bg-amber-500/15 text-amber-300 light:bg-[#6E16F2] light:text-white",
     },
     {
       label: "In Motion",
       value: (data?.drafts ?? 0) + (data?.scheduled ?? 0),
       icon: TrendingUp,
-      accent: "bg-emerald-500/15 text-emerald-300 light:bg-emerald-100 light:text-emerald-700",
+      accent: "bg-emerald-500/15 text-emerald-300 light:bg-[#6E16F2] light:text-white",
     },
   ];
 
@@ -91,14 +91,14 @@ export default function DashboardPage() {
       subtitle: "Draft a post",
       href: "/compose",
       icon: PenSquare,
-      accent: "bg-cyan-500/15 text-cyan-300 light:bg-cyan-100 light:text-cyan-700",
+      accent: "bg-cyan-500/15 text-cyan-300 light:bg-[#6E16F2] light:text-white",
     },
     {
       title: "Image AI",
       subtitle: "Generate visuals",
       href: "/ai-studio/image-generator",
       icon: ImageIcon,
-      accent: "bg-rose-500/15 text-rose-300 light:bg-rose-100 light:text-rose-700",
+      accent: "bg-rose-500/15 text-rose-300 light:bg-[#6E16F2] light:text-white",
     },
   ];
 
