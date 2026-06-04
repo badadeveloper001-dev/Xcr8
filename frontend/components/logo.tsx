@@ -25,7 +25,14 @@ export function Logo({ size = "md", className = "" }: { size?: LogoSize; classNa
       role="img"
     >
       <img
-        className="xcr8-logo-outline-light"
+        className="block dark:hidden"
+        src="/XCR8.jpg"
+        alt="XCR8"
+        style={{ width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
+        draggable={false}
+      />
+      <img
+        className="hidden dark:block"
         src="/5d03bb27-9df6-417f-b28f-5984e329bdc0-removebg-preview.png"
         alt="XCR8"
         style={{ width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
