@@ -129,11 +129,11 @@ export default function DashboardPage() {
           className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
         >
           <div>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <Logo size="sm" className="logo-breathe origin-left" />
               <Link
                 href="/compose"
-                className="cta-btn self-start rounded-xl px-4 py-2.5 text-sm font-semibold"
+                className="cta-btn rounded-xl px-4 py-2.5 text-sm font-semibold"
               >
                 New Post
               </Link>
