@@ -128,16 +128,19 @@ export default function DashboardPage() {
           {...fadeUp(0)}
           className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <Logo size="sm" className="logo-breathe mb-2 origin-left scale-110" />
-              <p className="text-sm font-medium text-slate-300 light:text-slate-700">
-                Welcome back, {displayName}
-              </p>
+          <div>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <Logo size="sm" className="logo-breathe origin-left" />
+              <Link
+                href="/compose"
+                className="cta-btn self-start rounded-xl px-4 py-2.5 text-sm font-semibold"
+              >
+                New Post
+              </Link>
             </div>
-            <Link href="/compose" className="cta-btn rounded-xl px-4 py-2.5 text-sm font-semibold">
-              New Post
-            </Link>
+            <p className="mt-2 text-sm font-medium text-slate-300 light:text-slate-700">
+              Welcome back, {displayName}
+            </p>
           </div>
 
           <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-4">

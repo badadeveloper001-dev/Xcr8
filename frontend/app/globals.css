@@ -4,7 +4,7 @@
 
 /* ─── Design tokens ──────────────────────────────── */
 :root {
-  --background: 36 28% 96%;
+  --background: 0 0% 100%;
   --foreground: 224 32% 10%;
   --primary: 194 92% 42%;
   --primary-foreground: 0 0% 100%;
@@ -24,7 +24,7 @@
 }
 
 .dark {
-  --background: 228 46% 7%;
+  --background: 267 90% 8%;
   --foreground: 210 38% 96%;
   --primary: 267 84% 64%;
   --primary-foreground: 0 0% 100%;
@@ -76,19 +76,13 @@ body {
 
 /* ─── Backgrounds ────────────────────────────────── */
 .dark body {
-  background-image:
-    radial-gradient(ellipse at 8% 8%, rgba(139, 92, 246, 0.28), transparent 36%),
-    radial-gradient(ellipse at 92% 12%, rgba(168, 85, 247, 0.2), transparent 34%),
-    radial-gradient(ellipse at 50% 96%, rgba(34, 211, 238, 0.1), transparent 40%),
-    linear-gradient(165deg, #050712 0%, #0b0f24 52%, #060914 100%);
+  background-image: none;
+  background-color: #150227;
 }
 
 html:not(.dark) body {
-  background-image:
-    radial-gradient(ellipse at 12% 8%, rgba(34, 211, 238, 0.12), transparent 36%),
-    radial-gradient(ellipse at 88% 6%, rgba(234, 179, 8, 0.14), transparent 34%),
-    radial-gradient(ellipse at 48% 100%, rgba(244, 114, 182, 0.07), transparent 42%),
-    linear-gradient(180deg, #fff8eb 0%, #f8f1e4 100%);
+  background-image: none;
+  background-color: #ffffff;
 }
 
 /* ─── Reusable surface classes ───────────────────── */
@@ -261,15 +255,15 @@ html:not(.dark) .lux-orb-c {
 
 @keyframes logo-breathe {
   0% {
-    transform: scale(1.1) translateY(0px);
+    transform: scale(1) translateY(0px);
     filter: brightness(1);
   }
   50% {
-    transform: scale(1.12) translateY(-1px);
-    filter: brightness(1.04);
+    transform: scale(1.015) translateY(-1px);
+    filter: brightness(1.02);
   }
   100% {
-    transform: scale(1.1) translateY(0px);
+    transform: scale(1) translateY(0px);
     filter: brightness(1);
   }
 }
