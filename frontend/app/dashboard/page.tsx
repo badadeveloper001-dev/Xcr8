@@ -89,7 +89,7 @@ export default function DashboardPage() {
     {
       title: "Composer",
       subtitle: "Draft a post",
-      href: "/compose",
+      href: "/ai-studio/composer",
       icon: PenSquare,
       accent: "bg-cyan-500/15 text-cyan-300 light:bg-[#6E16F2] light:text-white",
     },
