@@ -138,7 +138,7 @@ export default function DashboardPage() {
                 New Post
               </Link>
             </div>
-            <p className="mt-2 text-sm font-medium text-slate-300 light:text-slate-700">
+            <p className="mt-2 pl-3 text-sm font-medium text-slate-300 light:text-slate-700">
               Welcome back, {displayName}
             </p>
           </div>
