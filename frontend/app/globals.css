@@ -284,6 +284,16 @@ html:not(.dark) .lux-orb-c {
     box-shadow 0.2s ease;
 }
 
+html:not(.dark) .cta-btn {
+  background: #6e16f2;
+  box-shadow: 0 12px 30px rgba(110, 22, 242, 0.28);
+}
+
+html:not(.dark) .cta-btn:hover {
+  background: #5f12d0;
+  box-shadow: 0 16px 40px rgba(110, 22, 242, 0.26);
+}
+
 .dark .cta-btn {
   background: linear-gradient(100deg, #7c3aed 0%, #a855f7 52%, #22d3ee 100%);
   box-shadow: 0 12px 30px rgba(124, 58, 237, 0.32);
