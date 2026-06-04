@@ -130,7 +130,7 @@ export default function DashboardPage() {
         >
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Logo size="sm" className="logo-breathe -ml-2 origin-left" />
+              <Logo size="sm" className="logo-breathe origin-left" />
               <Link
                 href="/compose"
                 className="cta-btn rounded-xl px-4 py-2.5 text-sm font-semibold"
