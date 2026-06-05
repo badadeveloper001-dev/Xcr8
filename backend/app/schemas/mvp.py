@@ -251,6 +251,14 @@ class AIVoiceoverRequest(BaseModel):
     messages: list[AIConversationMessage] = Field(default_factory=list)
 
 
+class AIVoiceoverAudioRequest(BaseModel):
+    user_id: int
+    text: str = Field(min_length=3, max_length=6000)
+    language: str = Field(default="english", max_length=32)
+    pace: str = Field(default="steady", max_length=40)
+    voice_style: str = Field(default="warm", max_length=40)
+
+
 class AIVoiceoverResponse(BaseModel):
     script_title: str
     hook: str

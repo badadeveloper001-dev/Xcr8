@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, Mic, Play, SendHorizontal, Square, Sparkles } from "lucide-react";
+import { Check, Copy, Download, Mic, Play, SendHorizontal, Square, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
-import { generateAiVoiceover, getApiErrorMessage, type AiVoiceoverResponse } from "@/lib/api";
+import {
+  generateAiVoiceover,
+  generateAiVoiceoverAudio,
+  getApiErrorMessage,
+  type AiVoiceoverResponse,
+} from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 const platformOptions = ["instagram", "tiktok", "youtube_shorts", "threads", "linkedin", "x"];
@@ -40,6 +45,8 @@ export default function VoiceoverPage() {
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const stopPlayback = () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -149,6 +156,52 @@ export default function VoiceoverPage() {
     await navigator.clipboard.writeText(result.voiceover_script);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  const buildDownloadName = () => {
+    const base = (result?.script_title || topic || "voiceover").toLowerCase();
+    const slug = base
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48);
+    return `${slug || "xcr8-voiceover"}.mp3`;
+  };
+
+  const downloadVoiceoverAudio = async () => {
+    if (!result) {
+      setDownloadError("Generate a voiceover first.");
+      return;
+    }
+    if (!userId) {
+      setDownloadError("Your session is missing. Please log in again to download audio.");
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadError(null);
+
+    try {
+      const audioBlob = await generateAiVoiceoverAudio({
+        user_id: userId,
+        text: [result.hook, result.voiceover_script, result.cta].filter(Boolean).join(" "),
+        language: result.language,
+        pace,
+        voice_style: voiceStyle,
+      });
+
+      const downloadUrl = window.URL.createObjectURL(audioBlob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = buildDownloadName();
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setDownloadError(getApiErrorMessage(err, "Could not generate the audio download right now."));
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   useEffect(() => {
@@ -330,6 +383,15 @@ export default function VoiceoverPage() {
                     <Square size={13} />
                     Stop
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void downloadVoiceoverAudio()}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white/70 light:text-slate-700"
+                    disabled={!result || isDownloading}
+                  >
+                    <Download size={13} />
+                    {isDownloading ? "Preparing download..." : "Download audio"}
+                  </button>
                   <p className="text-xs text-slate-500">
                     {isSpeaking ? "Speaking aloud in your browser." : "Ready to play as audio."}
                   </p>
@@ -413,6 +475,15 @@ export default function VoiceoverPage() {
               className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-400"
             >
               {voiceError}
+            </p>
+          ) : null}
+
+          {downloadError ? (
+            <p
+              role="status"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-400"
+            >
+              {downloadError}
             </p>
           ) : null}
         </section>

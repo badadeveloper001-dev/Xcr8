@@ -4,6 +4,7 @@ python-dotenv==1.1.0
 pydantic==2.11.4
 pydantic-settings==2.9.1
 openai==1.79.0
+httpx==0.28.1
 langchain==0.3.25
 pgvector==0.3.6
 pinecone-client==5.0.1

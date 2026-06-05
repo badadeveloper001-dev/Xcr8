@@ -5,6 +5,7 @@ import logging
 import re
 from time import perf_counter
 
+import httpx
 from openai import OpenAI
 
 from app.core.config import settings
@@ -22,12 +23,27 @@ SYSTEM_PROMPT = (
     "voiceover_script should read like a voiceover draft, not bullet points."
 )
 
+VOICE_STYLE_TO_TTS_VOICE = {
+    "warm": "nova",
+    "confident": "alloy",
+    "calm": "echo",
+    "high-energy": "fable",
+    "premium": "onyx",
+}
+
+PACE_TO_SPEED = {
+    "slow": 0.9,
+    "steady": 1.0,
+    "fast": 1.1,
+    "punchy": 1.05,
+}
+
 
 def _compact_text(value: str, limit: int = 260) -> str:
     text = re.sub(r"\s+", " ", str(value or "").strip())
     if len(text) <= limit:
         return text
-    return text[: max(0, limit - 1)].rstrip() + "…"
+    return text[: max(0, limit - 1)].rstrip() + "..."
 
 
 def _extract_keywords(text: str, max_items: int = 4) -> list[str]:
@@ -84,15 +100,19 @@ def _fallback_voiceover(payload: dict) -> dict:
     goal = str(payload.get("goal", "engage viewers")).strip()
     voice_style = str(payload.get("voice_style", "warm")).strip()
     duration_seconds = int(payload.get("duration_seconds", 60) or 60)
-    creator_memory = payload.get("creator_memory", {}) if isinstance(payload.get("creator_memory", {}), dict) else {}
+    creator_memory = (
+        payload.get("creator_memory", {})
+        if isinstance(payload.get("creator_memory", {}), dict)
+        else {}
+    )
     keywords = _extract_keywords(topic, max_items=3)
     primary = keywords[0] if keywords else topic
     memory_hint = _memory_hint(creator_memory)
 
     beat_breakdown = [
         f"Open with the core promise around {primary}.",
-        f"Explain the value in one short, spoken sentence.",
-        f"Add one concrete example the audience can picture quickly.",
+        "Explain the value in one short, spoken sentence.",
+        "Add one concrete example the audience can picture quickly.",
         f"Close with a direct next step that matches the goal: {goal}.",
     ]
     delivery_notes = [
@@ -121,11 +141,11 @@ def _fallback_voiceover(payload: dict) -> dict:
         ],
         "delivery_notes": delivery_notes,
         "alt_openers": [
-            f"Here’s the simplest way to explain {primary}.",
+            f"Here is the simplest way to explain {primary}.",
             f"This is the version of {primary} I wish someone told me sooner.",
             f"If {primary} feels confusing, make it this simple.",
         ],
-        "cta": f"Ask people to try this and reply with what they want to make next.",
+        "cta": "Ask people to try this and reply with what they want to make next.",
         "estimated_duration_seconds": duration_seconds,
         "platform": platform,
         "language": language,
@@ -150,11 +170,16 @@ def generate_voiceover_script(payload: dict) -> dict:
     pace = str(payload.get("pace", "steady")).strip()
     voice_style = str(payload.get("voice_style", "warm")).strip()
     duration_seconds = int(payload.get("duration_seconds", 60) or 60)
-    creator_memory = payload.get("creator_memory", {}) if isinstance(payload.get("creator_memory", {}), dict) else {}
+    creator_memory = (
+        payload.get("creator_memory", {})
+        if isinstance(payload.get("creator_memory", {}), dict)
+        else {}
+    )
     messages = payload.get("messages", []) if isinstance(payload.get("messages", []), list) else []
-    started = perf_counter()
 
     client = OpenAI(api_key=settings.openai_api_key)
+    started = perf_counter()
+
     try:
         completion = client.chat.completions.create(
             model=settings.openai_model,
@@ -209,7 +234,10 @@ def generate_voiceover_script(payload: dict) -> dict:
             return _fallback_voiceover(payload)
 
         return {
-            "script_title": _compact_text(str(parsed.get("script_title", f"{topic.title()} Voiceover Script")).strip(), 90),
+            "script_title": _compact_text(
+                str(parsed.get("script_title", f"{topic.title()} Voiceover Script")).strip(),
+                90,
+            ),
             "hook": _compact_text(str(parsed.get("hook", "")).strip(), 220),
             "voiceover_script": voiceover_script,
             "beat_breakdown": [str(item).strip() for item in beat_breakdown if str(item).strip()][:6],
@@ -217,7 +245,9 @@ def generate_voiceover_script(payload: dict) -> dict:
             "delivery_notes": [str(item).strip() for item in delivery_notes if str(item).strip()][:5],
             "alt_openers": [str(item).strip() for item in alt_openers if str(item).strip()][:4],
             "cta": _compact_text(str(parsed.get("cta", "")).strip(), 220),
-            "estimated_duration_seconds": int(parsed.get("estimated_duration_seconds", duration_seconds) or duration_seconds),
+            "estimated_duration_seconds": int(
+                parsed.get("estimated_duration_seconds", duration_seconds) or duration_seconds
+            ),
             "platform": platform,
             "language": language,
             "tone": tone,
@@ -237,3 +267,36 @@ def generate_voiceover_script(payload: dict) -> dict:
         fallback["model"] = "voiceover-local-fallback-after-openai-error"
         fallback["latency_ms"] = int((perf_counter() - started) * 1000)
         return fallback
+
+
+def generate_voiceover_audio(payload: dict) -> bytes:
+    if not settings.openai_api_key:
+        raise RuntimeError("OpenAI API key is not configured for voiceover audio generation.")
+
+    text = _compact_text(str(payload.get("text") or "").strip(), 6000)
+    if not text:
+        raise ValueError("Voiceover text is required.")
+
+    voice_style = str(payload.get("voice_style") or "warm").strip()
+    pace = str(payload.get("pace") or "steady").strip()
+    voice = VOICE_STYLE_TO_TTS_VOICE.get(voice_style, "nova")
+    speed = PACE_TO_SPEED.get(pace, 1.0)
+
+    response = httpx.post(
+        "https://api.openai.com/v1/audio/speech",
+        headers={
+            "Authorization": f"Bearer {settings.openai_api_key}",
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        },
+        json={
+            "model": "tts-1",
+            "input": text,
+            "voice": voice,
+            "response_format": "mp3",
+            "speed": speed,
+        },
+        timeout=120.0,
+    )
+    response.raise_for_status()
+    return response.content

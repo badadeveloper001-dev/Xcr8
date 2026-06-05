@@ -69,38 +69,11 @@ class ContentIdeaResponse(BaseModel):
     usage: dict = Field(default_factory=dict)
 
 
-class VoiceoverRequest(BaseModel):
-    topic: str = Field(min_length=3, max_length=200)
-    platform: str = Field(default="instagram", max_length=40)
+class VoiceoverAudioRequest(BaseModel):
+    text: str = Field(min_length=3, max_length=6000)
     language: str = Field(default="english", max_length=32)
-    tone: str = Field(default="conversational", max_length=80)
-    duration: str = Field(default="30s", max_length=20)
-    audience_location: str | None = None
-    creator_memory: dict = Field(default_factory=dict)
-
-
-class VoiceoverBeat(BaseModel):
-    beat: str
-    delivery: str
-    purpose: str
-
-
-class VoiceoverResponse(BaseModel):
-    topic: str
-    platform: str
-    language: str
-    tone: str
-    duration: str
-    model: str
-    prompt_template_version: str
-    latency_ms: int = 0
-    voiceover_script: str
-    title: str
-    intro_hook: str
-    beats: list[VoiceoverBeat] = Field(default_factory=list)
-    outro: str
-    call_to_action: str
-    usage: dict = Field(default_factory=dict)
+    pace: str = Field(default="steady", max_length=40)
+    voice_style: str = Field(default="warm", max_length=40)
 
 
 class ConversationMessage(BaseModel):

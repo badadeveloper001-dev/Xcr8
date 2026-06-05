@@ -275,6 +275,14 @@ export type AiVoiceoverPayload = {
   messages?: AiConversationMessage[];
 };
 
+export type AiVoiceoverAudioPayload = {
+  user_id: number;
+  text: string;
+  language: string;
+  pace: string;
+  voice_style: string;
+};
+
 export type AiVoiceoverResponse = {
   script_title: string;
   hook: string;
@@ -490,6 +498,14 @@ export async function generateAiVoiceover(
 ): Promise<AiVoiceoverResponse> {
   const { data } = await apiClient.post<AiVoiceoverResponse>("/api/v1/ai/voiceover", payload, {
     timeout: 60_000,
+  });
+  return data;
+}
+
+export async function generateAiVoiceoverAudio(payload: AiVoiceoverAudioPayload): Promise<Blob> {
+  const { data } = await apiClient.post<Blob>("/api/v1/ai/voiceover/audio", payload, {
+    timeout: 120_000,
+    responseType: "blob",
   });
   return data;
 }

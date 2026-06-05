@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import Response
 
 from app.core.config import settings
 from app.schemas import (
@@ -13,12 +14,13 @@ from app.schemas import (
     DetectLanguageRequest,
     DetectLanguageResponse,
     VoiceoverRequest,
+    VoiceoverAudioRequest,
     VoiceoverResponse,
 )
 from app.services.assistant import generate_assistant_reply
 from app.services.idea_generator import generate_composed_content, generate_content_ideas
 from app.services.caption_adapter import adapt_caption, detect_caption_language
-from app.services.voiceover import generate_voiceover_script
+from app.services.voiceover import generate_voiceover_audio, generate_voiceover_script
 
 app = FastAPI(title="Xcr8 AI Services", version="0.1.0")
 
@@ -77,4 +79,10 @@ def assistant(payload: AssistantRequest) -> AssistantResponse:
 def voiceover(payload: VoiceoverRequest) -> VoiceoverResponse:
     result = generate_voiceover_script(payload.model_dump())
     return VoiceoverResponse(**result)
+
+
+@app.post("/voiceover/audio")
+def voiceover_audio(payload: VoiceoverAudioRequest) -> Response:
+    audio_bytes = generate_voiceover_audio(payload.model_dump())
+    return Response(content=audio_bytes, media_type="audio/mpeg")
 

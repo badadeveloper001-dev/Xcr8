@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -36,6 +37,7 @@ from app.schemas.mvp import (
     AIComposeRequest,
     AIComposeResponse,
     AIVoiceoverRequest,
+    AIVoiceoverAudioRequest,
     AIVoiceoverResponse,
     AITrendMapperRequest,
     AITrendMapperResponse,
@@ -954,6 +956,44 @@ def voiceover(payload: AIVoiceoverRequest, db: Session = Depends(get_db)) -> AIV
     )
     result.raise_for_status()
     return AIVoiceoverResponse(**result.json())
+
+
+@router.post("/voiceover/audio")
+def voiceover_audio(payload: AIVoiceoverAudioRequest, db: Session = Depends(get_db)) -> Response:
+    user = db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
+    recent_memories = list(
+        db.scalars(
+            select(CreatorMemory)
+            .where(CreatorMemory.user_id == payload.user_id)
+            .order_by(
+                desc(CreatorMemory.confidence_score),
+                desc(CreatorMemory.last_used_at),
+                desc(CreatorMemory.created_at),
+            )
+            .limit(6)
+        )
+    )
+
+    creator_memory = _build_creator_memory(profile, payload.language, payload.text, recent_memories)
+
+    result = httpx.post(
+        f"{settings.ai_service_url.rstrip('/')}/voiceover/audio",
+        json={
+            "user_id": payload.user_id,
+            "text": payload.text,
+            "language": payload.language,
+            "pace": payload.pace,
+            "voice_style": payload.voice_style,
+            "creator_memory": creator_memory,
+        },
+        timeout=120.0,
+    )
+    result.raise_for_status()
+    return Response(content=result.content, media_type=result.headers.get("content-type", "audio/mpeg"))
 
 
 @router.post("/assistant", response_model=AIAssistantResponse)
