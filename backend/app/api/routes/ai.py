@@ -213,7 +213,7 @@ def _build_missing_user_assistant_response(payload: AIAssistantRequest) -> AIAss
         language=resolved_language,
         tone=resolved_tone,
         model="backend-local-assistant-missing-user",
-        prompt_template_version="assistant-v1",
+        prompt_template_version="assistant-v2",
         latency_ms=0,
         usage={"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
     )
@@ -1005,7 +1005,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
             language=resolved_language,
             tone=resolved_tone,
             model="backend-local-assistant-fallback",
-            prompt_template_version="assistant-v1",
+            prompt_template_version="assistant-v2",
             latency_ms=0,
             usage={"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
         )

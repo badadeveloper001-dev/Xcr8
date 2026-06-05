@@ -526,7 +526,7 @@ export default function AssistantPage() {
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
-                    className={`ai-msg min-w-0 max-w-[92%] whitespace-pre-wrap break-all [overflow-wrap:anywhere] md:max-w-[88%] ${
+                    className={`ai-msg min-w-0 max-w-[92%] whitespace-pre-wrap break-words [overflow-wrap:break-word] md:max-w-[88%] ${
                       message.role === "user" ? "ai-msg-user ml-auto" : "ai-msg-assistant mr-auto"
                     }`}
                   >
