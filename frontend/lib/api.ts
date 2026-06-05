@@ -277,10 +277,15 @@ export type AiVoiceoverPayload = {
 
 export type AiVoiceoverAudioPayload = {
   user_id: number;
-  text: string;
+  topic: string;
   language: string;
   pace: string;
   voice_style: string;
+  voice_type: string;
+  platform?: string;
+  tone?: string;
+  goal?: string;
+  duration_seconds?: number;
 };
 
 export type AiVoiceoverResponse = {

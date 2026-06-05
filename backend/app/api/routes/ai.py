@@ -978,16 +978,21 @@ def voiceover_audio(payload: AIVoiceoverAudioRequest, db: Session = Depends(get_
         )
     )
 
-    creator_memory = _build_creator_memory(profile, payload.language, payload.text, recent_memories)
+    creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
     result = httpx.post(
         f"{settings.ai_service_url.rstrip('/')}/voiceover/audio",
         json={
             "user_id": payload.user_id,
-            "text": payload.text,
+            "topic": payload.topic,
             "language": payload.language,
             "pace": payload.pace,
             "voice_style": payload.voice_style,
+            "voice_type": payload.voice_type,
+            "platform": payload.platform,
+            "tone": payload.tone,
+            "goal": payload.goal,
+            "duration_seconds": payload.duration_seconds,
             "creator_memory": creator_memory,
         },
         timeout=120.0,

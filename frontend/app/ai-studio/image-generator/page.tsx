@@ -227,6 +227,7 @@ export default function ImageGeneratorPage() {
   const [generating, setGenerating] = useState(false);
   const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const canGenerate = subject.trim().length > 4;
 
@@ -562,7 +563,7 @@ export default function ImageGeneratorPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Image Generator now has a cleaner creative flow with clearer controls and output review."
+      subtitle="Minimal image generation flow with essential controls first and advanced settings on demand."
       activeToolId="image-generator"
       showToolShelf={false}
     >
@@ -614,7 +615,7 @@ export default function ImageGeneratorPage() {
             >
               {Object.keys(styleNotes).map((item) => (
                 <option key={item} value={item}>
-                  {item}
+                  Style: {item}
                 </option>
               ))}
             </select>
@@ -625,75 +626,87 @@ export default function ImageGeneratorPage() {
             >
               {["4:5", "1:1", "16:9"].map((item) => (
                 <option key={item} value={item}>
-                  {item}
+                  Ratio: {item}
                 </option>
               ))}
             </select>
           </div>
 
-          <select
-            value={useCase}
-            onChange={(e) => {
-              const selected = e.target.value as UseCase;
-              setUseCase(selected);
-              setRatio(useCaseRatios[selected]);
-            }}
-            className="xcr8-input"
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((current) => !current)}
+            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-white/10 light:border-slate-200 light:bg-white/70 light:text-slate-700"
           >
-            <option value="ad-creative">Use case: Ad Creative</option>
-            <option value="product-still">Use case: Product Still</option>
-            <option value="portrait">Use case: Portrait</option>
-            <option value="thumbnail">Use case: Thumbnail</option>
-            <option value="sports-action">Use case: Sports Action</option>
-          </select>
+            {showAdvanced ? "Hide advanced options" : "Show advanced options"}
+          </button>
 
-          <select
-            value={realism}
-            onChange={(e) => setRealism(e.target.value as RealismLevel)}
-            className="xcr8-input"
-          >
-            <option value="balanced">Photorealism: Balanced</option>
-            <option value="realistic">Photorealism: Realistic</option>
-            <option value="ultra">Photorealism: Ultra</option>
-          </select>
+          {showAdvanced ? (
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-3 light:border-slate-200 light:bg-white/70">
+              <select
+                value={useCase}
+                onChange={(e) => {
+                  const selected = e.target.value as UseCase;
+                  setUseCase(selected);
+                  setRatio(useCaseRatios[selected]);
+                }}
+                className="xcr8-input"
+              >
+                <option value="ad-creative">Use case: Ad Creative</option>
+                <option value="product-still">Use case: Product Still</option>
+                <option value="portrait">Use case: Portrait</option>
+                <option value="thumbnail">Use case: Thumbnail</option>
+                <option value="sports-action">Use case: Sports Action</option>
+              </select>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              value={mood}
-              onChange={(e) => setMood(e.target.value)}
-              className="xcr8-input"
-              placeholder="Mood"
-            />
-            <input
-              value={palette}
-              onChange={(e) => setPalette(e.target.value)}
-              className="xcr8-input"
-              placeholder="Color palette"
-            />
-          </div>
+              <select
+                value={realism}
+                onChange={(e) => setRealism(e.target.value as RealismLevel)}
+                className="xcr8-input"
+              >
+                <option value="balanced">Photorealism: Balanced</option>
+                <option value="realistic">Photorealism: Realistic</option>
+                <option value="ultra">Photorealism: Ultra</option>
+              </select>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <select
-              value={cameraAngle}
-              onChange={(e) => setCameraAngle(e.target.value as CameraAngle)}
-              className="xcr8-input"
-            >
-              <option value="eye-level">Camera: Eye level</option>
-              <option value="low-angle">Camera: Low angle</option>
-              <option value="overhead">Camera: Overhead</option>
-              <option value="close-up">Camera: Close up</option>
-            </select>
-            <select
-              value={lightingStyle}
-              onChange={(e) => setLightingStyle(e.target.value as LightingStyle)}
-              className="xcr8-input"
-            >
-              <option value="soft daylight">Lighting: Soft daylight</option>
-              <option value="golden hour">Lighting: Golden hour</option>
-              <option value="studio key light">Lighting: Studio key light</option>
-              <option value="neon night">Lighting: Neon night</option>
-            </select>
-          </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  value={mood}
+                  onChange={(e) => setMood(e.target.value)}
+                  className="xcr8-input"
+                  placeholder="Mood"
+                />
+                <input
+                  value={palette}
+                  onChange={(e) => setPalette(e.target.value)}
+                  className="xcr8-input"
+                  placeholder="Color palette"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <select
+                  value={cameraAngle}
+                  onChange={(e) => setCameraAngle(e.target.value as CameraAngle)}
+                  className="xcr8-input"
+                >
+                  <option value="eye-level">Camera: Eye level</option>
+                  <option value="low-angle">Camera: Low angle</option>
+                  <option value="overhead">Camera: Overhead</option>
+                  <option value="close-up">Camera: Close up</option>
+                </select>
+                <select
+                  value={lightingStyle}
+                  onChange={(e) => setLightingStyle(e.target.value as LightingStyle)}
+                  className="xcr8-input"
+                >
+                  <option value="soft daylight">Lighting: Soft daylight</option>
+                  <option value="golden hour">Lighting: Golden hour</option>
+                  <option value="studio key light">Lighting: Studio key light</option>
+                  <option value="neon night">Lighting: Neon night</option>
+                </select>
+              </div>
+            </div>
+          ) : null}
 
           <button
             type="submit"

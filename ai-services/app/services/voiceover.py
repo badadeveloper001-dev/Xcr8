@@ -273,13 +273,34 @@ def generate_voiceover_audio(payload: dict) -> bytes:
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI API key is not configured for voiceover audio generation.")
 
-    text = _compact_text(str(payload.get("text") or "").strip(), 6000)
+    provided_text = str(payload.get("text") or "").strip()
+    if provided_text:
+        text = _compact_text(provided_text, 6000)
+    else:
+        script_result = generate_voiceover_script(payload)
+        text = _compact_text(
+            " ".join(
+                [
+                    str(script_result.get("hook") or "").strip(),
+                    str(script_result.get("voiceover_script") or "").strip(),
+                    str(script_result.get("cta") or "").strip(),
+                ]
+            ),
+            6000,
+        )
+
     if not text:
         raise ValueError("Voiceover text is required.")
 
     voice_style = str(payload.get("voice_style") or "warm").strip()
+    requested_voice_type = str(payload.get("voice_type") or "").strip().lower()
     pace = str(payload.get("pace") or "steady").strip()
-    voice = VOICE_STYLE_TO_TTS_VOICE.get(voice_style, "nova")
+    valid_voice_types = {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
+    voice = (
+        requested_voice_type
+        if requested_voice_type in valid_voice_types
+        else VOICE_STYLE_TO_TTS_VOICE.get(voice_style, "nova")
+    )
     speed = PACE_TO_SPEED.get(pace, 1.0)
 
     response = httpx.post(

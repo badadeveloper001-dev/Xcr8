@@ -70,10 +70,16 @@ class ContentIdeaResponse(BaseModel):
 
 
 class VoiceoverAudioRequest(BaseModel):
-    text: str = Field(min_length=3, max_length=6000)
+    topic: str = Field(min_length=3, max_length=220)
     language: str = Field(default="english", max_length=32)
     pace: str = Field(default="steady", max_length=40)
     voice_style: str = Field(default="warm", max_length=40)
+    voice_type: str = Field(default="nova", max_length=40)
+    platform: str = Field(default="instagram", max_length=40)
+    tone: str = Field(default="conversational", max_length=80)
+    goal: str = Field(default="engage viewers", max_length=120)
+    duration_seconds: int = Field(default=60, ge=15, le=180)
+    text: str | None = Field(default=None, max_length=6000)
 
 
 class ConversationMessage(BaseModel):
