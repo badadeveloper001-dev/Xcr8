@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Copy, Mic, SendHorizontal, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Copy, Mic, Play, SendHorizontal, Square, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { generateAiVoiceover, getApiErrorMessage, type AiVoiceoverResponse } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -16,6 +16,7 @@ const durationOptions = [30, 45, 60, 90, 120];
 export default function VoiceoverPage() {
   const userId = useCreatorStore((state) => state.userId);
   const displayName = useCreatorStore((state) => state.displayName);
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
   const defaultPrompt = useMemo(
     () =>
       displayName
@@ -37,6 +38,72 @@ export default function VoiceoverPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiVoiceoverResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const stopPlayback = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    speechRef.current = null;
+    setIsSpeaking(false);
+  };
+
+  const speakVoiceover = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setVoiceError("Your browser does not support speech playback.");
+      return;
+    }
+    if (!result) {
+      setVoiceError("Generate a voiceover first.");
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(
+      [result.hook, result.voiceover_script, result.cta].filter(Boolean).join(" "),
+    );
+    utterance.lang =
+      {
+        english: "en-US",
+        nigerian_pidgin: "en-NG",
+        yoruba: "yo-NG",
+        code_switch: "en-NG",
+      }[result.language] ?? "en-US";
+    utterance.rate =
+      {
+        fast: 1.12,
+        steady: 1,
+        slow: 0.88,
+        punchy: 1.08,
+      }[pace] ?? 1;
+    utterance.pitch =
+      {
+        warm: 1,
+        confident: 0.92,
+        calm: 0.86,
+        "high-energy": 1.12,
+        premium: 0.95,
+      }[voiceStyle] ?? 1;
+    utterance.volume = 1;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => {
+      speechRef.current = null;
+      setIsSpeaking(false);
+    };
+    utterance.onerror = () => {
+      speechRef.current = null;
+      setIsSpeaking(false);
+      setVoiceError("Could not start voice playback.");
+    };
+
+    speechRef.current = utterance;
+    setVoiceError(null);
+    window.speechSynthesis.speak(utterance);
+  };
 
   const generateVoiceover = async () => {
     const nextTopic = topic.trim();
@@ -83,6 +150,12 @@ export default function VoiceoverPage() {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
+
+  useEffect(() => {
+    return () => {
+      stopPlayback();
+    };
+  }, []);
 
   return (
     <StudioShell
@@ -238,6 +311,29 @@ export default function VoiceoverPage() {
                     {copied ? "Copied" : "Copy script"}
                   </button>
                 </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={speakVoiceover}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+                    disabled={!result}
+                  >
+                    <Play size={13} />
+                    Play voice
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopPlayback}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white/70 light:text-slate-700"
+                    disabled={!isSpeaking}
+                  >
+                    <Square size={13} />
+                    Stop
+                  </button>
+                  <p className="text-xs text-slate-500">
+                    {isSpeaking ? "Speaking aloud in your browser." : "Ready to play as audio."}
+                  </p>
+                </div>
                 <p className="mt-3 text-sm text-slate-400 light:text-slate-600">{result.hook}</p>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 light:border-slate-200 light:bg-slate-50">
                   <p className="whitespace-pre-wrap text-sm leading-7 text-slate-100 light:text-slate-800">
@@ -310,6 +406,15 @@ export default function VoiceoverPage() {
               Your script preview appears here.
             </div>
           )}
+
+          {voiceError ? (
+            <p
+              role="status"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-400"
+            >
+              {voiceError}
+            </p>
+          ) : null}
         </section>
       </div>
     </StudioShell>
