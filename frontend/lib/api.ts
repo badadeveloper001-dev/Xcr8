@@ -261,6 +261,40 @@ export type AiComposeResponse = {
   usage: Record<string, unknown>;
 };
 
+export type AiVoiceoverPayload = {
+  user_id: number;
+  topic: string;
+  platform: string;
+  language: string;
+  tone: string;
+  audience_location?: string | null;
+  goal: string;
+  duration_seconds: number;
+  pace: string;
+  voice_style: string;
+  messages?: AiConversationMessage[];
+};
+
+export type AiVoiceoverResponse = {
+  script_title: string;
+  hook: string;
+  voiceover_script: string;
+  beat_breakdown: string[];
+  pacing_notes: string[];
+  delivery_notes: string[];
+  alt_openers: string[];
+  cta: string;
+  estimated_duration_seconds: number;
+  platform: string;
+  language: string;
+  tone: string;
+  voice_style: string;
+  model: string;
+  prompt_template_version: string;
+  latency_ms: number;
+  usage: Record<string, unknown>;
+};
+
 export type AiAssistantPayload = {
   user_id: number;
   email?: string;
@@ -320,7 +354,10 @@ export async function verifySignupCode(payload: SignupVerifyCodePayload): Promis
 export async function verifySignupPassword(
   payload: SignupVerifyPasswordPayload,
 ): Promise<SessionPayload> {
-  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup/verify-password", payload);
+  const { data } = await apiClient.post<SessionPayload>(
+    "/api/v1/auth/signup/verify-password",
+    payload,
+  );
   return data;
 }
 
@@ -443,6 +480,15 @@ export async function generateAiTrendMap(
 
 export async function composeAiContent(payload: AiComposePayload): Promise<AiComposeResponse> {
   const { data } = await apiClient.post<AiComposeResponse>("/api/v1/ai/compose", payload, {
+    timeout: 60_000,
+  });
+  return data;
+}
+
+export async function generateAiVoiceover(
+  payload: AiVoiceoverPayload,
+): Promise<AiVoiceoverResponse> {
+  const { data } = await apiClient.post<AiVoiceoverResponse>("/api/v1/ai/voiceover", payload, {
     timeout: 60_000,
   });
   return data;

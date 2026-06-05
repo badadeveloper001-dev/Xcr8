@@ -69,6 +69,40 @@ class ContentIdeaResponse(BaseModel):
     usage: dict = Field(default_factory=dict)
 
 
+class VoiceoverRequest(BaseModel):
+    topic: str = Field(min_length=3, max_length=200)
+    platform: str = Field(default="instagram", max_length=40)
+    language: str = Field(default="english", max_length=32)
+    tone: str = Field(default="conversational", max_length=80)
+    duration: str = Field(default="30s", max_length=20)
+    audience_location: str | None = None
+    creator_memory: dict = Field(default_factory=dict)
+
+
+class VoiceoverBeat(BaseModel):
+    beat: str
+    delivery: str
+    purpose: str
+
+
+class VoiceoverResponse(BaseModel):
+    topic: str
+    platform: str
+    language: str
+    tone: str
+    duration: str
+    model: str
+    prompt_template_version: str
+    latency_ms: int = 0
+    voiceover_script: str
+    title: str
+    intro_hook: str
+    beats: list[VoiceoverBeat] = Field(default_factory=list)
+    outro: str
+    call_to_action: str
+    usage: dict = Field(default_factory=dict)
+
+
 class ConversationMessage(BaseModel):
     role: str = Field(pattern=r"^(user|assistant)$")
     content: str = Field(min_length=1, max_length=8000)
@@ -99,6 +133,41 @@ class ComposeResponse(BaseModel):
     assistant_message: str
     content_plan: ContentPlan
     follow_up_question: str
+    model: str
+    prompt_template_version: str
+    latency_ms: int = 0
+    usage: dict = Field(default_factory=dict)
+
+
+class VoiceoverRequest(BaseModel):
+    user_id: int
+    topic: str = Field(min_length=3, max_length=220)
+    platform: str = Field(default="instagram", max_length=40)
+    language: str = Field(default="english", max_length=32)
+    tone: str = Field(default="conversational", max_length=80)
+    audience_location: str | None = None
+    goal: str = Field(default="engage viewers", max_length=120)
+    duration_seconds: int = Field(default=60, ge=15, le=180)
+    pace: str = Field(default="steady", max_length=40)
+    voice_style: str = Field(default="warm", max_length=40)
+    creator_memory: dict = Field(default_factory=dict)
+    messages: list[ConversationMessage] = Field(default_factory=list)
+
+
+class VoiceoverResponse(BaseModel):
+    script_title: str
+    hook: str
+    voiceover_script: str
+    beat_breakdown: list[str] = Field(default_factory=list)
+    pacing_notes: list[str] = Field(default_factory=list)
+    delivery_notes: list[str] = Field(default_factory=list)
+    alt_openers: list[str] = Field(default_factory=list)
+    cta: str
+    estimated_duration_seconds: int
+    platform: str
+    language: str
+    tone: str
+    voice_style: str
     model: str
     prompt_template_version: str
     latency_ms: int = 0

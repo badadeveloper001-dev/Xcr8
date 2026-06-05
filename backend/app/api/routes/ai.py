@@ -35,6 +35,8 @@ from app.schemas.mvp import (
     AIBrainstormResponse,
     AIComposeRequest,
     AIComposeResponse,
+    AIVoiceoverRequest,
+    AIVoiceoverResponse,
     AITrendMapperRequest,
     AITrendMapperResponse,
     AITrendSignal,
@@ -79,6 +81,11 @@ APP_FEATURE_CATALOG = [
         "name": "Brainstorm",
         "route": "/ai-studio/brainstorm",
         "description": "Generates batches of hooks, angles, and content ideas.",
+    },
+    {
+        "name": "Voiceover",
+        "route": "/ai-studio/voiceover",
+        "description": "Spoken script drafting for reels, tutorials, promos, and explainers.",
     },
     {
         "name": "Image Generator",
@@ -903,6 +910,50 @@ def compose(payload: AIComposeRequest, db: Session = Depends(get_db)) -> AICompo
     )
 
     return AIComposeResponse(**result)
+
+
+@router.post("/voiceover", response_model=AIVoiceoverResponse)
+def voiceover(payload: AIVoiceoverRequest, db: Session = Depends(get_db)) -> AIVoiceoverResponse:
+    user = db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
+    recent_memories = list(
+        db.scalars(
+            select(CreatorMemory)
+            .where(CreatorMemory.user_id == payload.user_id)
+            .order_by(
+                desc(CreatorMemory.confidence_score),
+                desc(CreatorMemory.last_used_at),
+                desc(CreatorMemory.created_at),
+            )
+            .limit(6)
+        )
+    )
+
+    creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
+
+    result = httpx.post(
+        f"{settings.ai_service_url.rstrip('/')}/voiceover",
+        json={
+            "user_id": payload.user_id,
+            "topic": payload.topic,
+            "platform": payload.platform,
+            "language": payload.language,
+            "tone": payload.tone,
+            "audience_location": payload.audience_location,
+            "goal": payload.goal,
+            "duration_seconds": payload.duration_seconds,
+            "pace": payload.pace,
+            "voice_style": payload.voice_style,
+            "messages": [message.model_dump() for message in payload.messages],
+            "creator_memory": creator_memory,
+        },
+        timeout=60.0,
+    )
+    result.raise_for_status()
+    return AIVoiceoverResponse(**result.json())
 
 
 @router.post("/assistant", response_model=AIAssistantResponse)

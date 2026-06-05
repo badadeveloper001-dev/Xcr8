@@ -63,7 +63,7 @@ export const studioTools: StudioTool[] = [
     name: "Voiceover",
     tagline: "Draft spoken scripts and narration beats.",
     description: "Voice script builder for reels, tutorials, promos, and explainer content.",
-    status: "planned",
+    status: "live",
     icon: Mic,
     href: "/ai-studio/voiceover",
   },
