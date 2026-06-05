@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Bell, Globe2, LogOut, Moon, Shield } from "lucide-react";
@@ -33,11 +33,15 @@ export default function SettingsPage() {
   const userId = useCreatorStore((s) => s.userId);
   const email = useCreatorStore((s) => s.email);
   const displayName = useCreatorStore((s) => s.displayName);
+  const avatarUrl = useCreatorStore((s) => s.avatarUrl);
+  const setAvatarUrl = useCreatorStore((s) => s.setAvatarUrl);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [postReminderEnabled, setPostReminderEnabled] = useState(true);
   const [securityAlertsEnabled, setSecurityAlertsEnabled] = useState(true);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -102,6 +106,40 @@ export default function SettingsPage() {
 
   if (!hasHydrated || !userId) return null;
 
+  const handleAvatarUpload = async (file: File) => {
+    setUploadingAvatar(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = (await response.json()) as { error?: string; url?: string };
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error || "Could not upload profile image.");
+      }
+
+      const parsed = new URL(payload.url, window.location.origin);
+      const storedAvatarUrl =
+        parsed.origin === window.location.origin ? parsed.pathname : payload.url;
+      setAvatarUrl(storedAvatarUrl);
+      setNotice("Profile picture updated.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not upload profile picture."));
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <MobileShell title="Settings" subtitle="Only the essentials, clearly grouped.">
       <div className="space-y-4">
@@ -117,7 +155,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3">
             <div className="relative h-14 w-14 overflow-hidden rounded-2xl bg-violet-500/20 ring-2 ring-violet-500/30">
               <Image
-                src="/avatar-placeholder.svg"
+                src={avatarUrl || "/avatar-placeholder.svg"}
                 alt="avatar"
                 width={56}
                 height={56}
@@ -125,9 +163,33 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <p className="text-lg font-semibold text-white light:text-slate-900">{displayName ?? "Creator"}</p>
+              <p className="text-lg font-semibold text-white light:text-slate-900">
+                {displayName ?? "Creator"}
+              </p>
               <p className="text-sm text-slate-500">{email ?? "user@xcr8.app"}</p>
             </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void handleAvatarUpload(file);
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+            >
+              {uploadingAvatar ? "Uploading..." : "Change profile picture"}
+            </button>
           </div>
         </motion.section>
 
@@ -154,7 +216,9 @@ export default function SettingsPage() {
           ].map((chip) => (
             <div key={chip.label} className="surface-soft rounded-xl px-3 py-2">
               <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{chip.label}</p>
-              <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">{chip.value}</p>
+              <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
+                {chip.value}
+              </p>
             </div>
           ))}
         </div>
@@ -174,7 +238,9 @@ export default function SettingsPage() {
                   <Moon size={15} />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-white light:text-slate-900">Appearance</p>
+                  <p className="text-sm font-semibold text-white light:text-slate-900">
+                    Appearance
+                  </p>
                   <p className="text-xs text-slate-500">Dark / Light mode</p>
                 </div>
               </div>
@@ -187,7 +253,9 @@ export default function SettingsPage() {
                   <Bell size={15} />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-white light:text-slate-900">Post reminders</p>
+                  <p className="text-sm font-semibold text-white light:text-slate-900">
+                    Post reminders
+                  </p>
                   <p className="text-xs text-slate-500">Notify before scheduled posts</p>
                 </div>
               </div>
@@ -220,7 +288,9 @@ export default function SettingsPage() {
                   <Shield size={15} />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-white light:text-slate-900">Security alerts</p>
+                  <p className="text-sm font-semibold text-white light:text-slate-900">
+                    Security alerts
+                  </p>
                   <p className="text-xs text-slate-500">Notify on login and account activity</p>
                 </div>
               </div>
@@ -269,10 +339,15 @@ export default function SettingsPage() {
 
           <div className="space-y-2">
             {platforms.map((platform) => {
-              const activeRow = connections?.find((item) => item.platform === platform.id && item.active);
+              const activeRow = connections?.find(
+                (item) => item.platform === platform.id && item.active,
+              );
 
               return (
-                <div key={platform.id} className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3">
+                <div
+                  key={platform.id}
+                  className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
+                >
                   <span
                     className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${platform.cls}`}
                   >

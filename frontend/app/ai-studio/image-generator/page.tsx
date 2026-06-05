@@ -2,12 +2,15 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, ImagePlus, RefreshCw } from "lucide-react";
+import { Download, ImagePlus, RefreshCw, Upload } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { useCreatorStore } from "@/lib/store";
 
+type GenerationMode = "text-to-image" | "image-enhance";
+
 type GeneratedImage = {
   id: string;
+  kind: GenerationMode;
   title: string;
   src: string;
   historySrc: string;
@@ -24,6 +27,7 @@ type HistoryImage = {
   prompt: string;
   createdAt: string;
   settings: {
+    mode: GenerationMode;
     subject: string;
     style: StyleKey;
     ratio: "4:5" | "1:1" | "16:9";
@@ -224,12 +228,16 @@ export default function ImageGeneratorPage() {
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [history, setHistory] = useState<HistoryImage[]>([]);
   const [promptPreview, setPromptPreview] = useState<string>("");
+  const [mode, setMode] = useState<GenerationMode>("text-to-image");
   const [generating, setGenerating] = useState(false);
   const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [sourceImageFile, setSourceImageFile] = useState<File | null>(null);
+  const [sourceImagePreview, setSourceImagePreview] = useState<string | null>(null);
 
-  const canGenerate = subject.trim().length > 4;
+  const canGenerate =
+    mode === "image-enhance" ? Boolean(sourceImageFile) : subject.trim().length > 4;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -286,6 +294,14 @@ export default function ImageGeneratorPage() {
     };
   }, [images]);
 
+  useEffect(() => {
+    return () => {
+      if (sourceImagePreview) {
+        URL.revokeObjectURL(sourceImagePreview);
+      }
+    };
+  }, [sourceImagePreview]);
+
   const handleStyleChange = (value: string) => {
     if (isStyleKey(value)) {
       setStyle(value);
@@ -332,6 +348,34 @@ export default function ImageGeneratorPage() {
       blobUrl,
       historySrc,
     };
+  };
+
+  const resolveEnhancedImageBlobUrl = async (
+    file: File,
+    level: RealismLevel,
+  ): Promise<{ blobUrl: string; historySrc: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("level", level);
+
+    const response = await fetch("/api/image/enhance", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("enhancement_failed");
+    }
+
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) {
+      throw new Error("invalid_blob");
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
+    const historySrc = await blobToPreviewDataUrl(blob);
+
+    return { blobUrl, historySrc };
   };
 
   const getDimensions = (nextRatio: string, nextRealism: RealismLevel) => {
@@ -392,6 +436,7 @@ export default function ImageGeneratorPage() {
 
     return {
       id: `${seed}-${index}`,
+      kind: "text-to-image",
       title: label,
       src: resolved.blobUrl,
       historySrc: resolved.historySrc,
@@ -403,6 +448,71 @@ export default function ImageGeneratorPage() {
 
   const handleGenerate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (mode === "image-enhance") {
+      if (!sourceImageFile) {
+        setError("Upload an image to enhance first.");
+        return;
+      }
+
+      setGenerating(true);
+      setError(null);
+
+      for (const image of images) {
+        URL.revokeObjectURL(image.src);
+      }
+      setImages([]);
+
+      try {
+        const enhanced = await resolveEnhancedImageBlobUrl(sourceImageFile, realism);
+        const now = new Date().toISOString();
+        const note = cleanText(subject) || "Enhanced uploaded image";
+        const built: GeneratedImage = {
+          id: `${Date.now()}-enhanced`,
+          kind: "image-enhance",
+          title: "Enhanced image",
+          src: enhanced.blobUrl,
+          historySrc: enhanced.historySrc,
+          downloadName: `xcr8-enhanced-${sourceImageFile.name.replace(/\.[^.]+$/, "") || "image"}.jpg`,
+          prompt: note,
+          createdAt: now,
+        };
+
+        setImages([built]);
+        setPromptPreview(note);
+        setHistory((previous) => {
+          const next: HistoryImage = {
+            id: built.id,
+            title: built.title,
+            src: built.historySrc,
+            downloadName: built.downloadName,
+            prompt: built.prompt,
+            createdAt: built.createdAt,
+            settings: {
+              mode: "image-enhance",
+              subject: note,
+              style,
+              ratio,
+              mood,
+              palette,
+              cameraAngle,
+              lightingStyle,
+              useCase,
+              realism,
+            },
+          };
+
+          return [next, ...previous].slice(0, HISTORY_LIMIT);
+        });
+      } catch {
+        setError("Could not enhance this image right now. Please try again.");
+      } finally {
+        setGenerating(false);
+      }
+
+      return;
+    }
+
     const cleanSubject = cleanText(subject);
     const cleanMood = cleanText(mood);
     const cleanPalette = cleanText(palette);
@@ -449,6 +559,7 @@ export default function ImageGeneratorPage() {
           prompt: item.prompt,
           createdAt: item.createdAt,
           settings: {
+            mode: "text-to-image",
             subject: cleanSubject,
             style,
             ratio,
@@ -512,6 +623,7 @@ export default function ImageGeneratorPage() {
           prompt: regenerated.prompt,
           createdAt: regenerated.createdAt,
           settings: {
+            mode: "text-to-image",
             subject: cleanSubject,
             style,
             ratio,
@@ -569,6 +681,31 @@ export default function ImageGeneratorPage() {
     >
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
         <form onSubmit={(e) => void handleGenerate(e)} className="space-y-3.5">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("text-to-image")}
+              className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                mode === "text-to-image"
+                  ? "border-cyan-300/30 bg-cyan-500/10 text-cyan-200 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+                  : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 light:border-slate-200 light:bg-white/70 light:text-slate-700"
+              }`}
+            >
+              Text to image
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("image-enhance")}
+              className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                mode === "image-enhance"
+                  ? "border-cyan-300/30 bg-cyan-500/10 text-cyan-200 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+                  : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 light:border-slate-200 light:bg-white/70 light:text-slate-700"
+              }`}
+            >
+              Image to image
+            </button>
+          </div>
+
           <div className="ai-stage p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -587,7 +724,8 @@ export default function ImageGeneratorPage() {
                   key={preset.id}
                   type="button"
                   onClick={() => applyPreset(preset)}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
+                  disabled={mode === "image-enhance"}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs font-medium text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 light:border-slate-200 light:bg-white light:text-slate-700"
                 >
                   {preset.label}
                 </button>
@@ -597,21 +735,65 @@ export default function ImageGeneratorPage() {
 
           <div className="ai-stage p-4">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              What should the image show?
+              {mode === "image-enhance" ? "Enhancement note" : "What should the image show?"}
             </label>
             <textarea
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               className="xcr8-input h-28 resize-none"
-              placeholder="Example: Founder filming a short-form video in a sunlit office with phone on tripod"
+              placeholder={
+                mode === "image-enhance"
+                  ? "Optional: cleaner skin tones, sharper product edges, brighter image, richer contrast"
+                  : "Example: Founder filming a short-form video in a sunlit office with phone on tripod"
+              }
             />
           </div>
+
+          {mode === "image-enhance" ? (
+            <div className="ai-stage p-4">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Source image
+              </label>
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-6 text-center transition hover:bg-white/10 light:border-slate-200 light:bg-white/70">
+                <Upload size={18} className="text-cyan-300" />
+                <span className="text-sm font-medium text-slate-200 light:text-slate-800">
+                  {sourceImageFile ? sourceImageFile.name : "Upload an image to edit or enhance"}
+                </span>
+                <span className="text-xs text-slate-500">PNG, JPG, WEBP, or GIF up to 12MB</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    setSourceImageFile(file);
+                    setError(null);
+                    setSourceImagePreview((current) => {
+                      if (current) {
+                        URL.revokeObjectURL(current);
+                      }
+                      return file ? URL.createObjectURL(file) : null;
+                    });
+                  }}
+                />
+              </label>
+
+              {sourceImagePreview ? (
+                <img
+                  src={sourceImagePreview}
+                  alt="Uploaded source preview"
+                  className="mt-3 h-auto w-full rounded-xl border border-white/10 object-cover"
+                />
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <select
               value={style}
               onChange={(e) => handleStyleChange(e.target.value)}
               className="xcr8-input"
+              disabled={mode === "image-enhance"}
             >
               {Object.keys(styleNotes).map((item) => (
                 <option key={item} value={item}>
@@ -623,6 +805,7 @@ export default function ImageGeneratorPage() {
               value={ratio}
               onChange={(e) => handleRatioChange(e.target.value)}
               className="xcr8-input"
+              disabled={mode === "image-enhance"}
             >
               {["4:5", "1:1", "16:9"].map((item) => (
                 <option key={item} value={item}>
@@ -640,7 +823,7 @@ export default function ImageGeneratorPage() {
             {showAdvanced ? "Hide advanced options" : "Show advanced options"}
           </button>
 
-          {showAdvanced ? (
+          {showAdvanced && mode === "text-to-image" ? (
             <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-3 light:border-slate-200 light:bg-white/70">
               <select
                 value={useCase}
@@ -714,7 +897,13 @@ export default function ImageGeneratorPage() {
             className="cta-btn inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold disabled:opacity-60"
           >
             <RefreshCw size={16} />
-            {generating ? "Generating images..." : "Generate images"}
+            {generating
+              ? mode === "image-enhance"
+                ? "Enhancing image..."
+                : "Generating images..."
+              : mode === "image-enhance"
+                ? "Enhance image"
+                : "Generate images"}
           </button>
 
           {error ? (
@@ -727,13 +916,14 @@ export default function ImageGeneratorPage() {
           ) : null}
 
           <p className="text-xs text-slate-500">
-            Photorealism mode controls strictness and internal rerolls. Generated images are loaded
-            as downloadable files to reduce broken renders.
+            {mode === "image-enhance"
+              ? "Upload an existing image to clean it up, sharpen details, and improve overall polish."
+              : "Photorealism mode controls strictness and internal rerolls. Generated images are loaded as downloadable files to reduce broken renders."}
           </p>
 
           {promptPreview ? (
             <div className="ai-chat-log px-3 py-2 text-xs text-slate-400 light:text-slate-600">
-              Prompt brief: {promptPreview}
+              {mode === "image-enhance" ? "Enhancement note" : "Prompt brief"}: {promptPreview}
             </div>
           ) : null}
         </form>
@@ -763,24 +953,28 @@ export default function ImageGeneratorPage() {
                     <Download size={12} />
                     Download image
                   </button>
-                  <button
-                    type="button"
-                    disabled={Boolean(regeneratingImageId)}
-                    onClick={() => void handleRegenerateVariation(image, index)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-60"
-                  >
-                    <RefreshCw
-                      size={12}
-                      className={regeneratingImageId === image.id ? "animate-spin" : ""}
-                    />
-                    {regeneratingImageId === image.id ? "Regenerating..." : "Regenerate this"}
-                  </button>
+                  {image.kind === "text-to-image" ? (
+                    <button
+                      type="button"
+                      disabled={Boolean(regeneratingImageId)}
+                      onClick={() => void handleRegenerateVariation(image, index)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-60"
+                    >
+                      <RefreshCw
+                        size={12}
+                        className={regeneratingImageId === image.id ? "animate-spin" : ""}
+                      />
+                      {regeneratingImageId === image.id ? "Regenerating..." : "Regenerate this"}
+                    </button>
+                  ) : null}
                 </div>
               </article>
             ))
           ) : (
             <div className="ai-stage p-4 text-sm text-slate-500 light:text-slate-600">
-              Generated images will appear here with one-click download.
+              {mode === "image-enhance"
+                ? "Your enhanced image will appear here with one-click download."
+                : "Generated images will appear here with one-click download."}
             </div>
           )}
         </div>

@@ -20,15 +20,16 @@
     "next": "^15.3.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.3.0",
     "zustand": "^5.0.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "@next/eslint-plugin-next": "^15.3.2",
     "@types/node": "^22.15.21",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
-    "@eslint/js": "^9.27.0",
-    "@next/eslint-plugin-next": "^15.3.2",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.27.0",
     "postcss": "^8.5.3",

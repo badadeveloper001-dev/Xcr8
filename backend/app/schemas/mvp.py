@@ -253,7 +253,8 @@ class AIVoiceoverRequest(BaseModel):
 
 class AIVoiceoverAudioRequest(BaseModel):
     user_id: int
-    topic: str = Field(min_length=3, max_length=220)
+    text: str = Field(min_length=3, max_length=6000)
+    topic: str | None = Field(default=None, max_length=220)
     language: str = Field(default="english", max_length=32)
     pace: str = Field(default="steady", max_length=40)
     voice_style: str = Field(default="warm", max_length=40)

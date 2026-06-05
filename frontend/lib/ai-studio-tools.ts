@@ -54,7 +54,7 @@ export const studioTools: StudioTool[] = [
     name: "Image Generator",
     tagline: "Create visual concepts for posts and promos.",
     description: "AI art directions, cover concepts, ad creatives, and thumbnails.",
-    status: "next",
+    status: "live",
     icon: ImagePlus,
     href: "/ai-studio/image-generator",
   },

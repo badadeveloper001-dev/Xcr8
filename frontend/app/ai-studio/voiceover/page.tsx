@@ -21,8 +21,8 @@ export default function VoiceoverPage() {
   const defaultPrompt = useMemo(
     () =>
       displayName
-        ? `Create a short creator voiceover for ${displayName} about consistency and growth.`
-        : "Create a short creator voiceover about consistency and growth.",
+        ? `Consistency compounds. ${displayName} keeps showing up, learning fast, and building real momentum.`
+        : "Consistency compounds. I keep showing up, learning fast, and building real momentum.",
     [displayName],
   );
 
@@ -58,7 +58,7 @@ export default function VoiceoverPage() {
     try {
       const audioBlob = await generateAiVoiceoverAudio({
         user_id: userId,
-        topic: nextTopic,
+        text: nextTopic,
         language,
         pace,
         voice_style: voiceStyle,
@@ -113,7 +113,7 @@ export default function VoiceoverPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Generate voiceover audio only, choose a voice type, then play or download."
+      subtitle="Paste the exact text you want spoken, choose a voice type, then play or download."
       activeToolId="voiceover"
       showToolShelf={false}
     >
@@ -129,19 +129,19 @@ export default function VoiceoverPage() {
               Voiceover Generator
             </h2>
             <p className="mt-1 text-sm text-slate-400 light:text-slate-600">
-              Enter your brief, pick a voice type, and generate an MP3.
+              Enter the exact text to speak, pick a voice type, and generate an MP3.
             </p>
           </div>
 
           <div className="ai-stage p-4">
             <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Voice brief
+              Voice text
             </label>
             <textarea
               value={topic}
               onChange={(event) => setTopic(event.target.value)}
               className="xcr8-input min-h-28 resize-y"
-              placeholder="Describe what should be spoken in the final audio..."
+              placeholder="Type the exact words you want in the final audio..."
             />
 
             <div className="mt-3 grid gap-3 sm:grid-cols-2">

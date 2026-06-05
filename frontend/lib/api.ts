@@ -277,7 +277,8 @@ export type AiVoiceoverPayload = {
 
 export type AiVoiceoverAudioPayload = {
   user_id: number;
-  topic: string;
+  text: string;
+  topic?: string;
   language: string;
   pace: string;
   voice_style: string;

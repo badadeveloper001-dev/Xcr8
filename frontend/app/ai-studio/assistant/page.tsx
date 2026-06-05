@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, History, MessageSquarePlus, SendHorizontal } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
@@ -101,6 +102,7 @@ export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
   const email = useCreatorStore((state) => state.email);
   const displayName = useCreatorStore((state) => state.displayName);
+  const searchParams = useSearchParams();
   const welcomeMessage = useMemo(() => buildWelcomeMessage(displayName), [displayName]);
   const [messages, setMessages] = useState<ChatItem[]>([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState<AiAssistantChatSummary[]>([]);
@@ -111,10 +113,11 @@ export default function AssistantPage() {
   const [error, setError] = useState<string | null>(null);
   const [suggestedActions, setSuggestedActions] = useState<string[]>(starterPrompts);
   const lastPromptParamRef = useRef<string | null>(null);
-  const requestedChatParamRef = useRef<string | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const [isMobileInputMode, setIsMobileInputMode] = useState(false);
   const [isHistoryReady, setIsHistoryReady] = useState(true);
+  const requestedChatId = searchParams.get("chat")?.trim() || null;
+  const promptParam = searchParams.get("prompt")?.trim() || "";
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -143,18 +146,22 @@ export default function AssistantPage() {
   }, [messages, loading]);
 
   useEffect(() => {
-    const promptParam = new URLSearchParams(window.location.search).get("prompt")?.trim() ?? "";
-    const requestedChatId = new URLSearchParams(window.location.search).get("chat")?.trim() ?? null;
-
-    requestedChatParamRef.current = requestedChatId;
-
     if (!promptParam || lastPromptParamRef.current === promptParam) {
       return;
     }
 
     setPrompt(promptParam);
     lastPromptParamRef.current = promptParam;
-  }, []);
+  }, [promptParam]);
+
+  useEffect(() => {
+    if (!requestedChatId) {
+      return;
+    }
+
+    setActiveChatId(requestedChatId);
+    setError(null);
+  }, [requestedChatId]);
 
   useEffect(() => {
     if (!userId) {
@@ -183,7 +190,6 @@ export default function AssistantPage() {
       if (cachedSessions.length > 0) {
         setChatSessions(cachedSessions);
         const storedChatId = localStorage.getItem(storageKey);
-        const requestedChatId = requestedChatParamRef.current;
         const cachedActive =
           requestedChatId ??
           (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
@@ -204,7 +210,6 @@ export default function AssistantPage() {
 
         setChatSessions(sessions);
         const storedChatId = localStorage.getItem(storageKey);
-        const requestedChatId = requestedChatParamRef.current;
         const nextChatId =
           requestedChatId ??
           (storedChatId && sessions.some((session) => session.chat_id === storedChatId)
@@ -216,7 +221,6 @@ export default function AssistantPage() {
           if (cachedSessions.length > 0) {
             setChatSessions(cachedSessions);
             const storedChatId = localStorage.getItem(storageKey);
-            const requestedChatId = requestedChatParamRef.current;
             const nextChatId =
               requestedChatId ??
               (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
@@ -225,7 +229,7 @@ export default function AssistantPage() {
             setActiveChatId(nextChatId);
           } else {
             setChatSessions([]);
-            setActiveChatId(requestedChatParamRef.current ?? null);
+            setActiveChatId(requestedChatId ?? null);
             setMessages([welcomeMessage]);
           }
         }
@@ -237,7 +241,7 @@ export default function AssistantPage() {
     return () => {
       cancelled = true;
     };
-  }, [email, userId, welcomeMessage]);
+  }, [email, requestedChatId, userId, welcomeMessage]);
 
   useEffect(() => {
     if (!userId) {
@@ -332,7 +336,7 @@ export default function AssistantPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeChatId, chatSessions, email, userId, welcomeMessage]);
+  }, [activeChatId, email, userId, welcomeMessage]);
 
   const startNewChat = () => {
     if (!userId) {
@@ -515,7 +519,7 @@ export default function AssistantPage() {
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
-                    className={`ai-msg min-w-0 max-w-[92%] whitespace-pre-wrap break-words [overflow-wrap:break-word] md:max-w-[88%] ${
+                    className={`ai-msg min-w-0 max-w-[92%] whitespace-pre-wrap break-words md:max-w-[88%] ${
                       message.role === "user" ? "ai-msg-user ml-auto" : "ai-msg-assistant mr-auto"
                     }`}
                   >

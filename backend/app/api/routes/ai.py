@@ -984,6 +984,7 @@ def voiceover_audio(payload: AIVoiceoverAudioRequest, db: Session = Depends(get_
         f"{settings.ai_service_url.rstrip('/')}/voiceover/audio",
         json={
             "user_id": payload.user_id,
+            "text": payload.text,
             "topic": payload.topic,
             "language": payload.language,
             "pace": payload.pace,

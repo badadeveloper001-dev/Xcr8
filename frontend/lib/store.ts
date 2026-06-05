@@ -9,6 +9,7 @@ type CreatorState = {
   userId: number | null;
   email: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
   fullName: string | null;
   username: string | null;
   onboardingComplete: boolean;
@@ -33,6 +34,7 @@ type CreatorState = {
     onboardingComplete: boolean;
   }) => void;
   clearSession: () => void;
+  setAvatarUrl: (avatarUrl: string | null) => void;
   setTheme: (theme: "dark" | "light" | "system") => void;
   setDistributionDraft: (payload: CreatorState["distributionDraft"]) => void;
 };
@@ -47,6 +49,7 @@ export const useCreatorStore = create<CreatorState>()(
       userId: null,
       email: null,
       displayName: null,
+      avatarUrl: null,
       fullName: null,
       username: null,
       onboardingComplete: false,
@@ -57,6 +60,7 @@ export const useCreatorStore = create<CreatorState>()(
           userId,
           email,
           displayName,
+          avatarUrl: null,
           fullName: fullName ?? displayName,
           username: username ?? null,
           onboardingComplete,
@@ -67,12 +71,14 @@ export const useCreatorStore = create<CreatorState>()(
           userId: null,
           email: null,
           displayName: null,
+          avatarUrl: null,
           fullName: null,
           username: null,
           onboardingComplete: false,
           activeCreatorId: null,
           distributionDraft: null,
         }),
+      setAvatarUrl: (avatarUrl) => set({ avatarUrl }),
       setTheme: (theme) => set({ theme }),
       setDistributionDraft: (distributionDraft) => set({ distributionDraft }),
     }),
@@ -86,6 +92,7 @@ export const useCreatorStore = create<CreatorState>()(
         userId: state.userId,
         email: state.email,
         displayName: state.displayName,
+        avatarUrl: state.avatarUrl,
         fullName: state.fullName,
         username: state.username,
         onboardingComplete: state.onboardingComplete,
