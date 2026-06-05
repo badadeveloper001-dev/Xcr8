@@ -162,7 +162,7 @@ export default function DashboardPage() {
               <Sparkles size={16} className="text-cyan-300" />
               <Link
                 href="/ai-studio"
-                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:bg-white/10 light:border-[#6E16F2] light:bg-[#6E16F2] light:text-white light:hover:bg-[#5f12d0]"
+                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700 light:hover:bg-slate-50"
               >
                 See all tools
               </Link>
@@ -203,7 +203,7 @@ export default function DashboardPage() {
                   key={item}
                   className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
                 >
-                  <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-xs font-semibold text-emerald-300 light:bg-[#6E16F2] light:text-white">
+                  <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-xs font-semibold text-emerald-300 light:bg-emerald-100 light:text-emerald-700">
                     {index + 1}
                   </div>
                   <p className="text-sm text-slate-200 light:text-slate-800">{item}</p>
@@ -212,7 +212,7 @@ export default function DashboardPage() {
             </div>
             <Link
               href="/analytics"
-              className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200 light:border-[#6E16F2] light:bg-[#6E16F2] light:text-white"
+              className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200 light:border-slate-200 light:bg-white light:text-slate-700"
             >
               Open full insights
               <ArrowRight size={14} />
@@ -241,7 +241,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-semibold text-white light:text-slate-900">
                       {post.title}
                     </p>
-                    <div className="mt-1 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 light:border-[#6E16F2] light:bg-[#6E16F2] light:text-white">
+                    <div className="mt-1 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 light:border-slate-200 light:bg-slate-50 light:text-slate-600">
                       {post.status}
                     </div>
                   </div>
