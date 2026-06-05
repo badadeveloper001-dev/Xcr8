@@ -185,11 +185,10 @@ export default function AssistantPage() {
         const storedChatId = localStorage.getItem(storageKey);
         const requestedChatId = requestedChatParamRef.current;
         const cachedActive =
-          requestedChatId && cachedSessions.some((session) => session.chat_id === requestedChatId)
-            ? requestedChatId
-            : storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
-              ? storedChatId
-              : (cachedSessions[0]?.chat_id ?? null);
+          requestedChatId ??
+          (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+            ? storedChatId
+            : (cachedSessions[0]?.chat_id ?? null));
         setActiveChatId(cachedActive);
       }
 
@@ -207,11 +206,10 @@ export default function AssistantPage() {
         const storedChatId = localStorage.getItem(storageKey);
         const requestedChatId = requestedChatParamRef.current;
         const nextChatId =
-          requestedChatId && sessions.some((session) => session.chat_id === requestedChatId)
-            ? requestedChatId
-            : storedChatId && sessions.some((session) => session.chat_id === storedChatId)
-              ? storedChatId
-              : (sessions[0]?.chat_id ?? null);
+          requestedChatId ??
+          (storedChatId && sessions.some((session) => session.chat_id === storedChatId)
+            ? storedChatId
+            : (sessions[0]?.chat_id ?? null));
         setActiveChatId(nextChatId);
       } catch {
         if (!cancelled) {
@@ -220,16 +218,14 @@ export default function AssistantPage() {
             const storedChatId = localStorage.getItem(storageKey);
             const requestedChatId = requestedChatParamRef.current;
             const nextChatId =
-              requestedChatId &&
-              cachedSessions.some((session) => session.chat_id === requestedChatId)
-                ? requestedChatId
-                : storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
-                  ? storedChatId
-                  : (cachedSessions[0]?.chat_id ?? null);
+              requestedChatId ??
+              (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+                ? storedChatId
+                : (cachedSessions[0]?.chat_id ?? null));
             setActiveChatId(nextChatId);
           } else {
             setChatSessions([]);
-            setActiveChatId(null);
+            setActiveChatId(requestedChatParamRef.current ?? null);
             setMessages([welcomeMessage]);
           }
         }
@@ -310,13 +306,6 @@ export default function AssistantPage() {
     }
 
     setIsHistoryReady(false);
-
-    const hasServerChat = chatSessions.some((session) => session.chat_id === activeChatId);
-    if (!hasServerChat) {
-      setMessages([welcomeMessage]);
-      setIsHistoryReady(true);
-      return;
-    }
 
     let cancelled = false;
 
