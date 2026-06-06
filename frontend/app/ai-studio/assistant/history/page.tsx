@@ -242,6 +242,11 @@ export default function AssistantHistoryPage() {
                       </button>
                       <Link
                         href={`/ai-studio/assistant?chat=${encodeURIComponent(session.chat_id)}`}
+                        onClick={() => {
+                          if (userId) {
+                            localStorage.setItem(activeChatStorageKey(userId), session.chat_id);
+                          }
+                        }}
                         className="inline-flex items-center rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200 transition hover:bg-cyan-500/15 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
                       >
                         Open

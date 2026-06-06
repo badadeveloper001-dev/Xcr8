@@ -26,7 +26,7 @@ export default function WelcomePage() {
           <Logo size="md" className="!w-[180px] max-w-full" />
           <Link
             href="/auth/login"
-            className="rounded-full border border-slate-200/60 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
           >
             Log In
           </Link>
@@ -41,7 +41,7 @@ export default function WelcomePage() {
           <p className="mb-3 inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-700 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-200">
             Creator workspace
           </p>
-          <h1 className="max-w-2xl text-4xl font-semibold leading-[1.04] tracking-tight text-slate-950 dark:text-white md:text-6xl">
+          <h1 className="max-w-2xl text-3xl font-semibold leading-[1.08] tracking-tight text-slate-950 dark:text-white md:text-5xl">
             One place to plan, create, and publish.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-300 md:text-lg">
@@ -59,7 +59,7 @@ export default function WelcomePage() {
             <button
               type="button"
               onClick={() => void handleGoogle()}
-              className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+              className="rounded-full border border-slate-300 bg-slate-100 px-6 py-3 text-sm font-medium text-slate-800 transition hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
             >
               Continue with Google
             </button>

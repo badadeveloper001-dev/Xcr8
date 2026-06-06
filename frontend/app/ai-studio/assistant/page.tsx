@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, History, MessageSquarePlus, SendHorizontal } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
@@ -101,6 +102,7 @@ export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
   const email = useCreatorStore((state) => state.email);
   const displayName = useCreatorStore((state) => state.displayName);
+  const searchParams = useSearchParams();
   const welcomeMessage = useMemo(() => buildWelcomeMessage(displayName), [displayName]);
   const [messages, setMessages] = useState<ChatItem[]>([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState<AiAssistantChatSummary[]>([]);
@@ -117,19 +119,15 @@ export default function AssistantPage() {
   const [requestedChatId, setRequestedChatId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    const nextChatId = searchParams.get("chat")?.trim() || null;
+    setRequestedChatId((current) => (current === nextChatId ? current : nextChatId));
 
-    const params = new URLSearchParams(window.location.search);
-    setRequestedChatId(params.get("chat")?.trim() || null);
-
-    const nextPrompt = params.get("prompt")?.trim() || "";
+    const nextPrompt = searchParams.get("prompt")?.trim() || "";
     if (nextPrompt && lastPromptParamRef.current !== nextPrompt) {
       setPrompt(nextPrompt);
       lastPromptParamRef.current = nextPrompt;
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -164,6 +162,7 @@ export default function AssistantPage() {
 
     setActiveChatId(requestedChatId);
     setError(null);
+    setIsHistoryReady(false);
   }, [requestedChatId]);
 
   useEffect(() => {
@@ -328,7 +327,7 @@ export default function AssistantPage() {
         setIsHistoryReady(true);
       } catch {
         if (!cancelled) {
-          setMessages([welcomeMessage]);
+          setError("Could not load this chat right now. Showing your latest local copy.");
           setIsHistoryReady(true);
         }
       }

@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
+import sharp from "sharp";
 
 export const dynamic = "force-dynamic";
 
 const MIN_DIMENSION = 512;
 const MAX_DIMENSION = 1792;
-const MIN_IMAGE_BYTES_STRICT = 42_000;
-const MIN_IMAGE_BYTES_RELAXED = 18_000;
+const MIN_IMAGE_BYTES_STRICT = 70_000;
+const MIN_IMAGE_BYTES_RELAXED = 30_000;
 const FETCH_TIMEOUT_MS = 12_000;
 const GLOBAL_QUALITY_NEGATIVE =
   "blurry, low resolution, noisy image, cgi look, deformed anatomy, extra limbs, extra fingers, duplicate body parts, duplicated objects, multiple balls, duplicate football, distorted face, watermark, logo, text overlay";
@@ -108,40 +109,24 @@ function scoreCandidate(contentType: string, bodyLength: number): number {
   return bodyLength + mimeScore(contentType);
 }
 
-function escapeSvgText(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function buildFallbackSvg(prompt: string, width: number, height: number): string {
-  const safePrompt = escapeSvgText(prompt.slice(0, 180));
-  const safeWidth = clamp(width, MIN_DIMENSION, MAX_DIMENSION);
-  const safeHeight = clamp(height, MIN_DIMENSION, MAX_DIMENSION);
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${safeWidth}" height="${safeHeight}" viewBox="0 0 ${safeWidth} ${safeHeight}">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#09111f" />
-      <stop offset="100%" stop-color="#12263f" />
-    </linearGradient>
-    <radialGradient id="glow" cx="50%" cy="38%" r="60%">
-      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.26" />
-      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0" />
-    </radialGradient>
-  </defs>
-  <rect width="100%" height="100%" fill="url(#bg)" />
-  <circle cx="${Math.round(safeWidth * 0.72)}" cy="${Math.round(safeHeight * 0.28)}" r="${Math.round(Math.min(safeWidth, safeHeight) * 0.28)}" fill="#8b5cf6" fill-opacity="0.12" />
-  <circle cx="${Math.round(safeWidth * 0.22)}" cy="${Math.round(safeHeight * 0.72)}" r="${Math.round(Math.min(safeWidth, safeHeight) * 0.24)}" fill="#22d3ee" fill-opacity="0.12" />
-  <rect width="100%" height="100%" fill="url(#glow)" />
-  <rect x="${Math.round(safeWidth * 0.08)}" y="${Math.round(safeHeight * 0.74)}" width="${Math.round(safeWidth * 0.84)}" height="${Math.max(2, Math.round(safeHeight * 0.015))}" rx="${Math.max(2, Math.round(safeHeight * 0.007))}" fill="#e2e8f0" fill-opacity="0.3" />
-  <text x="50%" y="48%" fill="#f8fafc" font-family="Arial, sans-serif" font-size="${Math.max(20, Math.round(Math.min(safeWidth, safeHeight) * 0.06))}" font-weight="700" text-anchor="middle">Xcr8 Image</text>
-  <text x="50%" y="58%" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="${Math.max(12, Math.round(Math.min(safeWidth, safeHeight) * 0.024))}" text-anchor="middle">${safePrompt}</text>
-</svg>`;
+async function polishCandidateImage(
+  body: ArrayBuffer,
+  width: number,
+  height: number,
+): Promise<Buffer> {
+  return sharp(Buffer.from(body), { animated: false })
+    .rotate()
+    .resize({
+      width,
+      height,
+      fit: "inside",
+      withoutEnlargement: false,
+    })
+    .normalize()
+    .sharpen({ sigma: 1.2, m1: 1.0, m2: 0.45 })
+    .modulate({ brightness: 1.01, saturation: 1.03 })
+    .webp({ quality: 92, effort: 5 })
+    .toBuffer();
 }
 
 async function fetchCandidate(url: string, minBytes: number): Promise<CandidateResult | null> {
@@ -236,24 +221,29 @@ export async function GET(request: NextRequest) {
   }
 
   if (best) {
-    return new Response(best.body, {
-      status: 200,
-      headers: {
-        "Content-Type": best.contentType,
-        "Cache-Control": "no-store",
-        "X-Xcr8-Image-Bytes": String(best.body.byteLength),
-        "X-Xcr8-Image-Source": best.sourceUrl,
-      },
-    });
+    try {
+      const polished = await polishCandidateImage(best.body, width, height);
+      return new Response(new Uint8Array(polished), {
+        status: 200,
+        headers: {
+          "Content-Type": "image/webp",
+          "Cache-Control": "no-store",
+          "X-Xcr8-Image-Bytes": String(polished.byteLength),
+          "X-Xcr8-Image-Source": best.sourceUrl,
+        },
+      });
+    } catch {
+      return new Response(best.body, {
+        status: 200,
+        headers: {
+          "Content-Type": best.contentType,
+          "Cache-Control": "no-store",
+          "X-Xcr8-Image-Bytes": String(best.body.byteLength),
+          "X-Xcr8-Image-Source": best.sourceUrl,
+        },
+      });
+    }
   }
 
-  const fallbackSvg = buildFallbackSvg(enrichedPrompt, width, height);
-  return new Response(fallbackSvg, {
-    status: 200,
-    headers: {
-      "Content-Type": "image/svg+xml",
-      "Cache-Control": "no-store",
-      "X-Xcr8-Image-Source": "local-fallback-svg",
-    },
-  });
+  return Response.json({ detail: "Image generation failed" }, { status: 502 });
 }
