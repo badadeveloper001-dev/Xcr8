@@ -12,6 +12,7 @@ import {
   disconnectPlatform,
   getApiErrorMessage,
   getPlatformConnections,
+  type PlatformConnectPayload,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 import { updateAvatarUrl } from "@/lib/api";
@@ -24,6 +25,8 @@ const platforms = [
   { id: "x", label: "X / Twitter", cls: "badge-x" },
   { id: "facebook", label: "Facebook", cls: "badge-fb" },
   { id: "linkedin", label: "LinkedIn", cls: "badge-li" },
+  { id: "youtube_shorts", label: "YouTube Shorts", cls: "badge-fb" },
+  { id: "threads", label: "Threads", cls: "badge-x" },
 ];
 
 export default function SettingsPage() {
@@ -43,6 +46,7 @@ export default function SettingsPage() {
   const [postReminderEnabled, setPostReminderEnabled] = useState(true);
   const [securityAlertsEnabled, setSecurityAlertsEnabled] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [platformDraft, setPlatformDraft] = useState<PlatformConnectPayload | null>(null);
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -79,11 +83,11 @@ export default function SettingsPage() {
   });
 
   const connectMutation = useMutation({
-    mutationFn: async (platform: string) =>
-      connectPlatform(userId as number, platform, `${displayName ?? "creator"}_${platform}`),
-    onSuccess: () => {
-      setNotice("Platform connected.");
+    mutationFn: async (payload: PlatformConnectPayload) => connectPlatform(userId as number, payload),
+    onSuccess: (connection) => {
+      setNotice(`${connection.platform} connected as ${connection.handle}.`);
       setError(null);
+      setPlatformDraft(null);
       void queryClient.invalidateQueries({ queryKey: ["platform-connections", userId] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
     },
@@ -106,6 +110,35 @@ export default function SettingsPage() {
   });
 
   if (!hasHydrated || !userId) return null;
+
+  const activeDraftPlatform = platformDraft?.platform ?? null;
+
+  const openPlatformDraft = (platform: string) => {
+    setNotice(null);
+    setError(null);
+    setPlatformDraft({
+      platform,
+      handle: "",
+      profile_url: "",
+    });
+  };
+
+  const submitPlatformDraft = async () => {
+    if (!platformDraft) return;
+
+    const handle = platformDraft.handle.trim();
+    const profileUrl = platformDraft.profile_url?.trim() || "";
+    if (!handle) {
+      setError("Add your account handle, page name, or channel name.");
+      return;
+    }
+
+    await connectMutation.mutateAsync({
+      platform: platformDraft.platform,
+      handle,
+      profile_url: profileUrl || null,
+    });
+  };
 
   const handleAvatarUpload = async (file: File) => {
     setUploadingAvatar(true);
@@ -330,6 +363,10 @@ export default function SettingsPage() {
             Connected Platforms
           </p>
 
+          <p className="mb-3 text-xs text-slate-500">
+            OAuth is not configured yet for these networks in this deployment, so connect the exact handle or page you publish with. This replaces the old fake auto-connect flow.
+          </p>
+
           {isLoading ? (
             <div className="mb-2 space-y-2" aria-hidden="true">
               <div className="skeleton h-10 rounded-xl" />
@@ -374,7 +411,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       disabled={connectMutation.isPending}
-                      onClick={() => void connectMutation.mutate(platform.id)}
+                      onClick={() => openPlatformDraft(platform.id)}
                       className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-400 hover:bg-violet-500/15 disabled:opacity-60 light:text-violet-600"
                     >
                       Connect
@@ -384,6 +421,84 @@ export default function SettingsPage() {
               );
             })}
           </div>
+
+          {platformDraft ? (
+            <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4 light:border-slate-200 light:bg-white/80">
+              <p className="text-sm font-semibold text-white light:text-slate-900">
+                Connect {platforms.find((item) => item.id === activeDraftPlatform)?.label}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Enter the exact account handle, page name, or channel name you want Xcr8 to use.
+              </p>
+
+              <div className="mt-3 space-y-3">
+                <input
+                  value={platformDraft.handle}
+                  onChange={(event) =>
+                    setPlatformDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            handle: event.target.value,
+                          }
+                        : current,
+                    )
+                  }
+                  className="xcr8-input"
+                  placeholder="@yourhandle or Channel Name"
+                />
+                <input
+                  value={platformDraft.profile_url ?? ""}
+                  onChange={(event) =>
+                    setPlatformDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            profile_url: event.target.value,
+                          }
+                        : current,
+                    )
+                  }
+                  className="xcr8-input"
+                  placeholder="https://... (optional profile URL)"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void submitPlatformDraft()}
+                    disabled={connectMutation.isPending}
+                    className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+                  >
+                    {connectMutation.isPending ? "Connecting..." : "Save connection"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlatformDraft(null)}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {connections && connections.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {connections
+                .filter((item) => item.active)
+                .map((item) => (
+                  <div
+                    key={`details-${item.id}`}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400 light:border-slate-200 light:bg-slate-50 light:text-slate-600"
+                  >
+                    <span className="font-medium text-slate-200 light:text-slate-800">{item.platform}</span>
+                    {` - ${item.handle}`}
+                    {item.profile_url ? ` - ${item.profile_url}` : ""}
+                  </div>
+                ))}
+            </div>
+          ) : null}
 
           <p className="mt-3 text-xs text-slate-500">
             Connect only channels you actively publish to this week for cleaner recommendations.

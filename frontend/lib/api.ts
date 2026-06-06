@@ -610,6 +610,14 @@ export type PlatformConnection = {
   handle: string;
   active: boolean;
   sync_status?: "synced" | "syncing" | "disconnected";
+  connection_method?: "manual" | "oauth";
+  profile_url?: string | null;
+};
+
+export type PlatformConnectPayload = {
+  platform: string;
+  handle: string;
+  profile_url?: string | null;
 };
 
 type PlatformListResponse = {
@@ -623,15 +631,11 @@ export async function getPlatformConnections(userId: number): Promise<PlatformCo
 
 export async function connectPlatform(
   userId: number,
-  platform: string,
-  handle: string,
+  payload: PlatformConnectPayload,
 ): Promise<PlatformConnection> {
   const { data } = await apiClient.post<PlatformConnection>(
     `/api/v1/platforms/${userId}/connect`,
-    null,
-    {
-      params: { platform, handle },
-    },
+    payload,
   );
   return data;
 }
