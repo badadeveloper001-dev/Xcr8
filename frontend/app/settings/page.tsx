@@ -14,6 +14,7 @@ import {
   getPlatformConnections,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { updateAvatarUrl } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
 
@@ -125,7 +126,8 @@ export default function SettingsPage() {
         throw new Error(payload.error || "Could not upload profile image.");
       }
 
-      setAvatarUrl(payload.url);
+      const session = await updateAvatarUrl({ user_id: userId, avatar_url: payload.url });
+      setAvatarUrl(session.avatar_url ?? payload.url);
       setNotice("Profile picture updated.");
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not upload profile picture."));

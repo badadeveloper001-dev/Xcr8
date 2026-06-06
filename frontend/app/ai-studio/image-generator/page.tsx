@@ -45,6 +45,7 @@ type CameraAngle = "eye-level" | "low-angle" | "overhead" | "close-up";
 type LightingStyle = "soft daylight" | "golden hour" | "studio key light" | "neon night";
 type UseCase = "ad-creative" | "product-still" | "portrait" | "thumbnail" | "sports-action";
 type StyleKey = "cinematic" | "editorial" | "documentary" | "vibrant";
+type EnhancementStyle = "clean-up" | "product-polish" | "portrait-retouch" | "cinematic-pop";
 
 type GenerationPreset = {
   id: string;
@@ -113,6 +114,13 @@ const variationDirections = [
   "alternative framing, changed angle",
   "alternative framing, changed spacing",
 ] as const;
+
+const enhancementStyleLabels: Record<EnhancementStyle, string> = {
+  "clean-up": "Clean up",
+  "product-polish": "Product polish",
+  "portrait-retouch": "Portrait retouch",
+  "cinematic-pop": "Cinematic pop",
+};
 
 const generationPresets: readonly GenerationPreset[] = [
   {
@@ -235,6 +243,7 @@ export default function ImageGeneratorPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [sourceImageFile, setSourceImageFile] = useState<File | null>(null);
   const [sourceImagePreview, setSourceImagePreview] = useState<string | null>(null);
+  const [enhancementStyle, setEnhancementStyle] = useState<EnhancementStyle>("clean-up");
 
   const canGenerate =
     mode === "image-enhance" ? Boolean(sourceImageFile) : subject.trim().length > 4;
@@ -353,9 +362,11 @@ export default function ImageGeneratorPage() {
   const resolveEnhancedImageBlobUrl = async (
     file: File,
     level: RealismLevel,
+    style: EnhancementStyle,
   ): Promise<{ blobUrl: string; historySrc: string }> => {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("style", style);
     formData.append("level", level);
 
     const response = await fetch("/api/image/enhance", {
@@ -464,7 +475,11 @@ export default function ImageGeneratorPage() {
       setImages([]);
 
       try {
-        const enhanced = await resolveEnhancedImageBlobUrl(sourceImageFile, realism);
+        const enhanced = await resolveEnhancedImageBlobUrl(
+          sourceImageFile,
+          realism,
+          enhancementStyle,
+        );
         const now = new Date().toISOString();
         const note = cleanText(subject) || "Enhanced uploaded image";
         const built: GeneratedImage = {
@@ -785,6 +800,23 @@ export default function ImageGeneratorPage() {
                   className="mt-3 h-auto w-full rounded-xl border border-white/10 object-cover"
                 />
               ) : null}
+
+              <div className="mt-3">
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Enhancement style
+                </label>
+                <select
+                  value={enhancementStyle}
+                  onChange={(e) => setEnhancementStyle(e.target.value as EnhancementStyle)}
+                  className="xcr8-input"
+                >
+                  {Object.entries(enhancementStyleLabels).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           ) : null}
 

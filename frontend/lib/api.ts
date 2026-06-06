@@ -17,6 +17,7 @@ export type SessionPayload = {
   display_name: string;
   full_name?: string | null;
   username?: string | null;
+  avatar_url?: string | null;
   onboarding_complete: boolean;
   google_oauth_enabled: boolean;
 };
@@ -49,6 +50,11 @@ export type LoginPayload = {
 
 export type PasswordResetPayload = {
   email: string;
+};
+
+export type AvatarUpdatePayload = {
+  user_id: number;
+  avatar_url: string;
 };
 
 export type PasswordResetConfirmPayload = {
@@ -407,6 +413,11 @@ export async function getSession(userId: number): Promise<SessionPayload> {
 
 export async function completeOnboarding(payload: OnboardingPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/onboarding", payload);
+  return data;
+}
+
+export async function updateAvatarUrl(payload: AvatarUpdatePayload): Promise<SessionPayload> {
+  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/avatar", payload);
   return data;
 }
 

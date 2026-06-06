@@ -171,6 +171,7 @@ export default function OnboardingPage() {
         displayName: session.display_name,
         fullName: session.full_name,
         username: session.username,
+        avatarUrl: session.avatar_url ?? null,
         onboardingComplete: true,
       });
       router.replace("/dashboard");

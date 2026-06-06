@@ -47,6 +47,7 @@ export default function LoginPage() {
         displayName: session.display_name,
         fullName: session.full_name,
         username: session.username,
+        avatarUrl: session.avatar_url ?? null,
         onboardingComplete: session.onboarding_complete,
       });
       router.push(session.onboarding_complete ? "/dashboard" : "/onboarding");

@@ -52,8 +52,14 @@ class AuthSessionResponse(BaseModel):
     display_name: str
     full_name: str | None = None
     username: str | None = None
+    avatar_url: str | None = None
     onboarding_complete: bool
     google_oauth_enabled: bool
+
+
+class AvatarUpdateRequest(BaseModel):
+    user_id: int
+    avatar_url: str = Field(min_length=16, max_length=20_000_000)
 
 
 class OnboardingRequest(BaseModel):

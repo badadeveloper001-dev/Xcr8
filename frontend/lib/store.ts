@@ -31,6 +31,7 @@ type CreatorState = {
     displayName: string;
     fullName?: string | null;
     username?: string | null;
+    avatarUrl?: string | null;
     onboardingComplete: boolean;
   }) => void;
   clearSession: () => void;
@@ -55,12 +56,20 @@ export const useCreatorStore = create<CreatorState>()(
       onboardingComplete: false,
       theme: "system",
       distributionDraft: null,
-      setSession: ({ userId, email, displayName, fullName, username, onboardingComplete }) =>
+      setSession: ({
+        userId,
+        email,
+        displayName,
+        fullName,
+        username,
+        avatarUrl,
+        onboardingComplete,
+      }) =>
         set({
           userId,
           email,
           displayName,
-          avatarUrl: null,
+          avatarUrl: avatarUrl ?? null,
           fullName: fullName ?? displayName,
           username: username ?? null,
           onboardingComplete,

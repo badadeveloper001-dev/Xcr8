@@ -22,6 +22,7 @@ export default function SplashPage() {
             displayName: session.display_name,
             fullName: session.full_name,
             username: session.username,
+            avatarUrl: session.avatar_url ?? null,
             onboardingComplete: session.onboarding_complete,
           });
           router.replace(session.onboarding_complete ? "/dashboard" : "/onboarding");

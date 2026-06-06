@@ -108,6 +108,7 @@ export default function SignupPage() {
         displayName: session.display_name,
         fullName: session.full_name,
         username: session.username,
+        avatarUrl: (session as { avatar_url?: string | null }).avatar_url ?? null,
         onboardingComplete: session.onboarding_complete,
       });
       router.push("/onboarding");
@@ -148,6 +149,7 @@ export default function SignupPage() {
         displayName: session.display_name,
         fullName: session.full_name,
         username: session.username,
+        avatarUrl: (session as { avatar_url?: string | null }).avatar_url ?? null,
         onboardingComplete: session.onboarding_complete,
       });
       router.push("/onboarding");

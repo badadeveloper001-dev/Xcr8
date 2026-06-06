@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import AuthCredential, CreatorMemory, CreatorProfile, User
 from app.schemas.mvp import (
+    AvatarUpdateRequest,
     AuthLoginRequest,
     AuthSignupPasswordVerifyRequest,
     AuthSessionResponse,
@@ -65,12 +66,15 @@ def _verify_password(password: str, salt_value: str, hash_value: str) -> bool:
 
 
 def _session_payload(user: User, credential: AuthCredential | None = None) -> AuthSessionResponse:
+    profile = user.profile
+    preferences = profile.preferences if profile and isinstance(profile.preferences, dict) else {}
     return AuthSessionResponse(
         user_id=user.id,
         email=user.email,
         display_name=user.display_name,
         full_name=credential.full_name if credential else user.display_name,
         username=credential.username if credential else None,
+        avatar_url=str(preferences.get("avatar_url") or "").strip() or None,
         onboarding_complete=user.onboarding_complete,
         google_oauth_enabled=settings.google_oauth_enabled,
     )
@@ -455,6 +459,33 @@ def get_session(user_id: int, db: Session = Depends(get_db)) -> AuthSessionRespo
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+    return _session_payload(user, credential)
+
+
+@router.post("/avatar", response_model=AuthSessionResponse)
+def update_avatar(payload: AvatarUpdateRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    user = db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    avatar_url = str(payload.avatar_url or "").strip()
+    if not avatar_url.startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Avatar must be an uploaded image data URL.")
+
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    if not profile:
+        profile = CreatorProfile(user_id=user.id, preferences={})
+        db.add(profile)
+
+    profile.preferences = {
+        **(profile.preferences or {}),
+        "avatar_url": avatar_url,
+        "avatar_updated_at": datetime.now(tz=UTC).isoformat(),
+    }
+    db.add(profile)
+    db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
