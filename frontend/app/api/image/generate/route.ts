@@ -6,7 +6,7 @@ const MIN_DIMENSION = 512;
 const MAX_DIMENSION = 1792;
 const MIN_IMAGE_BYTES_STRICT = 42_000;
 const MIN_IMAGE_BYTES_RELAXED = 18_000;
-const FETCH_TIMEOUT_MS = 20_000;
+const FETCH_TIMEOUT_MS = 12_000;
 const GLOBAL_QUALITY_NEGATIVE =
   "blurry, low resolution, noisy image, cgi look, deformed anatomy, extra limbs, extra fingers, duplicate body parts, duplicated objects, multiple balls, duplicate football, distorted face, watermark, logo, text overlay";
 
@@ -108,6 +108,33 @@ function scoreCandidate(contentType: string, bodyLength: number): number {
   return bodyLength + mimeScore(contentType);
 }
 
+async function fetchCandidate(
+  url: string,
+  minBytes: number,
+): Promise<CandidateResult | null> {
+  try {
+    const upstream = await fetchWithTimeout(url);
+
+    if (!upstream.ok) return null;
+    const contentType = upstream.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return null;
+    if (!isSupportedOutput(contentType)) return null;
+
+    const body = await upstream.arrayBuffer();
+    if (body.byteLength === 0) return null;
+    if (body.byteLength < minBytes) return null;
+
+    return {
+      body,
+      contentType,
+      score: scoreCandidate(contentType, body.byteLength),
+      sourceUrl: url,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const prompt = request.nextUrl.searchParams.get("prompt")?.trim() ?? "";
   if (!prompt) {
@@ -158,26 +185,14 @@ export async function GET(request: NextRequest) {
         seed + attempt * 541,
       );
 
-      for (const url of candidates) {
-        try {
-          const upstream = await fetchWithTimeout(url);
+      const settled = await Promise.all(
+        candidates.map((url) => fetchCandidate(url, pass.minBytes)),
+      );
 
-          if (!upstream.ok) continue;
-          const contentType = upstream.headers.get("content-type") ?? "";
-          if (!contentType.startsWith("image/")) continue;
-          if (!isSupportedOutput(contentType)) continue;
-
-          const body = await upstream.arrayBuffer();
-          if (body.byteLength === 0) continue;
-          if (body.byteLength < pass.minBytes) continue;
-
-          const score = scoreCandidate(contentType, body.byteLength);
-
-          if (!best || score > best.score) {
-            best = { body, contentType, score, sourceUrl: url };
-          }
-        } catch {
-          continue;
+      for (const candidate of settled) {
+        if (!candidate) continue;
+        if (!best || candidate.score > best.score) {
+          best = candidate;
         }
       }
 

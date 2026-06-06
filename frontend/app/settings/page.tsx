@@ -125,10 +125,7 @@ export default function SettingsPage() {
         throw new Error(payload.error || "Could not upload profile image.");
       }
 
-      const parsed = new URL(payload.url, window.location.origin);
-      const storedAvatarUrl =
-        parsed.origin === window.location.origin ? parsed.pathname : payload.url;
-      setAvatarUrl(storedAvatarUrl);
+      setAvatarUrl(payload.url);
       setNotice("Profile picture updated.");
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not upload profile picture."));
@@ -160,6 +157,7 @@ export default function SettingsPage() {
                 width={56}
                 height={56}
                 className="h-full w-full object-cover"
+                unoptimized
               />
             </div>
             <div>

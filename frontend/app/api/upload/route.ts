@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
-import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -25,21 +22,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "File too large. Max size is 10MB." }, { status: 400 });
   }
 
-  const extension = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-  const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
-
-  const uploadDirectory = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadDirectory, { recursive: true });
-
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(uploadDirectory, fileName), fileBuffer);
-
-  const requestUrl = new URL(request.url);
-  const publicUrl = `${requestUrl.origin}/uploads/${fileName}`;
+  const arrayBuffer = await file.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  const dataUrl = `data:${file.type};base64,${base64}`;
 
   return NextResponse.json({
     message: "Upload successful.",
-    fileName,
-    url: publicUrl,
+    url: dataUrl,
   });
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, History, MessageSquarePlus, SendHorizontal } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
@@ -102,7 +101,6 @@ export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
   const email = useCreatorStore((state) => state.email);
   const displayName = useCreatorStore((state) => state.displayName);
-  const searchParams = useSearchParams();
   const welcomeMessage = useMemo(() => buildWelcomeMessage(displayName), [displayName]);
   const [messages, setMessages] = useState<ChatItem[]>([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState<AiAssistantChatSummary[]>([]);
@@ -116,8 +114,22 @@ export default function AssistantPage() {
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const [isMobileInputMode, setIsMobileInputMode] = useState(false);
   const [isHistoryReady, setIsHistoryReady] = useState(true);
-  const requestedChatId = searchParams.get("chat")?.trim() || null;
-  const promptParam = searchParams.get("prompt")?.trim() || "";
+  const [requestedChatId, setRequestedChatId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setRequestedChatId(params.get("chat")?.trim() || null);
+
+    const nextPrompt = params.get("prompt")?.trim() || "";
+    if (nextPrompt && lastPromptParamRef.current !== nextPrompt) {
+      setPrompt(nextPrompt);
+      lastPromptParamRef.current = nextPrompt;
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -144,15 +156,6 @@ export default function AssistantPage() {
     }
     list.scrollTop = list.scrollHeight;
   }, [messages, loading]);
-
-  useEffect(() => {
-    if (!promptParam || lastPromptParamRef.current === promptParam) {
-      return;
-    }
-
-    setPrompt(promptParam);
-    lastPromptParamRef.current = promptParam;
-  }, [promptParam]);
 
   useEffect(() => {
     if (!requestedChatId) {
