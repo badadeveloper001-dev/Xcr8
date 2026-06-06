@@ -954,30 +954,30 @@ def voiceover(payload: AIVoiceoverRequest, db: Session = Depends(get_db)) -> AIV
 
     creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
-        try:
-            result = httpx.post(
-                f"{settings.ai_service_url.rstrip('/')}/voiceover",
-                json={
-                    "user_id": payload.user_id,
-                    "topic": payload.topic,
-                    "platform": payload.platform,
-                    "language": payload.language,
-                    "tone": payload.tone,
-                    "audience_location": payload.audience_location,
-                    "goal": payload.goal,
-                    "duration_seconds": payload.duration_seconds,
-                    "pace": payload.pace,
-                    "voice_style": payload.voice_style,
-                    "messages": [message.model_dump() for message in payload.messages],
-                    "creator_memory": creator_memory,
-                },
-                timeout=60.0,
-            )
-            result.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            _raise_ai_service_error(exc, "Voiceover generation failed")
-        except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"Voiceover service unavailable: {exc}") from exc
+    try:
+        result = httpx.post(
+            f"{settings.ai_service_url.rstrip('/')}/voiceover",
+            json={
+                "user_id": payload.user_id,
+                "topic": payload.topic,
+                "platform": payload.platform,
+                "language": payload.language,
+                "tone": payload.tone,
+                "audience_location": payload.audience_location,
+                "goal": payload.goal,
+                "duration_seconds": payload.duration_seconds,
+                "pace": payload.pace,
+                "voice_style": payload.voice_style,
+                "messages": [message.model_dump() for message in payload.messages],
+                "creator_memory": creator_memory,
+            },
+            timeout=60.0,
+        )
+        result.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        _raise_ai_service_error(exc, "Voiceover generation failed")
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Voiceover service unavailable: {exc}") from exc
 
     return AIVoiceoverResponse(**result.json())
 
@@ -1004,30 +1004,30 @@ def voiceover_audio(payload: AIVoiceoverAudioRequest, db: Session = Depends(get_
 
     creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
-        try:
-            result = httpx.post(
-                f"{settings.ai_service_url.rstrip('/')}/voiceover/audio",
-                json={
-                    "user_id": payload.user_id,
-                    "text": payload.text,
-                    "topic": payload.topic,
-                    "language": payload.language,
-                    "pace": payload.pace,
-                    "voice_style": payload.voice_style,
-                    "voice_type": payload.voice_type,
-                    "platform": payload.platform,
-                    "tone": payload.tone,
-                    "goal": payload.goal,
-                    "duration_seconds": payload.duration_seconds,
-                    "creator_memory": creator_memory,
-                },
-                timeout=120.0,
-            )
-            result.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            _raise_ai_service_error(exc, "Voiceover audio generation failed")
-        except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"Voiceover audio service unavailable: {exc}") from exc
+    try:
+        result = httpx.post(
+            f"{settings.ai_service_url.rstrip('/')}/voiceover/audio",
+            json={
+                "user_id": payload.user_id,
+                "text": payload.text,
+                "topic": payload.topic,
+                "language": payload.language,
+                "pace": payload.pace,
+                "voice_style": payload.voice_style,
+                "voice_type": payload.voice_type,
+                "platform": payload.platform,
+                "tone": payload.tone,
+                "goal": payload.goal,
+                "duration_seconds": payload.duration_seconds,
+                "creator_memory": creator_memory,
+            },
+            timeout=120.0,
+        )
+        result.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        _raise_ai_service_error(exc, "Voiceover audio generation failed")
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Voiceover audio service unavailable: {exc}") from exc
 
     return Response(content=result.content, media_type=result.headers.get("content-type", "audio/mpeg"))
 

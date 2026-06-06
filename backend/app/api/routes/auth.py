@@ -376,7 +376,12 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
                 status_code=429,
                 detail="Too many login attempts right now. Please wait a minute and try again.",
             ) from exc
-        raise HTTPException(status_code=401, detail=message) from exc
+        if exc.status_code >= 500:
+            raise HTTPException(
+                status_code=503,
+                detail="Authentication service is temporarily unavailable. Please try again.",
+            ) from exc
+        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=message) from exc
 
     auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
     user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
