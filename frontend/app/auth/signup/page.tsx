@@ -166,7 +166,7 @@ export default function SignupPage() {
       <div className="lux-orb-b" />
       <div className="lux-orb-c" />
 
-      <div className="relative grid w-full max-w-6xl gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-start">
+      <div className="relative mx-auto w-full max-w-3xl">
         <section className="xcr8-panel rounded-[30px] border-2 border-cyan-300/30 p-6 sm:p-7">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
             <Link href="/" className="inline-flex items-center gap-2.5">
@@ -366,33 +366,6 @@ export default function SignupPage() {
             </Link>
           </p>
         </section>
-
-        <aside className="xcr8-panel cyber-grid rounded-[30px] p-6 sm:p-7 lg:sticky lg:top-6">
-          <p className="xcr8-eyebrow mb-3">Creator onboarding</p>
-          <h2 className="xcr8-title-xl text-white light:text-slate-900">
-            Build your creator command center from day one.
-          </h2>
-          <p className="xcr8-subtle mt-4 text-sm">
-            XCR8 learns your channels, voice, goals, and audience so every assistant reply and
-            content workflow feels aligned from the first session.
-          </p>
-
-          <div className="mt-5 space-y-2.5">
-            {[
-              { title: "Identity", detail: "Creator profile tuned for your workspace" },
-              { title: "Voice memory", detail: "Assistant responses adapt to your style" },
-              { title: "Distribution", detail: "Multi-platform planning from one command flow" },
-              { title: "Mobile-first", detail: "Built for quick capture and publishing loops" },
-            ].map((item) => (
-              <div key={item.title} className="surface-soft rounded-2xl px-3 py-2.5">
-                <p className="text-sm font-semibold text-white light:text-slate-900">
-                  {item.title}
-                </p>
-                <p className="mt-1 text-xs text-slate-400 light:text-slate-600">{item.detail}</p>
-              </div>
-            ))}
-          </div>
-        </aside>
       </div>
     </main>
   );
