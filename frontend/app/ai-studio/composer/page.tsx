@@ -75,7 +75,9 @@ export default function ComposerPage() {
       <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-3.5">
           <div className="ai-stage p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Setup</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Setup
+            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <select
                 value={platform}
@@ -132,9 +134,7 @@ export default function ComposerPage() {
                 <div key={`${message.role}-${index}`} className="flex w-full">
                   <div
                     className={`ai-msg max-w-[88%] ${
-                      message.role === "user"
-                        ? "ai-msg-user ml-auto"
-                        : "ai-msg-assistant mr-auto"
+                      message.role === "user" ? "ai-msg-user ml-auto" : "ai-msg-assistant mr-auto"
                     }`}
                   >
                     {message.content}
@@ -193,14 +193,48 @@ export default function ComposerPage() {
               <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
                 {result.content_plan.angle}
               </p>
-              <div className="mt-3 space-y-2 rounded-xl bg-black/20 p-3 light:bg-slate-50">
+              <div className="mt-3 space-y-3 rounded-xl bg-black/20 p-3 light:bg-slate-50">
+                <p className="text-sm text-slate-200 light:text-slate-800">
+                  <span className="font-semibold text-violet-300 light:text-violet-700">
+                    Assistant:
+                  </span>{" "}
+                  {result.assistant_message}
+                </p>
                 <p className="text-sm text-slate-200 light:text-slate-800">
                   <span className="font-semibold text-violet-300 light:text-violet-700">Hook:</span>{" "}
                   {result.content_plan.hook}
                 </p>
                 <p className="text-sm text-slate-200 light:text-slate-800">
+                  <span className="font-semibold text-violet-300 light:text-violet-700">
+                    Intro:
+                  </span>{" "}
+                  {result.content_plan.intro}
+                </p>
+                <div>
+                  <p className="text-sm font-semibold text-violet-300 light:text-violet-700">
+                    Body:
+                  </p>
+                  <ul className="mt-1 space-y-1.5 text-sm text-slate-200 light:text-slate-800">
+                    {result.content_plan.body.map((section, index) => (
+                      <li key={`${section}-${index}`}>- {section}</li>
+                    ))}
+                  </ul>
+                </div>
+                <p className="text-sm text-slate-200 light:text-slate-800">
                   <span className="font-semibold text-violet-300 light:text-violet-700">CTA:</span>{" "}
                   {result.content_plan.cta}
+                </p>
+                {result.content_plan.hashtags.length > 0 ? (
+                  <p className="text-sm text-slate-200 light:text-slate-800">
+                    <span className="font-semibold text-violet-300 light:text-violet-700">
+                      Hashtags:
+                    </span>{" "}
+                    {result.content_plan.hashtags.join(" ")}
+                  </p>
+                ) : null}
+                <p className="text-sm text-slate-200 light:text-slate-800">
+                  <span className="font-semibold text-violet-300 light:text-violet-700">Next:</span>{" "}
+                  {result.follow_up_question}
                 </p>
               </div>
             </article>

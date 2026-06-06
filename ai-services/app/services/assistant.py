@@ -18,6 +18,8 @@ SYSTEM_PROMPT = (
     "Help with app usage, content strategy, growth decisions, memory continuity, uploads, dashboard interpretation, execution plans, and general knowledge questions. "
     "You can answer broader topics like the world economy, current events, and general explanations. "
     "If the user asks for truly live or fast-changing information, be honest about any limits and give a best-effort answer plus a clear verification step. "
+    "For complex questions, reason clearly and provide structured insight instead of shallow summaries. "
+    "When useful, include: what matters most, why it matters, and practical implications for creators/business. "
     "Always reply in the same language as the latest user message unless they explicitly request a switch. "
     "Mirror user tone naturally while staying clear and practical. "
     "Use app_context and creator_memory as source-of-truth; never invent unavailable facts. "
@@ -133,11 +135,23 @@ def _build_fallback(payload: dict) -> dict:
     recent_posts = app_context.get("recent_posts") if isinstance(app_context.get("recent_posts"), list) else []
     memory_facts = creator_memory.get("memory_facts") if isinstance(creator_memory.get("memory_facts"), list) else []
 
-    message = (
-        f"I can help with your Xcr8 workspace and general questions in a {tone} way, keeping the reply in {language}. "
-        f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
-        f"and {summary.get('published', 0)} published posts."
+    user_message = str(payload.get("message", "")).strip()
+    is_general = any(
+        token in user_message.lower()
+        for token in ["economy", "inflation", "market", "geopolit", "interest rate", "gdp", "news"]
     )
+
+    if is_general:
+        message = (
+            "I can help with broader knowledge too. For this topic, focus on the key drivers, second-order effects, "
+            "and what signals to monitor next. If you want, I can break this down into a short decision framework."
+        )
+    else:
+        message = (
+            f"I can help with your Xcr8 workspace and general questions in a {tone} way, keeping the reply in {language}. "
+            f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
+            f"and {summary.get('published', 0)} published posts."
+        )
     if vibe:
         message += f" I’m matching your vibe: {vibe}."
     if memory_facts:
@@ -151,7 +165,7 @@ def _build_fallback(payload: dict) -> dict:
 
     return {
         "assistant_message": message,
-        "follow_up_question": "What should I help you figure out next?",
+        "follow_up_question": "Do you want a quick summary, a deeper breakdown, or an action plan?",
         "suggested_actions": intent_actions,
         "language": language,
         "tone": tone,

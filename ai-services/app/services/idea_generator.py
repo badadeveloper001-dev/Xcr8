@@ -18,6 +18,7 @@ IDEA_SYSTEM_PROMPT = (
     "You are Xcr8 Idea Engine. Generate content ideas that feel specific, practical, and creator-native. "
     "Return strict JSON with keys: ideas (array of objects). Each idea object must include title, angle, hook, "
     "caption_seed, cta, hashtags. Avoid generic advice and avoid repeating the same framing across ideas. "
+    "Each idea should be detailed and concrete enough to produce a full post without guessing. "
     "Use creator_memory and topic cues to make the ideas feel personal and locally relevant."
 )
 
@@ -26,7 +27,8 @@ COMPOSE_SYSTEM_PROMPT = (
     "Reply like a helpful creative partner. Be conversational, ask at most one short follow-up question, and return "
     "strict JSON with keys: assistant_message (string), content_plan (object), follow_up_question (string). "
     "content_plan must include title, angle, hook, intro, body (array of short sections), cta, hashtags. "
-    "Avoid generic lines and make the result feel specific to the user's request and creator memory."
+    "Avoid generic lines and make the result feel specific to the user's request and creator memory. "
+    "Provide richer detail in body sections: practical steps, examples, and execution tips."
 )
 
 
@@ -179,6 +181,14 @@ def _fallback_ideas(topic: str, platform: str, language: str, goal: str, tone: s
             "cta": "Tell them to save the post and test the routine this week.",
             "hashtags": hashtags,
         },
+        {
+            "title": f"Myth vs reality: {primary}",
+            "angle": f"Challenge a common myth about {primary}, then give a realistic method creators can apply immediately.",
+            "hook": f"Hot take: most advice on {primary} sounds smart but fails in real execution.",
+            "caption_seed": "Set up the myth first, show where it breaks, then present a realistic replacement with one practical example.",
+            "cta": "Ask followers to vote: myth or reality, and share why.",
+            "hashtags": hashtags,
+        },
     ]
 
 
@@ -224,9 +234,10 @@ def generate_content_ideas(payload: dict) -> dict:
                             "audience_location": payload.get("audience_location"),
                             "creator_memory": creator_memory,
                             "constraints": {
-                                "ideas_min": 3,
-                                "ideas_max": 3,
+                                "ideas_min": 4,
+                                "ideas_max": 5,
                                 "prompt_template_version": PROMPT_TEMPLATE_VERSION,
+                                "require_detail": True,
                             },
                         }
                     ),
@@ -240,7 +251,7 @@ def generate_content_ideas(payload: dict) -> dict:
             ideas = []
 
         normalized: list[dict] = []
-        for item in ideas[:3]:
+        for item in ideas[:5]:
             if not isinstance(item, dict):
                 continue
             normalized.append(
@@ -260,7 +271,7 @@ def generate_content_ideas(payload: dict) -> dict:
                 }
             )
 
-        if len(normalized) < 3:
+        if len(normalized) < 4:
             normalized = _fallback_ideas(topic, platform, language, goal, tone, creator_memory)
 
         return {

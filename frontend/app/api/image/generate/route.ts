@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic";
 
 const MIN_DIMENSION = 512;
 const MAX_DIMENSION = 1792;
-const MIN_IMAGE_BYTES_STRICT = 70_000;
-const MIN_IMAGE_BYTES_RELAXED = 30_000;
-const FETCH_TIMEOUT_MS = 12_000;
+const MIN_IMAGE_BYTES_STRICT = 35_000;
+const MIN_IMAGE_BYTES_RELAXED = 10_000;
+const FETCH_TIMEOUT_MS = 16_000;
 const GLOBAL_QUALITY_NEGATIVE =
   "blurry, low resolution, noisy image, cgi look, deformed anatomy, extra limbs, extra fingers, duplicate body parts, duplicated objects, multiple balls, duplicate football, distorted face, watermark, logo, text overlay";
 
@@ -24,13 +24,14 @@ function buildCandidateUrls(
   baseSeed: number,
 ): string[] {
   const encodedPrompt = encodeURIComponent(prompt);
-  const common = `model=flux&width=${width}&height=${height}&nologo=true&enhance=true`;
+  const common = `width=${width}&height=${height}&nologo=true`;
   return [
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed}`,
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 97}`,
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 197}&safe=true`,
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 307}`,
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 409}&safe=true`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=flux&enhance=true&seed=${baseSeed}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=flux&enhance=true&seed=${baseSeed + 97}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=flux-realism&enhance=true&seed=${baseSeed + 197}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=turbo&enhance=true&seed=${baseSeed + 307}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=flux&safe=true&seed=${baseSeed + 409}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=turbo&safe=true&seed=${baseSeed + 503}`,
   ];
 }
 
@@ -182,12 +183,12 @@ export async function GET(request: NextRequest) {
     { minBytes: MIN_IMAGE_BYTES_STRICT, retries: attempts, width, height },
     {
       minBytes: MIN_IMAGE_BYTES_RELAXED,
-      retries: Math.max(2, attempts - 1),
+      retries: Math.max(3, attempts),
       width,
       height,
     },
     {
-      minBytes: MIN_IMAGE_BYTES_RELAXED,
+      minBytes: 0,
       retries: 2,
       width: clamp(Math.floor(width * 0.8), MIN_DIMENSION, MAX_DIMENSION),
       height: clamp(Math.floor(height * 0.8), MIN_DIMENSION, MAX_DIMENSION),

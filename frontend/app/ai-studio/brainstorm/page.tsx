@@ -105,11 +105,13 @@ export default function BrainstormPage() {
                 placeholder="Goal"
               />
               <select value={tone} onChange={(e) => setTone(e.target.value)} className="xcr8-input">
-                {["conversational", "bold", "educational", "funny", "luxury", "motivational"].map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
+                {["conversational", "bold", "educational", "funny", "luxury", "motivational"].map(
+                  (item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ),
+                )}
               </select>
             </div>
 
@@ -138,7 +140,6 @@ export default function BrainstormPage() {
               </p>
             ) : null}
           </form>
-
         </div>
 
         <div className="space-y-3.5">
@@ -152,23 +153,46 @@ export default function BrainstormPage() {
                 {result.topic}
               </h3>
               <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
-                {result.platform}
+                {result.platform} • {result.ideas.length} ideas
               </p>
               <div className="mt-4 space-y-3">
-                {result.ideas.slice(0, 3).map((idea, index) => (
-                  <div
-                    key={`${idea.title}-${index}`}
-                    className="ai-chat-log rounded-2xl p-4"
-                  >
+                {result.ideas.map((idea, index) => (
+                  <div key={`${idea.title}-${index}`} className="ai-chat-log rounded-2xl p-4">
                     <h4 className="text-sm font-semibold text-white light:text-slate-900">
                       {idea.title}
                     </h4>
+                    <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
+                      <span className="font-semibold text-violet-300 light:text-violet-700">
+                        Angle:
+                      </span>{" "}
+                      {idea.angle}
+                    </p>
                     <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
                       <span className="font-semibold text-violet-300 light:text-violet-700">
                         Hook:
                       </span>{" "}
                       {idea.hook}
                     </p>
+                    <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
+                      <span className="font-semibold text-violet-300 light:text-violet-700">
+                        Caption seed:
+                      </span>{" "}
+                      {idea.caption_seed}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
+                      <span className="font-semibold text-violet-300 light:text-violet-700">
+                        CTA:
+                      </span>{" "}
+                      {idea.cta}
+                    </p>
+                    {idea.hashtags.length > 0 ? (
+                      <p className="mt-2 text-sm text-slate-200 light:text-slate-800">
+                        <span className="font-semibold text-violet-300 light:text-violet-700">
+                          Hashtags:
+                        </span>{" "}
+                        {idea.hashtags.join(" ")}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
               </div>

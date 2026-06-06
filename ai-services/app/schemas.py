@@ -80,7 +80,6 @@ class VoiceoverAudioRequest(BaseModel):
     tone: str = Field(default="conversational", max_length=80)
     goal: str = Field(default="engage viewers", max_length=120)
     duration_seconds: int = Field(default=60, ge=15, le=180)
-    text: str | None = Field(default=None, max_length=6000)
 
 
 class ConversationMessage(BaseModel):
