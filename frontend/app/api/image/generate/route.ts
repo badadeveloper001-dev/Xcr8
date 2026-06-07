@@ -7,7 +7,7 @@ const MIN_DIMENSION = 512;
 const MAX_DIMENSION = 1792;
 const MIN_IMAGE_BYTES_STRICT = 35_000;
 const MIN_IMAGE_BYTES_RELAXED = 10_000;
-const FETCH_TIMEOUT_MS = 16_000;
+const FETCH_TIMEOUT_MS = 25_000;
 const GLOBAL_QUALITY_NEGATIVE =
   "blurry, low resolution, noisy image, cgi look, deformed anatomy, extra limbs, extra fingers, duplicate body parts, duplicated objects, multiple balls, duplicate football, distorted face, watermark, logo, text overlay";
 
@@ -32,6 +32,8 @@ function buildCandidateUrls(
     `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=turbo&enhance=true&seed=${baseSeed + 307}`,
     `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=flux&safe=true&seed=${baseSeed + 409}`,
     `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&model=turbo&safe=true&seed=${baseSeed + 503}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?${common}&seed=${baseSeed + 607}`,
+    `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${baseSeed + 709}`,
   ];
 }
 
@@ -84,8 +86,18 @@ function isSupportedOutput(contentType: string): boolean {
     contentType.includes("png") ||
     contentType.includes("webp") ||
     contentType.includes("jpeg") ||
-    contentType.includes("jpg")
+    contentType.includes("jpg") ||
+    contentType.includes("octet-stream")
   );
+}
+
+async function appearsToBeImage(body: ArrayBuffer): Promise<boolean> {
+  try {
+    const metadata = await sharp(Buffer.from(body), { animated: false }).metadata();
+    return Boolean(metadata.format && metadata.width && metadata.height);
+  } catch {
+    return false;
+  }
 }
 
 async function fetchWithTimeout(url: string): Promise<Response> {
@@ -135,13 +147,14 @@ async function fetchCandidate(url: string, minBytes: number): Promise<CandidateR
     const upstream = await fetchWithTimeout(url);
 
     if (!upstream.ok) return null;
-    const contentType = upstream.headers.get("content-type") ?? "";
-    if (!contentType.startsWith("image/")) return null;
+    const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
+    if (!(contentType.startsWith("image/") || contentType.includes("octet-stream"))) return null;
     if (!isSupportedOutput(contentType)) return null;
 
     const body = await upstream.arrayBuffer();
     if (body.byteLength === 0) return null;
     if (body.byteLength < minBytes) return null;
+    if (!(await appearsToBeImage(body))) return null;
 
     return {
       body,
@@ -174,7 +187,7 @@ export async function GET(request: NextRequest) {
     MAX_DIMENSION,
   );
   const seed = parsePositiveInt(request.nextUrl.searchParams.get("seed"), Date.now());
-  const attempts = clamp(parsePositiveInt(request.nextUrl.searchParams.get("attempts"), 2), 1, 5);
+  const attempts = clamp(parsePositiveInt(request.nextUrl.searchParams.get("attempts"), 3), 1, 6);
   const enrichedPrompt = enrichPrompt(prompt);
 
   let best: CandidateResult | null = null;

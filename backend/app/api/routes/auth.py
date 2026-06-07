@@ -14,6 +14,7 @@ from app.db.deps import get_db
 from app.db.models import AuthCredential, CreatorMemory, CreatorProfile, User
 from app.schemas.mvp import (
     AvatarUpdateRequest,
+    AuthProfileUpdateRequest,
     AuthLoginRequest,
     AuthSignupPasswordVerifyRequest,
     AuthSessionResponse,
@@ -65,9 +66,17 @@ def _verify_password(password: str, salt_value: str, hash_value: str) -> bool:
     return hmac.compare_digest(computed_hash, hash_value)
 
 
-def _session_payload(user: User, credential: AuthCredential | None = None) -> AuthSessionResponse:
-    profile = user.profile
-    preferences = profile.preferences if profile and isinstance(profile.preferences, dict) else {}
+def _session_payload(
+    user: User,
+    credential: AuthCredential | None = None,
+    profile: CreatorProfile | None = None,
+) -> AuthSessionResponse:
+    resolved_profile = profile or user.profile
+    preferences = (
+        resolved_profile.preferences
+        if resolved_profile and isinstance(resolved_profile.preferences, dict)
+        else {}
+    )
     return AuthSessionResponse(
         user_id=user.id,
         email=user.email,
@@ -456,7 +465,8 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
     db.commit()
     db.refresh(user)
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    return _session_payload(user, credential)
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    return _session_payload(user, credential, profile)
 
 
 @router.get("/session/{user_id}", response_model=AuthSessionResponse)
@@ -466,7 +476,8 @@ def get_session(user_id: int, db: Session = Depends(get_db)) -> AuthSessionRespo
         raise HTTPException(status_code=404, detail="User not found")
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    return _session_payload(user, credential)
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    return _session_payload(user, credential, profile)
 
 
 @router.post("/avatar", response_model=AuthSessionResponse)
@@ -491,9 +502,58 @@ def update_avatar(payload: AvatarUpdateRequest, db: Session = Depends(get_db)) -
     }
     db.add(profile)
     db.commit()
+    db.refresh(user)
+    db.refresh(profile)
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    return _session_payload(user, credential)
+    return _session_payload(user, credential, profile)
+
+
+@router.post("/profile", response_model=AuthSessionResponse)
+def update_profile(payload: AuthProfileUpdateRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    user = db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    display_name = str(payload.display_name or "").strip()
+    if len(display_name) < 2:
+        raise HTTPException(status_code=400, detail="Display name must be at least 2 characters.")
+
+    user.display_name = display_name
+
+    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+    if credential:
+        if payload.username is not None:
+            next_username = str(payload.username).strip()
+            username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == next_username))
+            if username_taken and username_taken.user_id != user.id:
+                raise HTTPException(status_code=409, detail="Username is already taken.")
+            credential.username = next_username
+
+        if payload.full_name is not None:
+            credential.full_name = str(payload.full_name).strip() or display_name
+        else:
+            credential.full_name = credential.full_name or display_name
+    else:
+        placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
+        requested_username = str(payload.username or "").strip() or user.email.split("@")[0]
+        safe_username = _ensure_unique_username(db, requested_username)
+        credential = AuthCredential(
+            user_id=user.id,
+            username=safe_username,
+            full_name=str(payload.full_name or "").strip() or display_name,
+            password_salt=placeholder_salt,
+            password_hash=placeholder_hash,
+            remember_me_default=False,
+        )
+        db.add(credential)
+
+    db.commit()
+    db.refresh(user)
+
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+    return _session_payload(user, credential, profile)
 
 
 @router.post("/onboarding", response_model=AuthSessionResponse)

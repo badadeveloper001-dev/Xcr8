@@ -57,6 +57,13 @@ export type AvatarUpdatePayload = {
   avatar_url: string;
 };
 
+export type ProfileUpdatePayload = {
+  user_id: number;
+  display_name: string;
+  full_name?: string | null;
+  username?: string | null;
+};
+
 export type PasswordResetConfirmPayload = {
   token: string;
   new_password: string;
@@ -418,6 +425,11 @@ export async function completeOnboarding(payload: OnboardingPayload): Promise<Se
 
 export async function updateAvatarUrl(payload: AvatarUpdatePayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/avatar", payload);
+  return data;
+}
+
+export async function updateProfile(payload: ProfileUpdatePayload): Promise<SessionPayload> {
+  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/profile", payload);
   return data;
 }
 

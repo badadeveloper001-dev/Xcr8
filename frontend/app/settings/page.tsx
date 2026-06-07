@@ -14,6 +14,7 @@ import {
   getOAuthProviders,
   getPlatformConnections,
   startPlatformOAuth,
+  updateProfile,
   type PlatformConnectPayload,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -39,6 +40,10 @@ export default function SettingsPage() {
   const userId = useCreatorStore((s) => s.userId);
   const email = useCreatorStore((s) => s.email);
   const displayName = useCreatorStore((s) => s.displayName);
+  const fullName = useCreatorStore((s) => s.fullName);
+  const username = useCreatorStore((s) => s.username);
+  const onboardingComplete = useCreatorStore((s) => s.onboardingComplete);
+  const setSession = useCreatorStore((s) => s.setSession);
   const avatarUrl = useCreatorStore((s) => s.avatarUrl);
   const setAvatarUrl = useCreatorStore((s) => s.setAvatarUrl);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
@@ -48,8 +53,12 @@ export default function SettingsPage() {
   const [postReminderEnabled, setPostReminderEnabled] = useState(true);
   const [securityAlertsEnabled, setSecurityAlertsEnabled] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [platformDraft, setPlatformDraft] = useState<PlatformConnectPayload | null>(null);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [profileDisplayName, setProfileDisplayName] = useState(displayName ?? "");
+  const [profileFullName, setProfileFullName] = useState(fullName ?? displayName ?? "");
+  const [profileUsername, setProfileUsername] = useState(username ?? "");
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -78,6 +87,18 @@ export default function SettingsPage() {
   const saveAlertSettings = (postReminders: boolean, securityAlerts: boolean) => {
     localStorage.setItem("xcr8-settings-alerts", JSON.stringify({ postReminders, securityAlerts }));
   };
+
+  useEffect(() => {
+    setProfileDisplayName(displayName ?? "");
+  }, [displayName]);
+
+  useEffect(() => {
+    setProfileFullName(fullName ?? displayName ?? "");
+  }, [fullName, displayName]);
+
+  useEffect(() => {
+    setProfileUsername(username ?? "");
+  }, [username]);
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["platform-connections", userId],
@@ -169,6 +190,45 @@ export default function SettingsPage() {
       handle,
       profile_url: profileUrl || null,
     });
+  };
+
+  const handleProfileSave = async () => {
+    const nextDisplayName = profileDisplayName.trim();
+    const nextFullName = profileFullName.trim();
+    const nextUsername = profileUsername.trim();
+
+    if (nextDisplayName.length < 2) {
+      setError("Display name must be at least 2 characters.");
+      return;
+    }
+
+    setSavingProfile(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const session = await updateProfile({
+        user_id: userId,
+        display_name: nextDisplayName,
+        full_name: nextFullName || null,
+        username: nextUsername || null,
+      });
+
+      setSession({
+        userId: session.user_id,
+        email: session.email,
+        displayName: session.display_name,
+        fullName: session.full_name,
+        username: session.username,
+        avatarUrl: session.avatar_url ?? avatarUrl,
+        onboardingComplete,
+      });
+
+      setNotice("Profile updated.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not update profile."));
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleAvatarUpload = async (file: File) => {
@@ -286,6 +346,43 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.32, delay: 0.04 }}
+          className="xcr8-panel rounded-2xl border-2 border-indigo-300/25 p-4"
+        >
+          <p className="xcr8-eyebrow mb-3">Profile</p>
+          <div className="space-y-2.5">
+            <input
+              value={profileDisplayName}
+              onChange={(event) => setProfileDisplayName(event.target.value)}
+              className="xcr8-input"
+              placeholder="Display name"
+            />
+            <input
+              value={profileFullName}
+              onChange={(event) => setProfileFullName(event.target.value)}
+              className="xcr8-input"
+              placeholder="Full name"
+            />
+            <input
+              value={profileUsername}
+              onChange={(event) => setProfileUsername(event.target.value)}
+              className="xcr8-input"
+              placeholder="Username"
+            />
+            <button
+              type="button"
+              disabled={savingProfile}
+              onClick={() => void handleProfileSave()}
+              className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+            >
+              {savingProfile ? "Saving..." : "Save profile"}
+            </button>
+          </div>
+        </motion.section>
 
         <motion.section
           initial={{ opacity: 0, y: 12 }}

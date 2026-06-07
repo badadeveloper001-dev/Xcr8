@@ -62,6 +62,13 @@ class AvatarUpdateRequest(BaseModel):
     avatar_url: str = Field(min_length=16, max_length=20_000_000)
 
 
+class AuthProfileUpdateRequest(BaseModel):
+    user_id: int
+    display_name: str = Field(min_length=2, max_length=120)
+    full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    username: str | None = Field(default=None, min_length=3, max_length=40, pattern=r"^[a-zA-Z0-9_.-]+$")
+
+
 class OnboardingRequest(BaseModel):
     user_id: int
     creator_type: list[str]
