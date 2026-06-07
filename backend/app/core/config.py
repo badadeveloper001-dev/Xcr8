@@ -29,6 +29,21 @@ class Settings(BaseSettings):
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"
 
+    # Platform OAuth credentials
+    meta_app_id: str = ""
+    meta_app_secret: str = ""
+    twitter_client_id: str = ""
+    twitter_client_secret: str = ""
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
+    tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
+    # Public frontend URL used for OAuth redirect_uri construction
+    frontend_url: str = ""
+
     storage_provider: str = "s3"
     storage_bucket: str = "xcr8-assets"
     storage_region: str = "us-east-1"
@@ -76,8 +91,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _ensure_database_url(self) -> "Settings":
+        vercel_base = self._resolve_vercel_base_url()
+
+        if not self.frontend_url.strip() and vercel_base:
+            self.frontend_url = vercel_base
+
         if self.ai_service_url.strip() in {"", "http://localhost:8100"}:
-            vercel_base = self._resolve_vercel_base_url()
             if vercel_base:
                 self.ai_service_url = f"{vercel_base}/_/ai-services"
 

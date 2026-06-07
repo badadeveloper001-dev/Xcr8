@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Bell, Globe2, LogOut, Moon, Shield } from "lucide-react";
+import { Bell, Globe2, Link2, LogOut, Moon, Shield } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   connectPlatform,
   disconnectPlatform,
   getApiErrorMessage,
+  getOAuthProviders,
   getPlatformConnections,
+  startPlatformOAuth,
   type PlatformConnectPayload,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -47,6 +49,7 @@ export default function SettingsPage() {
   const [securityAlertsEnabled, setSecurityAlertsEnabled] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [platformDraft, setPlatformDraft] = useState<PlatformConnectPayload | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -82,8 +85,15 @@ export default function SettingsPage() {
     enabled: Boolean(userId),
   });
 
+  const { data: oauthProviders } = useQuery({
+    queryKey: ["oauth-providers"],
+    queryFn: () => getOAuthProviders(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const connectMutation = useMutation({
-    mutationFn: async (payload: PlatformConnectPayload) => connectPlatform(userId as number, payload),
+    mutationFn: async (payload: PlatformConnectPayload) =>
+      connectPlatform(userId as number, payload),
     onSuccess: (connection) => {
       setNotice(`${connection.platform} connected as ${connection.handle}.`);
       setError(null);
@@ -112,6 +122,27 @@ export default function SettingsPage() {
   if (!hasHydrated || !userId) return null;
 
   const activeDraftPlatform = platformDraft?.platform ?? null;
+
+  const handleOAuthConnect = async (platform: string) => {
+    setNotice(null);
+    setError(null);
+    setOauthLoading(platform);
+    try {
+      const response = await startPlatformOAuth(userId as number, platform);
+      // Redirect user to platform OAuth page
+      window.location.href = response.auth_url;
+    } catch (err) {
+      setOauthLoading(null);
+      // Fall back to manual form on error (e.g. not configured)
+      setError(
+        getApiErrorMessage(
+          err,
+          `Could not start ${platform} OAuth. Use the manual handle form below.`,
+        ),
+      );
+      openPlatformDraft(platform);
+    }
+  };
 
   const openPlatformDraft = (platform: string) => {
     setNotice(null);
@@ -364,7 +395,9 @@ export default function SettingsPage() {
           </p>
 
           <p className="mb-3 text-xs text-slate-500">
-            OAuth is not configured yet for these networks in this deployment, so connect the exact handle or page you publish with. This replaces the old fake auto-connect flow.
+            Platforms with <span className="font-medium text-violet-400">Connect via OAuth</span>{" "}
+            enabled can publish posts directly from Xcr8. Others can be linked by handle for AI
+            recommendations only.
           </p>
 
           {isLoading ? (
@@ -379,6 +412,8 @@ export default function SettingsPage() {
               const activeRow = connections?.find(
                 (item) => item.platform === platform.id && item.active,
               );
+              const isOAuthConfigured = oauthProviders?.configured.includes(platform.id) ?? false;
+              const isOAuthMethod = activeRow?.connection_method === "oauth";
 
               return (
                 <div
@@ -390,14 +425,30 @@ export default function SettingsPage() {
                   >
                     <SocialPlatformIcon platform={platform.id as SocialPlatformId} size={14} />
                   </span>
-                  <span className="flex-1 text-sm font-medium text-slate-300 light:text-slate-700">
-                    {platform.label}
-                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm font-medium text-slate-300 light:text-slate-700">
+                      {platform.label}
+                    </span>
+                    {activeRow ? (
+                      <span className="truncate text-xs text-slate-500">
+                        {activeRow.handle}
+                        {isOAuthMethod ? (
+                          <span className="ml-1.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-300">
+                            OAuth ✓ can post
+                          </span>
+                        ) : (
+                          <span className="ml-1.5 rounded-full bg-slate-700/60 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                            Manual
+                          </span>
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
 
                   {activeRow ? (
                     <div className="flex items-center gap-2">
                       <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
-                        {activeRow.sync_status === "syncing" ? "Syncing" : "Synced"}
+                        Connected
                       </span>
                       <button
                         type="button"
@@ -408,14 +459,27 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={connectMutation.isPending}
-                      onClick={() => openPlatformDraft(platform.id)}
-                      className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-400 hover:bg-violet-500/15 disabled:opacity-60 light:text-violet-600"
-                    >
-                      Connect
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {isOAuthConfigured ? (
+                        <button
+                          type="button"
+                          disabled={oauthLoading === platform.id || connectMutation.isPending}
+                          onClick={() => void handleOAuthConnect(platform.id)}
+                          className="rounded-full border border-violet-500/30 bg-violet-500/15 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-500/25 disabled:opacity-60 light:text-violet-600"
+                        >
+                          {oauthLoading === platform.id ? "Redirecting…" : "Connect via OAuth"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={connectMutation.isPending}
+                        onClick={() => openPlatformDraft(platform.id)}
+                        title="Link handle manually (no direct publishing)"
+                        className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:bg-white/10 disabled:opacity-60 light:border-slate-200 light:bg-white/80 light:text-slate-500"
+                      >
+                        <Link2 size={11} />
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -425,10 +489,11 @@ export default function SettingsPage() {
           {platformDraft ? (
             <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4 light:border-slate-200 light:bg-white/80">
               <p className="text-sm font-semibold text-white light:text-slate-900">
-                Connect {platforms.find((item) => item.id === activeDraftPlatform)?.label}
+                Link {platforms.find((item) => item.id === activeDraftPlatform)?.label} manually
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Enter the exact account handle, page name, or channel name you want Xcr8 to use.
+                Manual links let Xcr8 use your handle for AI recommendations. To enable direct
+                publishing, use <span className="text-violet-400">Connect via OAuth</span> instead.
               </p>
 
               <div className="mt-3 space-y-3">
@@ -436,12 +501,7 @@ export default function SettingsPage() {
                   value={platformDraft.handle}
                   onChange={(event) =>
                     setPlatformDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            handle: event.target.value,
-                          }
-                        : current,
+                      current ? { ...current, handle: event.target.value } : current,
                     )
                   }
                   className="xcr8-input"
@@ -451,12 +511,7 @@ export default function SettingsPage() {
                   value={platformDraft.profile_url ?? ""}
                   onChange={(event) =>
                     setPlatformDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            profile_url: event.target.value,
-                          }
-                        : current,
+                      current ? { ...current, profile_url: event.target.value } : current,
                     )
                   }
                   className="xcr8-input"
@@ -469,7 +524,7 @@ export default function SettingsPage() {
                     disabled={connectMutation.isPending}
                     className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
                   >
-                    {connectMutation.isPending ? "Connecting..." : "Save connection"}
+                    {connectMutation.isPending ? "Saving..." : "Save"}
                   </button>
                   <button
                     type="button"
@@ -480,23 +535,6 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
-            </div>
-          ) : null}
-
-          {connections && connections.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {connections
-                .filter((item) => item.active)
-                .map((item) => (
-                  <div
-                    key={`details-${item.id}`}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400 light:border-slate-200 light:bg-slate-50 light:text-slate-600"
-                  >
-                    <span className="font-medium text-slate-200 light:text-slate-800">{item.platform}</span>
-                    {` - ${item.handle}`}
-                    {item.profile_url ? ` - ${item.profile_url}` : ""}
-                  </div>
-                ))}
             </div>
           ) : null}
 

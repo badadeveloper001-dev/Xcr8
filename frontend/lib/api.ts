@@ -620,6 +620,35 @@ export type PlatformConnectPayload = {
   profile_url?: string | null;
 };
 
+export type OAuthProvidersResponse = {
+  configured: string[];
+  all: string[];
+};
+
+export type OAuthStartResponse = {
+  auth_url: string;
+  redirect_uri: string;
+};
+
+export type PublishPostPayload = {
+  user_id: number;
+  post_id: number;
+  platforms?: string[] | null;
+};
+
+export type PublishResult = {
+  success: boolean;
+  post_id?: string | null;
+  post_url?: string | null;
+  error?: string | null;
+};
+
+export type PublishPostResponse = {
+  post_id: number;
+  published: boolean;
+  results: Record<string, PublishResult>;
+};
+
 type PlatformListResponse = {
   platforms: PlatformConnection[];
 };
@@ -642,6 +671,29 @@ export async function connectPlatform(
 
 export async function disconnectPlatform(userId: number, platformId: number): Promise<void> {
   await apiClient.delete(`/api/v1/platforms/${userId}/${platformId}`);
+}
+
+export async function getOAuthProviders(): Promise<OAuthProvidersResponse> {
+  const { data } = await apiClient.get<OAuthProvidersResponse>("/api/v1/social/oauth/providers");
+  return data;
+}
+
+export async function startPlatformOAuth(
+  userId: number,
+  platform: string,
+): Promise<OAuthStartResponse> {
+  const { data } = await apiClient.get<OAuthStartResponse>(
+    `/api/v1/social/oauth/${platform}/start`,
+    { params: { user_id: userId } },
+  );
+  return data;
+}
+
+export async function publishPost(payload: PublishPostPayload): Promise<PublishPostResponse> {
+  const { data } = await apiClient.post<PublishPostResponse>("/api/v1/social/publish", payload, {
+    timeout: 60_000,
+  });
+  return data;
 }
 
 type ApiErrorDetail =

@@ -1,16 +1,17 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { CheckCircle2, Link2, Sparkles } from "lucide-react";
+import { CheckCircle2, ExternalLink, Link2, Send, Sparkles, XCircle } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
 import {
   approveDistribution,
   createDistributionDraft,
   getApiErrorMessage,
+  publishPost,
   queueSchedule,
   writeMemory,
 } from "@/lib/api";
@@ -59,6 +60,11 @@ export default function ComposePage() {
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishResults, setPublishResults] = useState<Record<
+    string,
+    { success: boolean; post_url?: string | null; error?: string | null }
+  > | null>(null);
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -176,6 +182,52 @@ export default function ComposePage() {
       setError(getApiErrorMessage(err, "Could not approve and queue this post."));
     } finally {
       setApproving(false);
+    }
+  };
+
+  const approveAndPublishNow = async () => {
+    if (!distributionDraft || !userId) return;
+
+    setPublishing(true);
+    setError(null);
+    setNotice(null);
+    setPublishResults(null);
+
+    try {
+      // First approve all variants
+      await approveDistribution({
+        post_id: distributionDraft.postId,
+        approvals: distributionDraft.variants.map((variant) => ({
+          platform: variant.platform,
+          language: variant.language,
+          approved: true,
+        })),
+      });
+
+      // Then publish immediately
+      const response = await publishPost({
+        user_id: userId,
+        post_id: distributionDraft.postId,
+      });
+
+      setPublishResults(response.results);
+
+      const successCount = Object.values(response.results).filter((r) => r.success).length;
+      const total = Object.keys(response.results).length;
+
+      if (successCount > 0) {
+        setNotice(
+          `Published to ${successCount} of ${total} platform${total !== 1 ? "s" : ""}. Check results below.`,
+        );
+      } else {
+        setError("Publishing did not succeed on any platform. See details below.");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not publish this post."));
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -426,6 +478,65 @@ export default function ComposePage() {
               {approving ? "Approving..." : "Approve and Queue"}
             </button>
           </div>
+
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void approveAndPublishNow()}
+              disabled={publishing || approving}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-60"
+            >
+              <Send size={14} />
+              {publishing ? "Publishing…" : "Publish Now"}
+            </button>
+          </div>
+
+          {publishResults ? (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Publish results
+              </p>
+              {Object.entries(publishResults).map(([platform, result]) => (
+                <div
+                  key={platform}
+                  className={`flex items-start gap-3 rounded-xl p-3 text-sm ${
+                    result.success
+                      ? "border border-emerald-500/20 bg-emerald-500/10"
+                      : "border border-rose-500/20 bg-rose-500/10"
+                  }`}
+                >
+                  <span className="mt-0.5">
+                    {result.success ? (
+                      <CheckCircle2 size={15} className="text-emerald-400" />
+                    ) : (
+                      <XCircle size={15} className="text-rose-400" />
+                    )}
+                  </span>
+                  <div className="flex flex-1 flex-col gap-1">
+                    <span className="font-semibold capitalize text-white light:text-slate-900">
+                      {platform.replace(/_/g, " ")}
+                    </span>
+                    {result.success ? (
+                      result.post_url ? (
+                        <a
+                          href={result.post_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-emerald-300 underline hover:text-emerald-200"
+                        >
+                          View post <ExternalLink size={11} />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-emerald-300">Posted successfully</span>
+                      )
+                    ) : (
+                      <span className="text-xs text-rose-300">{result.error}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </motion.section>
       ) : null}
 
