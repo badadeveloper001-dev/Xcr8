@@ -411,9 +411,12 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
                     },
                 }
             else:
-                raise HTTPException(status_code=401, detail="Invalid login credentials")
+                auth_payload = None
         else:
-            raise HTTPException(status_code=401, detail="Invalid login credentials")
+            auth_payload = None
+
+    if auth_payload is None:
+        raise HTTPException(status_code=401, detail="Invalid login credentials")
 
     auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
     user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}

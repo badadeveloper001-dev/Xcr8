@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { getApiErrorMessage, signup, verifySignupCode, verifySignupPassword } from "@/lib/api";
+import {
+  getApiErrorMessage,
+  login,
+  signup,
+  verifySignupCode,
+  verifySignupPassword,
+} from "@/lib/api";
 import { supabaseClient } from "@/lib/supabase";
 import { useCreatorStore } from "@/lib/store";
 import { ArrowRight, Sparkles } from "lucide-react";

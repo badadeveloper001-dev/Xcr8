@@ -365,8 +365,13 @@ export type AiAssistantChatCreatePayload = {
   title?: string | null;
 };
 
-export async function signup(payload: SignupPayload): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(
+export type SignupResponse = {
+  message: string;
+  requires_verification?: boolean;
+};
+
+export async function signup(payload: SignupPayload): Promise<SignupResponse> {
+  const { data } = await apiClient.post<SignupResponse>(
     "/api/v1/auth/signup/request-code",
     payload,
   );
