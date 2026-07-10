@@ -74,6 +74,26 @@ export default function SignupPage() {
           language: "english",
           timezone: "Africa/Lagos",
         });
+
+        if (response.requires_verification === false) {
+          const session = await login({
+            email: email.trim(),
+            password,
+            remember_me: false,
+          });
+          setSession({
+            userId: session.user_id,
+            email: session.email,
+            displayName: session.display_name,
+            fullName: session.full_name,
+            username: session.username,
+            avatarUrl: session.avatar_url ?? null,
+            onboardingComplete: session.onboarding_complete,
+          });
+          router.push("/onboarding");
+          return;
+        }
+
         setCodeSent(true);
         setNotice(response.message || "Verification code sent. Check your email inbox.");
       } catch (err) {

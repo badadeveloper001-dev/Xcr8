@@ -87,6 +87,8 @@ function isSupportedOutput(contentType: string): boolean {
     contentType.includes("webp") ||
     contentType.includes("jpeg") ||
     contentType.includes("jpg") ||
+    contentType.includes("avif") ||
+    contentType.includes("binary") ||
     contentType.includes("octet-stream")
   );
 }
@@ -187,7 +189,7 @@ export async function GET(request: NextRequest) {
     MAX_DIMENSION,
   );
   const seed = parsePositiveInt(request.nextUrl.searchParams.get("seed"), Date.now());
-  const attempts = clamp(parsePositiveInt(request.nextUrl.searchParams.get("attempts"), 3), 1, 6);
+  const attempts = clamp(parsePositiveInt(request.nextUrl.searchParams.get("attempts"), 4), 1, 8);
   const enrichedPrompt = enrichPrompt(prompt);
 
   let best: CandidateResult | null = null;

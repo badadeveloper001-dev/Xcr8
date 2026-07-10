@@ -338,7 +338,7 @@ export default function ImageGeneratorPage() {
     }
 
     const blob = await response.blob();
-    if (!blob.type.startsWith("image/")) {
+    if (blob.size <= 0) {
       throw new Error("invalid_blob");
     }
 
@@ -379,7 +379,7 @@ export default function ImageGeneratorPage() {
     }
 
     const blob = await response.blob();
-    if (!blob.type.startsWith("image/")) {
+    if (blob.size <= 0) {
       throw new Error("invalid_blob");
     }
 

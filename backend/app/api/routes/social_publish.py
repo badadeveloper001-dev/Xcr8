@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, ContentPost, Platform, PostVariant, User
-from app.schemas.mvp import Platform as PlatformEnum  # noqa: F401
 from app.services.social_publisher import (
     configured_platforms,
     exchange_code_for_token,

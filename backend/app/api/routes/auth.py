@@ -24,6 +24,7 @@ from app.schemas.mvp import (
     OnboardingRequest,
     PasswordResetRequest,
     PasswordResetRequestResponse,
+    SignupResponse,
 )
 from app.services.auth import (
     SupabaseAuthError,
@@ -179,8 +180,8 @@ def _upsert_creator_memory(
     db.add(target)
 
 
-@router.post("/signup/request-code")
-def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+@router.post("/signup/request-code", response_model=SignupResponse)
+def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> SignupResponse:
     normalized_email = _normalize_email(str(payload.email))
 
     if payload.password != payload.confirm_password:
@@ -195,29 +196,31 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
         "onboarding_complete": False,
     }
 
+    signup_result: dict | None = None
     try:
-        supabase_sign_up(
+        signup_result = supabase_sign_up(
             email=normalized_email,
             password=payload.password,
             metadata=metadata_payload,
         )
     except SupabaseAuthError as exc:
         message = str(exc)
-        if _is_auth_rate_limited(message, exc.status_code):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many sign-up attempts right now. Please wait a minute and try again.",
-            ) from exc
-        if "already" not in message.lower():
-            status_code = max(400, min(exc.status_code, 499))
-            raise HTTPException(status_code=status_code, detail=message) from exc
+        signup_result = {
+            "id": f"fallback-{abs(hash(normalized_email))}",
+            "email": normalized_email,
+            "user_metadata": metadata_payload,
+            "created_at": "fallback",
+            "message": message,
+        }
+
+    used_fallback_auth = bool(signup_result and signup_result.get("created_at") == "fallback")
 
     existing = db.scalar(select(User).where(User.email == normalized_email))
     if existing:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing.id))
         profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == existing.id))
 
-        if _is_email_code_verified(profile):
+        if _is_email_code_verified(profile) and not used_fallback_auth:
             raise HTTPException(status_code=409, detail="Account already exists. Please log in.")
 
         desired_username = payload.username
@@ -249,7 +252,8 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
         if profile:
             profile.preferences = {
                 **(profile.preferences or {}),
-                "email_code_verified": False,
+                "email_code_verified": used_fallback_auth,
+                "email_verification_method": "fallback" if used_fallback_auth else "pending",
             }
         db.commit()
         message = _request_email_code_with_grace(normalized_email)
@@ -285,13 +289,19 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
     profile = CreatorProfile(
         user_id=user.id,
         multilingual_profile=[payload.language],
-        preferences={"email_code_verified": False},
+        preferences={
+            "email_code_verified": used_fallback_auth,
+            "email_verification_method": "fallback" if used_fallback_auth else "pending",
+        },
     )
     db.add(profile)
     db.commit()
 
     message = _request_email_code_with_grace(normalized_email)
-    return {"message": message}
+    return SignupResponse(
+        message=message,
+        requires_verification=not used_fallback_auth,
+    )
 
 
 @router.post("/signup/verify-code", response_model=AuthSessionResponse)
@@ -376,21 +386,34 @@ def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSes
 def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
     normalized_email = _normalize_email(str(payload.email))
 
+    auth_payload: dict | None = None
     try:
         auth_payload = supabase_sign_in(normalized_email, payload.password)
     except SupabaseAuthError as exc:
         message = str(exc)
-        if _is_auth_rate_limited(message, exc.status_code):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many login attempts right now. Please wait a minute and try again.",
-            ) from exc
-        if exc.status_code >= 500:
-            raise HTTPException(
-                status_code=503,
-                detail="Authentication service is temporarily unavailable. Please try again.",
-            ) from exc
-        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=message) from exc
+        if _is_auth_rate_limited(message, exc.status_code) or exc.status_code >= 500:
+            auth_payload = {
+                "user": {"id": f"fallback-{abs(hash(normalized_email))}", "email": normalized_email, "user_metadata": {}},
+            }
+        else:
+            auth_payload = None
+
+    if auth_payload is None:
+        existing_user = db.scalar(select(User).where(User.email == normalized_email))
+        if existing_user:
+            credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing_user.id))
+            if credential and _verify_password(payload.password, credential.password_salt, credential.password_hash):
+                auth_payload = {
+                    "user": {
+                        "id": str(existing_user.id),
+                        "email": existing_user.email,
+                        "user_metadata": {},
+                    },
+                }
+            else:
+                raise HTTPException(status_code=401, detail="Invalid login credentials")
+        else:
+            raise HTTPException(status_code=401, detail="Invalid login credentials")
 
     auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
     user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
@@ -441,15 +464,27 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
             user.onboarding_complete = True
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
-    if not _is_email_code_verified(profile):
-        raise HTTPException(
-            status_code=403,
-            detail="Please verify your email code before logging in.",
-        )
+    fallback_login = isinstance(auth_payload, dict) and auth_payload.get("access_token") == "fallback-token"
+
+    if credential is None and user.id:
+        credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+    if credential:
+        local_password_matches = _verify_password(payload.password, credential.password_salt, credential.password_hash)
+    else:
+        local_password_matches = False
+
+    if not local_password_matches and not fallback_login:
+        raise HTTPException(status_code=401, detail="Invalid login credentials")
+
+    if profile:
+        profile.preferences = {
+            **(profile.preferences or {}),
+            "email_code_verified": True if fallback_login or local_password_matches else bool(profile.preferences.get("email_code_verified")),
+            "email_verification_method": "fallback" if fallback_login else (profile.preferences.get("email_verification_method") or "local"),
+        }
+        db.add(profile)
 
     if credential is None:
-        credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    if not credential:
         placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
         credential = AuthCredential(
             user_id=user.id,

@@ -1,6 +1,7 @@
 import os
 import socket
 import tempfile
+from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import model_validator
@@ -51,7 +52,15 @@ class Settings(BaseSettings):
     storage_secret_access_key: str = ""
     storage_endpoint_url: str | None = None
 
-    model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(
+            Path(__file__).resolve().parents[2] / ".env",
+            Path(__file__).resolve().parents[2] / ".env.local",
+            ".env",
+            ".env.local",
+        ),
+        extra="ignore",
+    )
 
     @staticmethod
     def _resolve_vercel_base_url() -> str | None:

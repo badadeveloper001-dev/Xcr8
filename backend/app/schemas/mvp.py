@@ -46,6 +46,11 @@ class PasswordResetRequestResponse(BaseModel):
     reset_url: str | None = None
 
 
+class SignupResponse(BaseModel):
+    message: str
+    requires_verification: bool = True
+
+
 class AuthSessionResponse(BaseModel):
     user_id: int
     email: EmailStr
