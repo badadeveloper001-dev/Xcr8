@@ -420,10 +420,7 @@ export default function AssistantPage() {
       const resolvedChatId = data.chat_id ?? currentChatId;
       const assistantMessage: ChatItem = {
         role: "assistant",
-        content: [data.assistant_message, data.follow_up_question]
-          .filter(Boolean)
-          .join("\n\n")
-          .trim(),
+        content: data.assistant_message.trim(),
       };
       setMessages([...nextMessages, assistantMessage].slice(-MAX_RENDERED_MESSAGES));
       setSuggestedActions(

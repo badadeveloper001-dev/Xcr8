@@ -77,6 +77,68 @@ def _build_memory_digest(creator_memory: dict) -> str:
     return " | ".join(cleaned[:5])
 
 
+def _infer_creator_friend_persona(recent_chat_turns: list[dict], explicit_vibe: str) -> str:
+    vibe_text = str(explicit_vibe or "").strip().lower()
+    if any(token in vibe_text for token in ["fun", "humor", "play", "friend", "banter"]):
+        return "playful_creator_friend"
+    if any(token in vibe_text for token in ["calm", "focus", "serious", "strategy"]):
+        return "calm_strategist_friend"
+
+    user_turns = [
+        str(turn.get("content") or "").lower()
+        for turn in recent_chat_turns
+        if isinstance(turn, dict) and str(turn.get("role") or "").lower() == "user"
+    ]
+    joined = " ".join(user_turns[-6:])
+    playful_cues = ["lol", "haha", "lmao", "joke", "meme", "funny", "banter"]
+    strategic_cues = ["plan", "strategy", "roadmap", "optimize", "system", "process"]
+
+    playful_score = sum(1 for cue in playful_cues if cue in joined)
+    strategic_score = sum(1 for cue in strategic_cues if cue in joined)
+    if playful_score > strategic_score:
+        return "playful_creator_friend"
+    if strategic_score > playful_score:
+        return "calm_strategist_friend"
+    return "supportive_creator_friend"
+
+
+def _normalize_follow_up_question(
+    assistant_message: str,
+    follow_up_question: str,
+    recent_chat_turns: list[dict],
+) -> str:
+    candidate = str(follow_up_question or "").strip()
+    if not candidate:
+        return ""
+
+    normalized = re.sub(r"\s+", " ", candidate).strip().lower()
+    blocked_fragments = [
+        "what content would you like to create",
+        "what should we do next",
+        "what should i help you with next",
+        "what would you like to do next",
+    ]
+    if any(fragment in normalized for fragment in blocked_fragments):
+        return ""
+
+    if len(candidate) < 14:
+        return ""
+
+    assistant_lower = str(assistant_message or "").lower()
+    if "?" in assistant_lower:
+        return ""
+
+    recent_assistant_content = [
+        str(turn.get("content") or "").lower()
+        for turn in recent_chat_turns[-4:]
+        if isinstance(turn, dict) and str(turn.get("role") or "").lower() == "assistant"
+    ]
+    if any(normalized in item for item in recent_assistant_content):
+        return ""
+
+    return candidate
+
+
 def _infer_vibe_profile(message: str, tone: str, explicit_vibe: str) -> dict:
     text = str(message or "")
     lowered = text.lower()
@@ -207,6 +269,8 @@ def _build_fallback(payload: dict) -> dict:
     memory_facts = creator_memory.get("memory_facts") if isinstance(creator_memory.get("memory_facts"), list) else []
 
     user_message = str(payload.get("message", "")).strip()
+    recent_chat_turns = payload.get("recent_chat_turns") if isinstance(payload.get("recent_chat_turns"), list) else []
+    persona = _infer_creator_friend_persona(recent_chat_turns, vibe)
     vibe_profile = _infer_vibe_profile(user_message, tone, vibe)
     is_general = any(
         token in user_message.lower()
@@ -237,6 +301,10 @@ def _build_fallback(payload: dict) -> dict:
                 f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
                 f"and {summary.get('published', 0)} published posts."
             )
+    if persona == "playful_creator_friend":
+        message = "Creator-friend mode on. " + message
+    elif persona == "calm_strategist_friend":
+        message = "I am with you. Let us move step by step. " + message
     if vibe:
         message += f" I’m matching your vibe: {vibe}."
     if memory_facts:
@@ -251,9 +319,13 @@ def _build_fallback(payload: dict) -> dict:
 
     intent_actions = _intent_suggested_actions(payload.get("message", ""), app_context)
 
+    follow_up = ""
+    if vibe_profile["mood"] == "playful" and not is_general:
+        follow_up = "Want quick witty caption options, or a stronger hook first?"
+
     return {
         "assistant_message": message,
-        "follow_up_question": "Do you want a quick summary, a deeper breakdown, or an action plan?",
+        "follow_up_question": follow_up,
         "suggested_actions": intent_actions,
         "language": language,
         "tone": tone,
@@ -277,6 +349,7 @@ def generate_assistant_reply(payload: dict) -> dict:
         recent_chat_turns = _extract_recent_chat_turns(creator_memory)
         memory_digest = _build_memory_digest(creator_memory)
         user_message = str(payload.get("message", ""))
+        persona = _infer_creator_friend_persona(recent_chat_turns, str(payload.get("vibe") or ""))
         vibe_profile = _infer_vibe_profile(
             user_message,
             str(payload.get("tone", "conversational")),
@@ -299,6 +372,7 @@ def generate_assistant_reply(payload: dict) -> dict:
                             "language": payload.get("language", "english"),
                             "tone": payload.get("tone", "conversational"),
                             "vibe": payload.get("vibe"),
+                            "creator_friend_persona": persona,
                             "vibe_profile": vibe_profile,
                             "messages": payload.get("messages", []),
                             "recent_chat_turns": recent_chat_turns,
@@ -314,7 +388,7 @@ def generate_assistant_reply(payload: dict) -> dict:
         raw = completion.choices[0].message.content or "{}"
         parsed = json.loads(raw)
         assistant_message = str(parsed.get("assistant_message", "")).strip()
-        follow_up_question = str(parsed.get("follow_up_question", "What should we do next?")).strip()
+        follow_up_question = str(parsed.get("follow_up_question", "")).strip()
         suggested_actions = parsed.get("suggested_actions", [])
         if not isinstance(suggested_actions, list):
             suggested_actions = []
@@ -322,12 +396,18 @@ def generate_assistant_reply(payload: dict) -> dict:
         if not assistant_message:
             return _build_fallback(payload)
 
+        follow_up_question = _normalize_follow_up_question(
+            assistant_message,
+            follow_up_question,
+            recent_chat_turns,
+        )
+
         intent_actions = _intent_suggested_actions(payload.get("message", ""), app_context)
         merged_actions = _stringify_actions([str(item) for item in suggested_actions] + intent_actions)
 
         return {
             "assistant_message": assistant_message,
-            "follow_up_question": follow_up_question or "What should we do next?",
+            "follow_up_question": follow_up_question,
             "suggested_actions": merged_actions,
             "language": str(payload.get("language") or "english").strip() or "english",
             "tone": str(payload.get("tone") or "conversational").strip() or "conversational",
@@ -342,6 +422,9 @@ def generate_assistant_reply(payload: dict) -> dict:
         }
     except Exception as exc:
         logger.warning("OpenAI assistant generation failed; using fallback: %s", exc)
-        fallback = _build_fallback(payload)
+        fallback_payload = dict(payload)
+        if isinstance(fallback_payload.get("creator_memory"), dict):
+            fallback_payload["recent_chat_turns"] = _extract_recent_chat_turns(fallback_payload["creator_memory"])
+        fallback = _build_fallback(fallback_payload)
         fallback["model"] = "assistant-local-fallback-after-openai-error"
         return fallback
