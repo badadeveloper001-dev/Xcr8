@@ -418,6 +418,8 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
     if auth_payload is None:
         raise HTTPException(status_code=401, detail="Invalid login credentials")
 
+    supabase_login_ok = isinstance(auth_payload, dict) and bool(auth_payload.get("access_token"))
+
     auth_user = auth_payload.get("user") if isinstance(auth_payload, dict) else {}
     user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
     has_onboarding_flag, onboarding_from_meta = _extract_onboarding_state(
@@ -476,13 +478,15 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
     else:
         local_password_matches = False
 
-    if not local_password_matches and not fallback_login:
+    if not supabase_login_ok and not local_password_matches and not fallback_login:
         raise HTTPException(status_code=401, detail="Invalid login credentials")
 
     if profile:
         profile.preferences = {
             **(profile.preferences or {}),
-            "email_code_verified": True if fallback_login or local_password_matches else bool(profile.preferences.get("email_code_verified")),
+            "email_code_verified": True
+            if supabase_login_ok or fallback_login or local_password_matches
+            else bool(profile.preferences.get("email_code_verified")),
             "email_verification_method": "fallback" if fallback_login else (profile.preferences.get("email_verification_method") or "local"),
         }
         db.add(profile)

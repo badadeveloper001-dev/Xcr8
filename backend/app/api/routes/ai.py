@@ -228,22 +228,40 @@ def _build_missing_user_assistant_response(payload: AIAssistantRequest) -> AIAss
     )
 
 
-    def _raise_ai_service_error(exc: httpx.HTTPStatusError, fallback_detail: str) -> None:
-        status_code = exc.response.status_code
-        detail = fallback_detail
+def _raise_ai_service_error(exc: httpx.HTTPStatusError, fallback_detail: str) -> None:
+    status_code = exc.response.status_code
+    detail = fallback_detail
 
-        try:
-            payload = exc.response.json()
-            if isinstance(payload, dict):
-                candidate = payload.get("detail")
-                if isinstance(candidate, str) and candidate.strip():
-                    detail = candidate.strip()
-        except Exception:
-            text = (exc.response.text or "").strip()
-            if text:
-                detail = text[:300]
+    try:
+        payload = exc.response.json()
+        if isinstance(payload, dict):
+            candidate = payload.get("detail")
+            if isinstance(candidate, str) and candidate.strip():
+                detail = candidate.strip()
+    except Exception:
+        text = (exc.response.text or "").strip()
+        if text:
+            detail = text[:300]
 
-        raise HTTPException(status_code=status_code, detail=detail) from exc
+    raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+def _is_probably_garbled_text(value: str) -> bool:
+    text = str(value or "")
+    if not text:
+        return True
+
+    non_printable = sum(1 for char in text if ord(char) < 9 or (13 < ord(char) < 32))
+    if non_printable > 0:
+        return True
+
+    if len(text) > 24:
+        punctuation_heavy = sum(1 for char in text if char in "{}[]<>\\|~`")
+        ratio = punctuation_heavy / max(1, len(text))
+        if ratio > 0.22:
+            return True
+
+    return False
 
 
 def _compact_text(value: str, max_chars: int) -> str:
@@ -1093,6 +1111,15 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         )
         response.raise_for_status()
         parsed_response = AIAssistantResponse(**response.json())
+
+        if _is_probably_garbled_text(parsed_response.assistant_message):
+            parsed_response.assistant_message = (
+                "I had trouble formatting that response clearly. "
+                "Ask me again and I will give you a clean, structured answer."
+            )
+            if not parsed_response.follow_up_question.strip():
+                parsed_response.follow_up_question = "What part should I break down first?"
+
         _persist_assistant_chat_memory(
             db,
             user.id,
