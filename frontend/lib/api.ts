@@ -241,6 +241,72 @@ export type AiTrendMapperResponse = {
   source_stats: Record<string, number>;
 };
 
+export type IntelligenceRecommendation = {
+  recommendation_type: string;
+  content_angle: string;
+  story_framework: string;
+  brainstorm_seed: string;
+  composer_seed: string;
+  score: number;
+};
+
+export type IntelligenceSignal = {
+  id: number;
+  topic: string;
+  platform: string;
+  title: string;
+  summary: string;
+  source_label: string;
+  confidence_score: number;
+  momentum_score: number;
+  relevance_score: number;
+  opportunity_score: number;
+  risk_score: number;
+  status: string;
+  created_at: string;
+  brief: {
+    what_is_happening: string;
+    why_it_matters: string;
+    who_is_using_it: string;
+    why_it_performs: string;
+    potential_risks: string;
+    opportunities: string;
+  };
+  recommendations: IntelligenceRecommendation[];
+};
+
+export type IntelligenceNotification = {
+  id: number;
+  title: string;
+  body: string;
+  severity: string;
+  related_topic: string;
+  is_read: boolean;
+  created_at: string;
+};
+
+export type IntelligenceFeedResponse = {
+  user_id: number;
+  generated_at: string;
+  summary: string;
+  interests: string[];
+  signals: IntelligenceSignal[];
+  notifications: IntelligenceNotification[];
+  source_stats: Record<string, number>;
+};
+
+export type IntelligenceRefreshPayload = {
+  user_id: number;
+  interests?: string[];
+  platform?: string;
+};
+
+export type IntelligenceFeedbackPayload = {
+  user_id: number;
+  trend_signal_id: number;
+  action: "viewed" | "saved" | "dismissed" | "brainstormed" | "composed" | "published";
+};
+
 export type AiConversationMessage = {
   role: "user" | "assistant";
   content: string;
@@ -517,6 +583,42 @@ export async function generateAiTrendMap(
   const { data } = await apiClient.post<AiTrendMapperResponse>("/api/v1/ai/trend-mapper", payload, {
     timeout: 60_000,
   });
+  return data;
+}
+
+export async function getIntelligenceFeed(
+  userId: number,
+  params?: { platform?: string; limit?: number },
+): Promise<IntelligenceFeedResponse> {
+  const { data } = await apiClient.get<IntelligenceFeedResponse>(
+    `/api/v1/intelligence/feed/${userId}`,
+    {
+      params,
+      timeout: 60_000,
+    },
+  );
+  return data;
+}
+
+export async function refreshIntelligence(
+  payload: IntelligenceRefreshPayload,
+): Promise<{ created: number; interests: string[]; generated_at: string }> {
+  const { data } = await apiClient.post<{
+    created: number;
+    interests: string[];
+    generated_at: string;
+  }>("/api/v1/intelligence/refresh", payload, { timeout: 60_000 });
+  return data;
+}
+
+export async function submitIntelligenceFeedback(
+  payload: IntelligenceFeedbackPayload,
+): Promise<{ trend_signal_id: number; action: string; status: string }> {
+  const { data } = await apiClient.post<{
+    trend_signal_id: number;
+    action: string;
+    status: string;
+  }>("/api/v1/intelligence/feedback", payload, { timeout: 30_000 });
   return data;
 }
 

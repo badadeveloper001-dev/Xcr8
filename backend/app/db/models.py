@@ -50,6 +50,9 @@ class User(Base):
     schedules: Mapped[list[ScheduledPost]] = relationship(back_populates="user")
     memories: Mapped[list[CreatorMemory]] = relationship(back_populates="user")
     analytics: Mapped[list[AnalyticsSnapshot]] = relationship(back_populates="user")
+    trend_signals: Mapped[list[TrendSignalEvent]] = relationship(back_populates="user")
+    intelligence_feedback: Mapped[list[IntelligenceFeedback]] = relationship(back_populates="user")
+    intelligence_notifications: Mapped[list[IntelligenceNotification]] = relationship(back_populates="user")
 
 
 class CreatorProfile(Base):
@@ -202,3 +205,92 @@ class AnalyticsSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="analytics")
+
+
+class TrendSignalEvent(Base):
+    __tablename__ = "trend_signal_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    topic: Mapped[str] = mapped_column(String(180), default="creator intelligence")
+    platform: Mapped[str] = mapped_column(String(40), default="all", index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    summary: Mapped[str] = mapped_column(Text)
+    source_label: Mapped[str] = mapped_column(String(120), default="xcr8-local-intelligence")
+    confidence_score: Mapped[float] = mapped_column(Float, default=0.55)
+    momentum_score: Mapped[float] = mapped_column(Float, default=0.5)
+    relevance_score: Mapped[float] = mapped_column(Float, default=0.5)
+    opportunity_score: Mapped[float] = mapped_column(Float, default=0.5)
+    risk_score: Mapped[float] = mapped_column(Float, default=0.25)
+    status: Mapped[str] = mapped_column(String(24), default="new", index=True)
+    signal_meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="trend_signals")
+    briefs: Mapped[list[TrendResearchBrief]] = relationship(back_populates="trend_signal")
+    recommendations: Mapped[list[TrendRecommendation]] = relationship(back_populates="trend_signal")
+    feedback: Mapped[list[IntelligenceFeedback]] = relationship(back_populates="trend_signal")
+
+
+class TrendResearchBrief(Base):
+    __tablename__ = "trend_research_briefs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trend_signal_id: Mapped[int] = mapped_column(ForeignKey("trend_signal_events.id"), index=True)
+    what_is_happening: Mapped[str] = mapped_column(Text)
+    why_it_matters: Mapped[str] = mapped_column(Text)
+    who_is_using_it: Mapped[str] = mapped_column(Text)
+    why_it_performs: Mapped[str] = mapped_column(Text)
+    potential_risks: Mapped[str] = mapped_column(Text)
+    opportunities: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    trend_signal: Mapped[TrendSignalEvent] = relationship(back_populates="briefs")
+
+
+class TrendRecommendation(Base):
+    __tablename__ = "trend_recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trend_signal_id: Mapped[int] = mapped_column(ForeignKey("trend_signal_events.id"), index=True)
+    recommendation_type: Mapped[str] = mapped_column(String(64), default="content_angle")
+    content_angle: Mapped[str] = mapped_column(Text)
+    story_framework: Mapped[str] = mapped_column(Text)
+    brainstorm_seed: Mapped[str] = mapped_column(Text)
+    composer_seed: Mapped[str] = mapped_column(Text)
+    score: Mapped[float] = mapped_column(Float, default=0.55)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    trend_signal: Mapped[TrendSignalEvent] = relationship(back_populates="recommendations")
+
+
+class IntelligenceFeedback(Base):
+    __tablename__ = "intelligence_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    trend_signal_id: Mapped[int] = mapped_column(ForeignKey("trend_signal_events.id"), index=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    weight: Mapped[float] = mapped_column(Float, default=0.5)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user: Mapped[User] = relationship(back_populates="intelligence_feedback")
+    trend_signal: Mapped[TrendSignalEvent] = relationship(back_populates="feedback")
+
+
+class IntelligenceNotification(Base):
+    __tablename__ = "intelligence_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    body: Mapped[str] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(24), default="info")
+    related_topic: Mapped[str] = mapped_column(String(180), default="creator intelligence")
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user: Mapped[User] = relationship(back_populates="intelligence_notifications")

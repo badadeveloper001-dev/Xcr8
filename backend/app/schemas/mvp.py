@@ -219,6 +219,74 @@ class AITrendMapperResponse(BaseModel):
     source_stats: dict = Field(default_factory=dict)
 
 
+class IntelligenceRefreshRequest(BaseModel):
+    user_id: int
+    interests: list[str] = Field(default_factory=list)
+    platform: str = Field(default="all", max_length=40)
+
+
+class IntelligenceFeedbackRequest(BaseModel):
+    user_id: int
+    trend_signal_id: int
+    action: str = Field(pattern=r"^(viewed|saved|dismissed|brainstormed|composed|published)$")
+
+
+class IntelligenceResearchBrief(BaseModel):
+    what_is_happening: str
+    why_it_matters: str
+    who_is_using_it: str
+    why_it_performs: str
+    potential_risks: str
+    opportunities: str
+
+
+class IntelligenceRecommendation(BaseModel):
+    recommendation_type: str
+    content_angle: str
+    story_framework: str
+    brainstorm_seed: str
+    composer_seed: str
+    score: float
+
+
+class IntelligenceSignal(BaseModel):
+    id: int
+    topic: str
+    platform: str
+    title: str
+    summary: str
+    source_label: str
+    confidence_score: float
+    momentum_score: float
+    relevance_score: float
+    opportunity_score: float
+    risk_score: float
+    status: str
+    created_at: str
+    brief: IntelligenceResearchBrief
+    recommendations: list[IntelligenceRecommendation] = Field(default_factory=list)
+
+
+class IntelligenceNotificationItem(BaseModel):
+    id: int
+    title: str
+    body: str
+    severity: str
+    related_topic: str
+    is_read: bool
+    created_at: str
+
+
+class IntelligenceFeedResponse(BaseModel):
+    user_id: int
+    generated_at: str
+    summary: str
+    interests: list[str] = Field(default_factory=list)
+    signals: list[IntelligenceSignal] = Field(default_factory=list)
+    notifications: list[IntelligenceNotificationItem] = Field(default_factory=list)
+    source_stats: dict = Field(default_factory=dict)
+
+
 class AIConversationMessage(BaseModel):
     role: str = Field(pattern=r"^(user|assistant)$")
     content: str = Field(min_length=1, max_length=8000)
