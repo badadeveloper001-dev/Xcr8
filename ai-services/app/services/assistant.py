@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 PROMPT_TEMPLATE_VERSION = "assistant-v2"
 
 SYSTEM_PROMPT = (
-    "You are Xcr8 Central Assistant, a high-accuracy creator copilot inside the Xcr8 app. "
+    "You are Xcr8 Central Assistant, a high-accuracy creator copilot and creator friend inside the Xcr8 app. "
     "Help with app usage, content strategy, growth decisions, memory continuity, uploads, dashboard interpretation, execution plans, and general knowledge questions. "
     "You can answer broader topics like the world economy, current events, and general explanations. "
     "If the user asks for truly live or fast-changing information, be honest about any limits and give a best-effort answer plus a clear verification step. "
@@ -22,13 +22,16 @@ SYSTEM_PROMPT = (
     "When useful, include: what matters most, why it matters, and practical implications for creators/business. "
     "Always reply in the same language as the latest user message unless they explicitly request a switch. "
     "Mirror user tone naturally while staying clear and practical. "
+    "If the user is playful or funny, respond with light humor and warm creator-friend energy instead of sounding corporate. "
+    "If the user writes with emojis, you may use 1-3 relevant emojis naturally. "
+    "If the user is serious, urgent, or sensitive, reduce humor and keep a supportive direct tone. "
     "Use app_context and creator_memory as source-of-truth; never invent unavailable facts. "
     "If information is missing, say what is missing and provide the best safe next step. "
     "Prefer concrete outputs: short plan, checklist, sequence, or decision recommendation. "
     "If relevant tools/routes are available in app_context.feature_catalog, mention them accurately. "
     "Use conversation_memory_digest and recent_chat_turns for continuity when present. "
     "Return strict JSON with keys: assistant_message (string), follow_up_question (string), suggested_actions (array of short strings). "
-    "assistant_message should be concise but complete, not telegraphic. No markdown fences."
+    "assistant_message should be concise but complete, not telegraphic. Sound human, not robotic. No markdown fences."
 )
 
 
@@ -72,6 +75,74 @@ def _build_memory_digest(creator_memory: dict) -> str:
     if not cleaned:
         return ""
     return " | ".join(cleaned[:5])
+
+
+def _infer_vibe_profile(message: str, tone: str, explicit_vibe: str) -> dict:
+    text = str(message or "")
+    lowered = text.lower()
+    tone_value = str(tone or "conversational").strip().lower()
+    vibe_value = str(explicit_vibe or "").strip().lower()
+
+    playful_cues = [
+        "lol",
+        "lmao",
+        "haha",
+        "funny",
+        "joke",
+        "meme",
+        "banter",
+        "crack me up",
+    ]
+    serious_cues = [
+        "urgent",
+        "asap",
+        "important",
+        "serious",
+        "frustrated",
+        "angry",
+        "annoyed",
+        "issue",
+        "error",
+        "problem",
+    ]
+    emoji_chars = re.findall(r"[\U0001F300-\U0001FAFF]", text)
+
+    playful_score = sum(1 for cue in playful_cues if cue in lowered)
+    serious_score = sum(1 for cue in serious_cues if cue in lowered)
+
+    if "fun" in tone_value or "play" in tone_value or "casual" in tone_value:
+        playful_score += 1
+    if "professional" in tone_value or "formal" in tone_value:
+        serious_score += 1
+    if any(token in vibe_value for token in ["fun", "play", "humor", "friendly", "friend"]):
+        playful_score += 1
+    if any(token in vibe_value for token in ["formal", "serious", "professional"]):
+        serious_score += 1
+
+    if playful_score > serious_score:
+        mood = "playful"
+    elif serious_score > playful_score:
+        mood = "serious"
+    else:
+        mood = "balanced"
+
+    if mood == "playful":
+        emoji_style = "moderate" if emoji_chars else "light"
+        humor_mode = "light"
+    elif mood == "serious":
+        emoji_style = "none"
+        humor_mode = "off"
+    else:
+        emoji_style = "light" if emoji_chars else "none"
+        humor_mode = "light" if playful_score else "off"
+
+    return {
+        "mood": mood,
+        "emoji_style": emoji_style,
+        "humor_mode": humor_mode,
+        "creator_friend_energy": "high" if mood == "playful" else "medium",
+        "user_used_emoji_count": len(emoji_chars),
+    }
 
 
 def _intent_suggested_actions(message: str, app_context: dict) -> list[str]:
@@ -136,22 +207,36 @@ def _build_fallback(payload: dict) -> dict:
     memory_facts = creator_memory.get("memory_facts") if isinstance(creator_memory.get("memory_facts"), list) else []
 
     user_message = str(payload.get("message", "")).strip()
+    vibe_profile = _infer_vibe_profile(user_message, tone, vibe)
     is_general = any(
         token in user_message.lower()
         for token in ["economy", "inflation", "market", "geopolit", "interest rate", "gdp", "news"]
     )
 
     if is_general:
-        message = (
-            "I can help with broader knowledge too. For this topic, focus on the key drivers, second-order effects, "
-            "and what signals to monitor next. If you want, I can break this down into a short decision framework."
-        )
+        if vibe_profile["mood"] == "playful":
+            message = (
+                "Love this kind of question. Let us break it down creator-to-creator: key drivers first, "
+                "then second-order effects, then the signals worth watching."
+            )
+        else:
+            message = (
+                "I can help with broader knowledge too. For this topic, focus on the key drivers, second-order effects, "
+                "and what signals to monitor next. If you want, I can break this down into a short decision framework."
+            )
     else:
-        message = (
-            f"I can help with your Xcr8 workspace and general questions in a {tone} way, keeping the reply in {language}. "
-            f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
-            f"and {summary.get('published', 0)} published posts."
-        )
+        if vibe_profile["mood"] == "playful":
+            message = (
+                f"I have your back. We can keep this {tone} and still make it fun. "
+                f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
+                f"and {summary.get('published', 0)} published posts, so you are not starting from zero."
+            )
+        else:
+            message = (
+                f"I can help with your Xcr8 workspace and general questions in a {tone} way, keeping the reply in {language}. "
+                f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
+                f"and {summary.get('published', 0)} published posts."
+            )
     if vibe:
         message += f" I’m matching your vibe: {vibe}."
     if memory_facts:
@@ -160,6 +245,9 @@ def _build_fallback(payload: dict) -> dict:
         latest = recent_posts[0]
         title = latest.get("title") or "your latest post"
         message += f" Your latest post is {title}."
+
+    if vibe_profile["emoji_style"] != "none":
+        message += " 😊"
 
     intent_actions = _intent_suggested_actions(payload.get("message", ""), app_context)
 
@@ -188,10 +276,16 @@ def generate_assistant_reply(payload: dict) -> dict:
         app_context = payload.get("app_context", {}) if isinstance(payload.get("app_context"), dict) else {}
         recent_chat_turns = _extract_recent_chat_turns(creator_memory)
         memory_digest = _build_memory_digest(creator_memory)
+        user_message = str(payload.get("message", ""))
+        vibe_profile = _infer_vibe_profile(
+            user_message,
+            str(payload.get("tone", "conversational")),
+            str(payload.get("vibe") or ""),
+        )
 
         completion = client.chat.completions.create(
             model=settings.openai_model,
-            temperature=0.6,
+            temperature=0.75,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -200,11 +294,12 @@ def generate_assistant_reply(payload: dict) -> dict:
                     "content": json.dumps(
                         {
                             "prompt_template_version": PROMPT_TEMPLATE_VERSION,
-                            "message": payload.get("message", ""),
-                            "latest_user_message": payload.get("message", ""),
+                            "message": user_message,
+                            "latest_user_message": user_message,
                             "language": payload.get("language", "english"),
                             "tone": payload.get("tone", "conversational"),
                             "vibe": payload.get("vibe"),
+                            "vibe_profile": vibe_profile,
                             "messages": payload.get("messages", []),
                             "recent_chat_turns": recent_chat_turns,
                             "conversation_memory_digest": memory_digest,
