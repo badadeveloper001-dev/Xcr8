@@ -20,6 +20,12 @@ class AuthSignupCodeVerifyRequest(BaseModel):
     code: str = Field(min_length=4, max_length=12)
 
 
+class AuthSignupLinkVerifyRequest(BaseModel):
+    email: EmailStr
+    token_hash: str = Field(min_length=8, max_length=512)
+    type: str = Field(default="email", pattern=r"^(email|signup)$")
+
+
 class AuthSignupPasswordVerifyRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)

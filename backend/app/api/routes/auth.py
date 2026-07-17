@@ -16,6 +16,7 @@ from app.schemas.mvp import (
     AvatarUpdateRequest,
     AuthProfileUpdateRequest,
     AuthLoginRequest,
+    AuthSignupLinkVerifyRequest,
     AuthSignupPasswordVerifyRequest,
     AuthSessionResponse,
     AuthSignupCodeVerifyRequest,
@@ -34,6 +35,7 @@ from app.services.auth import (
     supabase_sign_in,
     supabase_sign_up,
     supabase_update_password,
+    supabase_verify_email_link,
     supabase_verify_email_otp,
 )
 
@@ -332,6 +334,39 @@ def signup_verify_code(payload: AuthSignupCodeVerifyRequest, db: Session = Depen
             **(profile.preferences or {}),
             "email_code_verified": True,
             "email_verified_at": datetime.now(tz=UTC).isoformat(),
+        }
+        db.add(profile)
+        db.commit()
+
+    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+    return _session_payload(user, credential)
+
+
+@router.post("/signup/verify-link", response_model=AuthSessionResponse)
+def signup_verify_link(payload: AuthSignupLinkVerifyRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    normalized_email = _normalize_email(str(payload.email))
+
+    try:
+        supabase_verify_email_link(str(payload.token_hash).strip(), str(payload.type).strip().lower())
+    except SupabaseAuthError as exc:
+        if _is_auth_rate_limited(str(exc), exc.status_code):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many verification attempts. Please wait a minute and try again.",
+            ) from exc
+        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+
+    user = db.scalar(select(User).where(User.email == normalized_email))
+    if not user:
+        raise HTTPException(status_code=404, detail="Signup session not found. Please register again.")
+
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    if profile:
+        profile.preferences = {
+            **(profile.preferences or {}),
+            "email_code_verified": True,
+            "email_verified_at": datetime.now(tz=UTC).isoformat(),
+            "email_verification_method": "link",
         }
         db.add(profile)
         db.commit()

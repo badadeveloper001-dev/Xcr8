@@ -37,6 +37,12 @@ export type SignupVerifyCodePayload = {
   code: string;
 };
 
+export type SignupVerifyLinkPayload = {
+  email: string;
+  token_hash: string;
+  type?: "email" | "signup";
+};
+
 export type SignupVerifyPasswordPayload = {
   email: string;
   password: string;
@@ -453,6 +459,11 @@ export async function signup(payload: SignupPayload): Promise<SignupResponse> {
 
 export async function verifySignupCode(payload: SignupVerifyCodePayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup/verify-code", payload);
+  return data;
+}
+
+export async function verifySignupLink(payload: SignupVerifyLinkPayload): Promise<SessionPayload> {
+  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup/verify-link", payload);
   return data;
 }
 

@@ -34,6 +34,13 @@ def _admin_headers() -> dict[str, str]:
     }
 
 
+def _frontend_email_redirect_url() -> str | None:
+    base = settings.frontend_url.strip().rstrip("/")
+    if not base:
+        return None
+    return f"{base}/auth/confirm"
+
+
 def _is_rate_limited(message: str, status_code: int) -> bool:
     lowered = message.lower()
     return status_code == 429 or "rate limit" in lowered or "too many" in lowered
@@ -123,16 +130,20 @@ def supabase_request_email_otp(email: str) -> None:
         )
 
     last_response: httpx.Response | None = None
+    email_redirect_to = _frontend_email_redirect_url()
     with httpx.Client(timeout=15.0) as client:
         try:
             # Prefer resend for signup users so they receive a fresh real verification code.
+            resend_payload: dict[str, object] = {
+                "email": email,
+                "type": "signup",
+            }
+            if email_redirect_to:
+                resend_payload["email_redirect_to"] = email_redirect_to
             resend_response = client.post(
                 f"{settings.supabase_url}/auth/v1/resend",
                 headers=_auth_headers(),
-                json={
-                    "email": email,
-                    "type": "signup",
-                },
+                json=resend_payload,
             )
             if resend_response.status_code < 400:
                 return
@@ -153,13 +164,16 @@ def supabase_request_email_otp(email: str) -> None:
                 _raise_auth_error(resend_response, "Too many email attempts. Please wait and retry.")
 
             for create_user in (False, True):
+                otp_payload: dict[str, object] = {
+                    "email": email,
+                    "create_user": create_user,
+                }
+                if email_redirect_to:
+                    otp_payload["email_redirect_to"] = email_redirect_to
                 response = client.post(
                     f"{settings.supabase_url}/auth/v1/otp",
                     headers=_auth_headers(),
-                    json={
-                        "email": email,
-                        "create_user": create_user,
-                    },
+                    json=otp_payload,
                 )
 
                 if response.status_code < 400:
@@ -242,6 +256,50 @@ def supabase_verify_email_otp(email: str, token: str) -> dict:
     if last_error is not None:
         raise last_error
     raise SupabaseAuthError("Invalid or expired verification code.", status_code=400)
+
+
+def supabase_verify_email_link(token_hash: str, verify_type: str = "email") -> dict:
+    if not settings.supabase_url.strip() or not settings.supabase_anon_key.strip():
+        raise SupabaseAuthError(
+            detail="Authentication service is not configured. Please contact support.",
+            status_code=503,
+        )
+
+    requested_type = str(verify_type or "email").strip().lower()
+    verify_types = [requested_type] if requested_type in {"email", "signup"} else ["email", "signup"]
+    last_error: SupabaseAuthError | None = None
+
+    with httpx.Client(timeout=15.0) as client:
+        for kind in verify_types:
+            try:
+                response = client.post(
+                    f"{settings.supabase_url}/auth/v1/verify",
+                    headers=_auth_headers(),
+                    json={
+                        "token_hash": token_hash,
+                        "type": kind,
+                    },
+                )
+            except httpx.RequestError as exc:
+                raise SupabaseAuthError(
+                    detail="Authentication service is temporarily unavailable. Please try again.",
+                    status_code=503,
+                ) from exc
+
+            if response.status_code < 400:
+                return response.json()
+
+            try:
+                payload = response.json()
+                message = payload.get("msg") or payload.get("message") or payload.get("error_description")
+                detail = str(message).strip() if isinstance(message, str) else "Invalid or expired confirmation link."
+            except ValueError:
+                detail = "Invalid or expired confirmation link."
+            last_error = SupabaseAuthError(detail=detail, status_code=response.status_code)
+
+    if last_error is not None:
+        raise last_error
+    raise SupabaseAuthError("Invalid or expired confirmation link.", status_code=400)
 
 
 def supabase_admin_confirm_email(email: str) -> None:
