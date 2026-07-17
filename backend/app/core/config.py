@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     supabase_db_port: int = 5432
     google_oauth_enabled: bool = True
 
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "XCR8"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    signup_code_ttl_minutes: int = 10
+
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"
 

@@ -29,6 +29,15 @@
 - `SUPABASE_ANON_KEY`: Supabase anon key
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
 - `SUPABASE_JWT_SECRET`: Supabase JWT secret
+- `SMTP_HOST`: SMTP server host used for sending signup verification codes
+- `SMTP_PORT`: SMTP server port (commonly `587` for TLS)
+- `SMTP_USERNAME`: SMTP auth username
+- `SMTP_PASSWORD`: SMTP auth password or app password
+- `SMTP_FROM_EMAIL`: sender email address used for verification messages
+- `SMTP_FROM_NAME`: sender display name (default `XCR8`)
+- `SMTP_USE_TLS`: use STARTTLS (`true`/`false`)
+- `SMTP_USE_SSL`: use implicit SSL (`true`/`false`)
+- `SIGNUP_CODE_TTL_MINUTES`: verification code expiry time in minutes (default `10`)
 
 ## AI Services
 

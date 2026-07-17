@@ -29,14 +29,16 @@ from app.schemas.mvp import (
 )
 from app.services.auth import (
     SupabaseAuthError,
-    supabase_request_email_otp,
     supabase_request_password_reset,
     supabase_admin_confirm_email,
     supabase_sign_in,
-    supabase_sign_up,
     supabase_update_password,
     supabase_verify_email_link,
-    supabase_verify_email_otp,
+    generate_signup_email_code,
+    hash_signup_email_code,
+    send_signup_email_code,
+    signup_code_expiry,
+    verify_signup_email_code,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -45,29 +47,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def _is_auth_rate_limited(message: str, status_code: int) -> bool:
     lowered = message.lower()
     return status_code == 429 or "rate limit" in lowered or "too many" in lowered
-
-
-def _is_supabase_user_exists_error(message: str, status_code: int) -> bool:
-    lowered = message.lower()
-    return (
-        status_code in {400, 409, 422}
-        and (
-            "already registered" in lowered
-            or "already exists" in lowered
-            or "user already" in lowered
-            or "already been registered" in lowered
-        )
-    )
-
-
-def _request_email_code_with_grace(email: str) -> str:
-    try:
-        supabase_request_email_otp(email)
-        return "Verification code sent to your email."
-    except SupabaseAuthError as exc:
-        if _is_auth_rate_limited(str(exc), exc.status_code):
-            return "Email provider limit reached. Please wait about 60 seconds, then resend code and check spam/promotions."
-        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
@@ -205,22 +184,6 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
     if len(payload.password) < 8 or not any(ch.isdigit() for ch in payload.password):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters and include a number.")
 
-    metadata_payload = {
-        "full_name": payload.full_name,
-        "username": payload.username,
-        "onboarding_complete": False,
-    }
-
-    try:
-        supabase_sign_up(
-            email=normalized_email,
-            password=payload.password,
-            metadata=metadata_payload,
-        )
-    except SupabaseAuthError as exc:
-        if not _is_supabase_user_exists_error(str(exc), exc.status_code):
-            raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
-
     existing = db.scalar(select(User).where(User.email == normalized_email))
     if existing:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing.id))
@@ -261,8 +224,35 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
                 "email_code_verified": False,
                 "email_verification_method": "pending",
             }
+            code = generate_signup_email_code()
+            profile.preferences = {
+                **profile.preferences,
+                "signup_code_hash": hash_signup_email_code(normalized_email, code),
+                "signup_code_expires_at": signup_code_expiry().isoformat(),
+                "signup_code_attempts": 0,
+                "signup_code_sent_at": datetime.now(tz=UTC).isoformat(),
+            }
+        else:
+            code = generate_signup_email_code()
+            profile = CreatorProfile(
+                user_id=existing.id,
+                multilingual_profile=[payload.language],
+                preferences={
+                    "email_code_verified": False,
+                    "email_verification_method": "pending",
+                    "signup_code_hash": hash_signup_email_code(normalized_email, code),
+                    "signup_code_expires_at": signup_code_expiry().isoformat(),
+                    "signup_code_attempts": 0,
+                    "signup_code_sent_at": datetime.now(tz=UTC).isoformat(),
+                },
+            )
+            db.add(profile)
         db.commit()
-        message = _request_email_code_with_grace(normalized_email)
+        try:
+            send_signup_email_code(normalized_email, code)
+        except SupabaseAuthError as exc:
+            raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+        message = "Verification code sent to your email."
         return {"message": message}
 
     username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == payload.username))
@@ -300,10 +290,21 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
             "email_verification_method": "pending",
         },
     )
+    code = generate_signup_email_code()
+    profile.preferences = {
+        **(profile.preferences or {}),
+        "signup_code_hash": hash_signup_email_code(normalized_email, code),
+        "signup_code_expires_at": signup_code_expiry().isoformat(),
+        "signup_code_attempts": 0,
+        "signup_code_sent_at": datetime.now(tz=UTC).isoformat(),
+    }
     db.add(profile)
     db.commit()
-
-    message = _request_email_code_with_grace(normalized_email)
+    try:
+        send_signup_email_code(normalized_email, code)
+    except SupabaseAuthError as exc:
+        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+    message = "Verification code sent to your email."
     return SignupResponse(
         message=message,
         requires_verification=True,
@@ -314,29 +315,56 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
 def signup_verify_code(payload: AuthSignupCodeVerifyRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
     normalized_email = _normalize_email(str(payload.email))
 
-    try:
-        supabase_verify_email_otp(normalized_email, str(payload.code).strip())
-    except SupabaseAuthError as exc:
-        if _is_auth_rate_limited(str(exc), exc.status_code):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many verification attempts. Please wait a minute and try again.",
-            ) from exc
-        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
-
     user = db.scalar(select(User).where(User.email == normalized_email))
     if not user:
         raise HTTPException(status_code=404, detail="Signup session not found. Please register again.")
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
-    if profile:
+    if not profile:
+        raise HTTPException(status_code=404, detail="Signup session not found. Please register again.")
+
+    preferences = profile.preferences if isinstance(profile.preferences, dict) else {}
+    stored_hash = str(preferences.get("signup_code_hash") or "").strip()
+    expires_at_raw = str(preferences.get("signup_code_expires_at") or "").strip()
+    attempts = int(preferences.get("signup_code_attempts") or 0)
+
+    if not stored_hash or not expires_at_raw:
+        raise HTTPException(status_code=400, detail="No active verification code. Please request a new code.")
+
+    try:
+        expires_at = datetime.fromisoformat(expires_at_raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Verification code expired. Request a new code.") from exc
+
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+
+    if datetime.now(tz=UTC) > expires_at:
+        raise HTTPException(status_code=400, detail="Verification code expired. Request a new code.")
+
+    if attempts >= 8:
+        raise HTTPException(status_code=429, detail="Too many attempts. Request a new verification code.")
+
+    if not verify_signup_email_code(normalized_email, str(payload.code).strip(), stored_hash):
         profile.preferences = {
-            **(profile.preferences or {}),
-            "email_code_verified": True,
-            "email_verified_at": datetime.now(tz=UTC).isoformat(),
+            **preferences,
+            "signup_code_attempts": attempts + 1,
         }
         db.add(profile)
         db.commit()
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+
+    profile.preferences = {
+        **preferences,
+        "email_code_verified": True,
+        "email_verified_at": datetime.now(tz=UTC).isoformat(),
+        "email_verification_method": "smtp_code",
+        "signup_code_hash": None,
+        "signup_code_expires_at": None,
+        "signup_code_attempts": 0,
+    }
+    db.add(profile)
+    db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
@@ -392,8 +420,9 @@ def signup_verify_password(
 
     try:
         supabase_admin_confirm_email(normalized_email)
-    except SupabaseAuthError as exc:
-        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+    except SupabaseAuthError:
+        # Local auth flow should keep working even when Supabase admin confirmation is unavailable.
+        pass
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
     if not profile:
