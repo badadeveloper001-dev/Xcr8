@@ -30,6 +30,7 @@ from app.schemas.mvp import (
 )
 from app.services.auth import (
     SupabaseAuthError,
+    stable_fallback_user_id,
     supabase_request_password_reset,
     supabase_admin_confirm_email,
     supabase_get_user,
@@ -463,7 +464,11 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
         message = str(exc)
         if _is_auth_rate_limited(message, exc.status_code) or exc.status_code >= 500:
             auth_payload = {
-                "user": {"id": f"fallback-{abs(hash(normalized_email))}", "email": normalized_email, "user_metadata": {}},
+                "user": {
+                    "id": stable_fallback_user_id(normalized_email),
+                    "email": normalized_email,
+                    "user_metadata": {},
+                },
             }
         else:
             auth_payload = None

@@ -329,7 +329,14 @@ export default function ImageGeneratorPage() {
 
     const response = await fetch(`/api/image/generate?${params.toString()}`, { cache: "no-store" });
     if (!response.ok) {
-      throw new Error("generation_failed");
+      let detail = "";
+      try {
+        const payload = (await response.json()) as { detail?: string };
+        detail = typeof payload.detail === "string" ? payload.detail.trim() : "";
+      } catch {
+        detail = "";
+      }
+      throw new Error(detail || "generation_failed");
     }
 
     const blob = await response.blob();
@@ -567,8 +574,9 @@ export default function ImageGeneratorPage() {
 
         return [newEntry, ...previous].slice(0, HISTORY_LIMIT);
       });
-    } catch {
-      setError("Could not generate images right now. Please try again.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message.trim() : "";
+      setError(message || "Could not generate images right now. Please try again.");
     }
 
     setGenerating(false);

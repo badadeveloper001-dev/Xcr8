@@ -26,12 +26,6 @@ const fadeUp = (delay = 0) => ({
   transition: { duration: 0.32, delay },
 });
 
-const fallbackFocus = [
-  "Polish one post and schedule it today.",
-  "Use Cr8or AI for one new caption variation.",
-  "Review analytics for one actionable insight.",
-];
-
 export default function DashboardPage() {
   const router = useRouter();
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
@@ -52,22 +46,19 @@ export default function DashboardPage() {
 
   const focusList = useMemo(() => {
     const insights = data?.ai_insights ?? [];
-    if (insights.length === 0) {
-      return fallbackFocus;
-    }
     return insights.slice(0, 3).map((item) => item.title);
   }, [data?.ai_insights]);
 
   const quickStats = [
     {
       label: "Drafts",
-      value: data?.drafts ?? 12,
+      value: data?.drafts ?? 0,
       icon: FileText,
       accent: "bg-cyan-500/15 text-cyan-300 light:bg-[#6E16F2] light:text-white",
     },
     {
       label: "Scheduled",
-      value: data?.scheduled ?? 8,
+      value: data?.scheduled ?? 0,
       icon: CalendarClock,
       accent: "bg-violet-500/15 text-violet-300 light:bg-[#6E16F2] light:text-white",
     },
@@ -111,12 +102,7 @@ export default function DashboardPage() {
       }));
     }
 
-    return [
-      { id: "p1", title: "This mix will blow your mind!", status: "Published" },
-      { id: "p2", title: "Old school vibes never die", status: "Scheduled" },
-      { id: "p3", title: "How I build weekly creator flows", status: "Draft" },
-      { id: "p4", title: "Afrobeats carousel concept", status: "Draft" },
-    ];
+    return [];
   }, [data?.recent_posts]);
 
   const proactiveAlert = data?.cr8or_ai_alert ?? null;
@@ -234,17 +220,23 @@ export default function DashboardPage() {
               Your Focus Today
             </h2>
             <div className="grid gap-2.5">
-              {focusList.map((item, index) => (
-                <div
-                  key={item}
-                  className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
-                >
-                  <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-xs font-semibold text-emerald-300 light:bg-emerald-100 light:text-emerald-700">
-                    {index + 1}
+              {focusList.length > 0 ? (
+                focusList.map((item, index) => (
+                  <div
+                    key={item}
+                    className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
+                  >
+                    <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-xs font-semibold text-emerald-300 light:bg-emerald-100 light:text-emerald-700">
+                      {index + 1}
+                    </div>
+                    <p className="text-sm text-slate-200 light:text-slate-800">{item}</p>
                   </div>
-                  <p className="text-sm text-slate-200 light:text-slate-800">{item}</p>
+                ))
+              ) : (
+                <div className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-400 light:text-slate-600">
+                  No live insights yet. Generate content and analytics to unlock focus suggestions.
                 </div>
-              ))}
+              )}
             </div>
             <Link
               href="/analytics"
@@ -266,24 +258,30 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="space-y-2.5">
-              {recentPosts.map((post) => (
-                <button
-                  key={post.id}
-                  type="button"
-                  onClick={() => router.push("/compose")}
-                  className="surface-soft flex w-full items-center justify-between rounded-xl px-3 py-3 text-left"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-white light:text-slate-900">
-                      {post.title}
-                    </p>
-                    <div className="mt-1 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 light:border-slate-200 light:bg-slate-50 light:text-slate-600">
-                      {post.status}
+              {recentPosts.length > 0 ? (
+                recentPosts.map((post) => (
+                  <button
+                    key={post.id}
+                    type="button"
+                    onClick={() => router.push("/compose")}
+                    className="surface-soft flex w-full items-center justify-between rounded-xl px-3 py-3 text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white light:text-slate-900">
+                        {post.title}
+                      </p>
+                      <div className="mt-1 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 light:border-slate-200 light:bg-slate-50 light:text-slate-600">
+                        {post.status}
+                      </div>
                     </div>
-                  </div>
-                  <ArrowRight size={14} className="text-slate-500" />
-                </button>
-              ))}
+                    <ArrowRight size={14} className="text-slate-500" />
+                  </button>
+                ))
+              ) : (
+                <div className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-400 light:text-slate-600">
+                  No posts yet. Create your first post to start building history.
+                </div>
+              )}
             </div>
           </motion.section>
         </div>

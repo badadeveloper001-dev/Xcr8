@@ -39,14 +39,6 @@ async function fetchAnalytics(userId: number, window: string) {
   return data;
 }
 
-const demoEngagement: EngagementItem[] = [
-  { platform: "instagram", engagement_rate: 0.062, followers_delta: 284, caption_effectiveness: 0.81 },
-  { platform: "tiktok", engagement_rate: 0.118, followers_delta: 1240, caption_effectiveness: 0.74 },
-  { platform: "x", engagement_rate: 0.031, followers_delta: 95, caption_effectiveness: 0.65 },
-  { platform: "facebook", engagement_rate: 0.022, followers_delta: 48, caption_effectiveness: 0.58 },
-  { platform: "linkedin", engagement_rate: 0.054, followers_delta: 121, caption_effectiveness: 0.69 },
-];
-
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 12 },
   animate: { opacity: 1, y: 0 },
@@ -74,7 +66,7 @@ export default function AnalyticsPage() {
 
   if (!hasHydrated || !userId) return null;
 
-  const engagement = data?.engagement?.length ? data.engagement : demoEngagement;
+  const engagement = data?.engagement ?? [];
   const platformOptions = Array.from(new Set(engagement.map((item) => item.platform)));
 
   const filtered =
@@ -82,25 +74,19 @@ export default function AnalyticsPage() {
       ? engagement
       : engagement.filter((item) => item.platform === selectedPlatform);
 
-  const totalReach =
-    data?.summary?.total_reach_estimate ??
-    engagement.reduce((acc, item) => acc + Math.round(item.engagement_rate * 120000), 0);
-  const audienceGrowth =
-    data?.summary?.audience_growth ?? engagement.reduce((acc, item) => acc + item.followers_delta, 0);
-  const avgEngagement =
-    (data?.summary?.average_engagement_rate ??
-      engagement.reduce((acc, item) => acc + item.engagement_rate, 0) / Math.max(engagement.length, 1)) *
-    100;
-  const avgCaptionFit =
-    (data?.summary?.average_caption_effectiveness ??
-      engagement.reduce((acc, item) => acc + item.caption_effectiveness, 0) /
-        Math.max(engagement.length, 1)) *
-    100;
+  const totalReach = data?.summary?.total_reach_estimate ?? 0;
+  const audienceGrowth = data?.summary?.audience_growth ?? 0;
+  const avgEngagement = (data?.summary?.average_engagement_rate ?? 0) * 100;
+  const avgCaptionFit = (data?.summary?.average_caption_effectiveness ?? 0) * 100;
 
   const topRecommendations = [
-    data?.insights?.trend ?? "Short hooks and direct CTAs are currently outperforming baseline.",
-    `Best posting windows: ${(data?.insights?.best_posting_times ?? ["7:30 PM", "12:00 PM"]).join(" · ")}`,
-    `Ideal caption length: ${data?.insights?.best_caption_length ?? 148} characters.`,
+    data?.insights?.trend ?? "No live trend signal yet.",
+    data?.insights?.best_posting_times?.length
+      ? `Best posting windows: ${data.insights.best_posting_times.join(" · ")}`
+      : "Best posting windows: Not enough live data yet.",
+    data?.insights?.best_caption_length
+      ? `Ideal caption length: ${data.insights.best_caption_length} characters.`
+      : "Ideal caption length: Not enough live data yet.",
   ];
 
   const exportSnapshot = () => {
@@ -128,7 +114,10 @@ export default function AnalyticsPage() {
   return (
     <MobileShell title="Analytics" subtitle="Understand performance in under a minute.">
       <div className="space-y-4">
-        <motion.section {...fadeUp(0)} className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5">
+        <motion.section
+          {...fadeUp(0)}
+          className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
+        >
           <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
             Clarity View
           </p>
@@ -168,7 +157,9 @@ export default function AnalyticsPage() {
               ))}
             </select>
 
-            <span className="text-xs text-slate-500">Showing data for {selectedPlatform === "all" ? "all channels" : selectedPlatform}</span>
+            <span className="text-xs text-slate-500">
+              Showing data for {selectedPlatform === "all" ? "all channels" : selectedPlatform}
+            </span>
 
             <button
               type="button"
@@ -189,7 +180,9 @@ export default function AnalyticsPage() {
           ].map((card) => (
             <article key={card.label} className="xcr8-panel rounded-2xl p-4">
               <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{card.label}</p>
-              <p className="mt-1 text-2xl font-semibold text-white light:text-slate-900">{card.value}</p>
+              <p className="mt-1 text-2xl font-semibold text-white light:text-slate-900">
+                {card.value}
+              </p>
             </article>
           ))}
         </motion.section>
@@ -202,7 +195,10 @@ export default function AnalyticsPage() {
             </h2>
             <div className="space-y-2.5">
               {topRecommendations.map((item) => (
-                <div key={item} className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-200 light:text-slate-800">
+                <div
+                  key={item}
+                  className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-200 light:text-slate-800"
+                >
                   {item}
                 </div>
               ))}
@@ -237,30 +233,43 @@ export default function AnalyticsPage() {
               Platform performance
             </h2>
             <div className="space-y-2.5">
-              {filtered.map((item) => (
-                <article key={item.platform} className="surface-soft rounded-xl px-3 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold capitalize text-white light:text-slate-900">
-                      {item.platform.replace(/_/g, " ")}
-                    </p>
-                    <p className="text-xs text-emerald-400">{(item.engagement_rate * 100).toFixed(1)}%</p>
-                  </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-500 light:text-slate-600">
-                    <div>
-                      <p>Followers</p>
-                      <p className="mt-0.5 text-slate-300 light:text-slate-800">+{item.followers_delta}</p>
+              {filtered.length > 0 ? (
+                filtered.map((item) => (
+                  <article key={item.platform} className="surface-soft rounded-xl px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold capitalize text-white light:text-slate-900">
+                        {item.platform.replace(/_/g, " ")}
+                      </p>
+                      <p className="text-xs text-emerald-400">
+                        {(item.engagement_rate * 100).toFixed(1)}%
+                      </p>
                     </div>
-                    <div>
-                      <p>Caption Fit</p>
-                      <p className="mt-0.5 text-slate-300 light:text-slate-800">{(item.caption_effectiveness * 100).toFixed(0)}%</p>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-500 light:text-slate-600">
+                      <div>
+                        <p>Followers</p>
+                        <p className="mt-0.5 text-slate-300 light:text-slate-800">
+                          +{item.followers_delta}
+                        </p>
+                      </div>
+                      <div>
+                        <p>Caption Fit</p>
+                        <p className="mt-0.5 text-slate-300 light:text-slate-800">
+                          {(item.caption_effectiveness * 100).toFixed(0)}%
+                        </p>
+                      </div>
+                      <div>
+                        <p>Status</p>
+                        <p className="mt-0.5 text-slate-300 light:text-slate-800">Active</p>
+                      </div>
                     </div>
-                    <div>
-                      <p>Status</p>
-                      <p className="mt-0.5 text-slate-300 light:text-slate-800">Active</p>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                ))
+              ) : (
+                <div className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-400 light:text-slate-600">
+                  No live analytics yet. Connect platforms and publish content to populate this
+                  section.
+                </div>
+              )}
             </div>
 
             <button

@@ -377,7 +377,7 @@ export default function AssistantPage() {
       updated_at: new Date().toISOString(),
     };
 
-    setActiveChatId(null);
+    setActiveChatId(chatId);
     setMessages([welcomeMessage]);
     setError(null);
     setPrompt("");

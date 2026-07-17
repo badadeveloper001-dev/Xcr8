@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const MIN_DIMENSION = 512;
 const MAX_DIMENSION = 1792;
-const FETCH_TIMEOUT_MS = 25_000;
+const FETCH_TIMEOUT_MS = 120_000;
 const GLOBAL_QUALITY_NEGATIVE =
   "blurry, low resolution, noisy image, cgi look, deformed anatomy, extra limbs, extra fingers, duplicate body parts, duplicated objects, multiple balls, duplicate football, distorted face, watermark, logo, text overlay";
 

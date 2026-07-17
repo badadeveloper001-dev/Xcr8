@@ -21,6 +21,12 @@ class SupabaseAuthError(ValueError):
         self.status_code = status_code
 
 
+def stable_fallback_user_id(email: str) -> str:
+    normalized = str(email or "").strip().lower()
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"fallback-{digest[:16]}"
+
+
 def get_supabase_admin_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
@@ -120,7 +126,7 @@ def supabase_sign_in(email: str, password: str) -> dict:
                 "expires_in": 3600,
                 "refresh_token": "fallback-refresh",
                 "user": {
-                    "id": f"fallback-{abs(hash(email))}",
+                    "id": stable_fallback_user_id(email),
                     "email": email,
                     "user_metadata": {},
                 },
