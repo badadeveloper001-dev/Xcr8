@@ -188,6 +188,39 @@ export default function SignupPage() {
     }
   };
 
+  const handleResendCode = async () => {
+    if (!email.trim() || !password || !confirmPassword) {
+      setError("Complete your signup details first to resend the code.");
+      return;
+    }
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await signup({
+        full_name: fullName.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        password,
+        confirm_password: confirmPassword,
+        language: "english",
+        timezone: "Africa/Lagos",
+      });
+      setNotice(response.message || "A new verification code has been sent.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not resend code. Please try again."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="lux-page flex min-h-screen w-full items-center justify-center px-5 py-12">
       <div className="lux-orb-a" />
@@ -345,6 +378,14 @@ export default function SignupPage() {
               </button>
             ) : (
               <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void handleResendCode()}
+                  disabled={loading}
+                  className="w-full rounded-2xl border border-cyan-400/25 bg-cyan-500/10 py-3.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+                >
+                  Resend code now
+                </button>
                 <button
                   type="button"
                   onClick={() => void handleVerifyWithPassword()}

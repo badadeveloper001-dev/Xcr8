@@ -17,6 +17,7 @@ const creatorTypes = [
   "brand",
   "agency",
   "entrepreneur",
+  "other",
 ];
 
 const platforms = ["instagram", "tiktok", "x", "linkedin", "youtube", "facebook", "threads"];

@@ -199,6 +199,12 @@ def supabase_request_email_otp(email: str) -> None:
 
 
 def supabase_verify_email_otp(email: str, token: str) -> dict:
+    if not settings.supabase_url.strip() or not settings.supabase_anon_key.strip():
+        raise SupabaseAuthError(
+            detail="Authentication service is not configured. Please contact support.",
+            status_code=503,
+        )
+
     # Different Supabase flows may emit OTPs with different verify types.
     # Try both common types so users can paste the code they received.
     verify_types = ("email", "signup")
@@ -206,15 +212,21 @@ def supabase_verify_email_otp(email: str, token: str) -> dict:
 
     with httpx.Client(timeout=15.0) as client:
         for verify_type in verify_types:
-            response = client.post(
-                f"{settings.supabase_url}/auth/v1/verify",
-                headers=_auth_headers(),
-                json={
-                    "email": email,
-                    "token": token,
-                    "type": verify_type,
-                },
-            )
+            try:
+                response = client.post(
+                    f"{settings.supabase_url}/auth/v1/verify",
+                    headers=_auth_headers(),
+                    json={
+                        "email": email,
+                        "token": token,
+                        "type": verify_type,
+                    },
+                )
+            except httpx.RequestError as exc:
+                raise SupabaseAuthError(
+                    detail="Authentication service is temporarily unavailable. Please try again.",
+                    status_code=503,
+                ) from exc
 
             if response.status_code < 400:
                 return response.json()
