@@ -10,6 +10,7 @@ import {
   getApiErrorMessage,
   updateAdminIncident,
 } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const ADMIN_SESSION_KEY = "xcr8-admin-access";
 
@@ -19,7 +20,7 @@ function StatCard({
   icon: Icon,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   icon: typeof Users;
 }) {
   return (
@@ -98,6 +99,8 @@ export default function AdminDashboardPage() {
     refetchInterval: 15000,
   });
 
+  const statValue = (value: number | undefined) => (isLoading ? "..." : (value ?? 0));
+
   const incidentMutation = useMutation({
     mutationFn: ({
       incidentId,
@@ -125,19 +128,22 @@ export default function AdminDashboardPage() {
                 XCR8 Platform Overview
               </h1>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                sessionStorage.removeItem(ADMIN_SESSION_KEY);
-                router.replace("/admin");
-              }}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
-            >
-              <span className="inline-flex items-center gap-2">
-                <LogOut size={14} />
-                Sign out
-              </span>
-            </button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+                  router.replace("/admin");
+                }}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <LogOut size={14} />
+                  Sign out
+                </span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -148,25 +154,37 @@ export default function AdminDashboardPage() {
         ) : null}
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total users" value={data?.total_users ?? 0} icon={Users} />
-          <StatCard label="Onboarded users" value={data?.onboarded_users ?? 0} icon={Users} />
-          <StatCard label="Active users (7d)" value={data?.active_users_7d ?? 0} icon={Radar} />
-          <StatCard label="AI generations" value={data?.ai_generations ?? 0} icon={BarChart3} />
+          <StatCard label="Total users" value={statValue(data?.total_users)} icon={Users} />
+          <StatCard label="Onboarded users" value={statValue(data?.onboarded_users)} icon={Users} />
+          <StatCard
+            label="Active users (7d)"
+            value={statValue(data?.active_users_7d)}
+            icon={Radar}
+          />
+          <StatCard
+            label="AI generations"
+            value={statValue(data?.ai_generations)}
+            icon={BarChart3}
+          />
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Open incidents"
-            value={data?.pulse_open_incidents ?? 0}
+            value={statValue(data?.pulse_open_incidents)}
             icon={ShieldAlert}
           />
           <StatCard
             label="Critical incidents"
-            value={data?.pulse_critical_incidents ?? 0}
+            value={statValue(data?.pulse_critical_incidents)}
             icon={AlertTriangle}
           />
-          <StatCard label="Trend signals" value={data?.trend_signals ?? 0} icon={Radar} />
-          <StatCard label="Published posts" value={data?.published_posts ?? 0} icon={BarChart3} />
+          <StatCard label="Trend signals" value={statValue(data?.trend_signals)} icon={Radar} />
+          <StatCard
+            label="Published posts"
+            value={statValue(data?.published_posts)}
+            icon={BarChart3}
+          />
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -176,25 +194,25 @@ export default function AdminDashboardPage() {
               <div className="surface-soft rounded-xl px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Total Posts</p>
                 <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
-                  {data?.total_posts ?? 0}
+                  {statValue(data?.total_posts)}
                 </p>
               </div>
               <div className="surface-soft rounded-xl px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Drafts</p>
                 <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
-                  {data?.draft_posts ?? 0}
+                  {statValue(data?.draft_posts)}
                 </p>
               </div>
               <div className="surface-soft rounded-xl px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Scheduled</p>
                 <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
-                  {data?.scheduled_posts ?? 0}
+                  {statValue(data?.scheduled_posts)}
                 </p>
               </div>
               <div className="surface-soft rounded-xl px-3 py-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Published</p>
                 <p className="mt-1 text-lg font-semibold text-white light:text-slate-900">
-                  {data?.published_posts ?? 0}
+                  {statValue(data?.published_posts)}
                 </p>
               </div>
             </div>
@@ -252,6 +270,12 @@ export default function AdminDashboardPage() {
             </div>
             {incidentsLoading ? <p className="text-sm text-slate-400">Refreshing...</p> : null}
           </div>
+
+          {error ? (
+            <p className="mb-3 text-sm text-rose-300">
+              Admin data failed to load from the live API. Retry after sign-in or refresh.
+            </p>
+          ) : null}
 
           <div className="space-y-3">
             {incidents.map((incident) => (

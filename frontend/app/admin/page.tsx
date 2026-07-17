@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const ADMIN_SESSION_KEY = "xcr8-admin-access";
 
@@ -37,9 +38,12 @@ export default function AdminLoginPage() {
       <div className="lux-orb-c" />
 
       <section className="xcr8-panel w-full max-w-[460px] rounded-[28px] border border-cyan-300/30 p-7">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-200 light:text-cyan-700">
-          <ShieldCheck size={14} />
-          Admin Access
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-200 light:text-cyan-700">
+            <ShieldCheck size={14} />
+            Admin Access
+          </div>
+          <ThemeToggle />
         </div>
 
         <h1 className="xcr8-title-xl text-white light:text-slate-900">XCR8 Admin Portal</h1>

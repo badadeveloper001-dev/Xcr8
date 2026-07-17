@@ -11,6 +11,27 @@ export const apiClient = axios.create({
   timeout: 10_000,
 });
 
+function getAdminSafeBaseUrl(): string | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const { protocol, hostname, port } = window.location;
+  let targetHost = "";
+
+  if (hostname.startsWith("admin-")) {
+    targetHost = hostname.slice("admin-".length);
+  } else if (hostname.startsWith("admin.")) {
+    targetHost = hostname.slice("admin.".length);
+  }
+
+  if (!targetHost) {
+    return undefined;
+  }
+
+  return `${protocol}//${targetHost}${port ? `:${port}` : ""}`;
+}
+
 export type SessionPayload = {
   user_id: number;
   email: string;
@@ -543,6 +564,7 @@ export async function loginWithGoogle(payload: GoogleSessionPayload): Promise<Se
 
 export async function getAdminOverview(accessCode: string): Promise<AdminOverviewPayload> {
   const { data } = await apiClient.get<AdminOverviewPayload>("/api/v1/admin/overview", {
+    baseURL: getAdminSafeBaseUrl() ?? apiBaseUrl,
     headers: {
       "x-admin-code": accessCode,
     },
@@ -553,6 +575,7 @@ export async function getAdminOverview(accessCode: string): Promise<AdminOvervie
 
 export async function getAdminIncidents(accessCode: string): Promise<PulseIncidentItem[]> {
   const { data } = await apiClient.get<PulseIncidentItem[]>("/api/v1/admin/incidents", {
+    baseURL: getAdminSafeBaseUrl() ?? apiBaseUrl,
     headers: {
       "x-admin-code": accessCode,
     },
@@ -570,6 +593,7 @@ export async function updateAdminIncident(
     `/api/v1/admin/incidents/${incidentId}`,
     payload,
     {
+      baseURL: getAdminSafeBaseUrl() ?? apiBaseUrl,
       headers: {
         "x-admin-code": accessCode,
       },
