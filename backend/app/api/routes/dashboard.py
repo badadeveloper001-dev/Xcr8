@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -101,6 +101,53 @@ def _localized_alert(language: str, niche: str, personality: str, trend_titles: 
     )
 
 
+def _localized_pending_alert(language: str, drafts: int, scheduled: int) -> Cr8orAIAlert:
+    total_pending = drafts + scheduled
+    if language == "nigerian_pidgin":
+        message = f"You get {total_pending} pending work inside Xcr8. Make we clear am together?"
+        prompt = f"Help me clear my pending work. I have {drafts} drafts and {scheduled} scheduled posts waiting."
+    elif language == "yoruba":
+        message = f"O ni ise to ku {total_pending} ninu Xcr8. Se ka pari won papo?"
+        prompt = f"Ran mi lowo lati pari ise mi to ku. Mo ni drafts {drafts} ati scheduled posts {scheduled}."
+    elif language == "code_switch":
+        message = f"You still get {total_pending} pending work for Xcr8. Make we sort am out?"
+        prompt = f"Help me work through my pending tasks. I have {drafts} drafts and {scheduled} scheduled posts."
+    else:
+        message = f"You have {total_pending} pending items in Xcr8. Want me to help you clear them?"
+        prompt = f"Help me work through my pending tasks. I have {drafts} drafts and {scheduled} scheduled posts waiting."
+
+    return Cr8orAIAlert(
+        title="Cr8or AI noticed pending work",
+        message=message,
+        prompt=prompt,
+        trend_titles=[],
+        language=language or "english",
+    )
+
+
+def _localized_inactive_alert(language: str, inactive_days: int) -> Cr8orAIAlert:
+    if language == "nigerian_pidgin":
+        message = f"You never really dey active for like {inactive_days} days. Wetin dey block you? Make I help you restart."
+        prompt = f"I have been inactive for about {inactive_days} days. Help me restart with the easiest high-impact next move."
+    elif language == "yoruba":
+        message = f"O dabi pe o ti dakẹ fun bii ojo {inactive_days}. Kini n di e mu? Je ki n ran e lowo lati bere si i tun."
+        prompt = f"I have been inactive for about {inactive_days} days. Help me restart with the easiest high-impact next move."
+    elif language == "code_switch":
+        message = f"You have been quiet for about {inactive_days} days. Wetin happen? Make I help you bounce back."
+        prompt = f"I have been inactive for about {inactive_days} days. Help me restart with the easiest high-impact next move."
+    else:
+        message = f"You have been inactive for about {inactive_days} days. What is blocking you? Want me to help you restart?"
+        prompt = f"I have been inactive for about {inactive_days} days. Help me restart with the easiest high-impact next move."
+
+    return Cr8orAIAlert(
+        title="Cr8or AI checked in on you",
+        message=message,
+        prompt=prompt,
+        trend_titles=[],
+        language=language or "english",
+    )
+
+
 @router.get("/overview/{user_id}", response_model=DashboardOverview)
 def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     user = db.get(User, user_id)
@@ -119,11 +166,13 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         )
     )
 
-    recent_posts_query = db.scalars(
+    recent_post_records = list(
+        db.scalars(
         select(ContentPost)
         .where(ContentPost.user_id == user_id)
         .order_by(ContentPost.created_at.desc())
         .limit(5)
+        )
     )
     recent_posts = [
         {
@@ -133,7 +182,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
             "created_at": post.created_at.isoformat(),
             "media_url": post.media_url,
         }
-        for post in recent_posts_query
+        for post in recent_post_records
     ]
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user_id))
@@ -155,12 +204,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     if len(trend_titles) < 3:
         trend_titles = _fallback_trend_titles(str(niche_label), str(personality_label))
 
-    cr8or_ai_alert = _localized_alert(
-        str(user.language or "english").strip().lower(),
-        str(niche_label),
-        str(personality_label),
-        trend_titles,
-    )
+    user_language = str(user.language or "english").strip().lower()
 
     platforms = db.scalars(
         select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id).limit(8)
@@ -204,6 +248,30 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     most_used_template = (
         max(template_versions.items(), key=lambda item: item[1])[0] if template_versions else "unknown"
     )
+
+    latest_post_time = recent_post_records[0].created_at if recent_post_records else None
+    latest_generation_time = ai_rows[0].created_at if ai_rows else None
+    last_activity_at = max(
+        [value for value in [latest_post_time, latest_generation_time] if value is not None],
+        default=None,
+    )
+    if last_activity_at and last_activity_at.tzinfo is None:
+        last_activity_at = last_activity_at.replace(tzinfo=UTC)
+    inactive_days = (
+        max(0, (datetime.now(tz=UTC) - last_activity_at).days) if last_activity_at else 0
+    )
+
+    if inactive_days >= 5:
+        cr8or_ai_alert = _localized_inactive_alert(user_language, inactive_days)
+    elif (drafts or 0) + (scheduled or 0) >= 2:
+        cr8or_ai_alert = _localized_pending_alert(user_language, drafts or 0, scheduled or 0)
+    else:
+        cr8or_ai_alert = _localized_alert(
+            user_language,
+            str(niche_label),
+            str(personality_label),
+            trend_titles,
+        )
 
     return DashboardOverview(
         greeting="Good evening" if datetime.utcnow().hour >= 12 else "Good morning",

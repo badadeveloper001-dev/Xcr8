@@ -180,6 +180,14 @@ def _detect_message_language(message: str, fallback_language: str = "english") -
         "don",
         "comot",
         "make we",
+        "na who",
+        "e be like",
+        "dem",
+        "go just",
+        "wey",
+        "dey happen",
+        "no fit",
+        "you sabi",
     ]
     french_words = ["bonjour", "merci", "s'il", "avec", "pour", "vous", "nous", "est-ce", "francais"]
     spanish_words = ["hola", "gracias", "por favor", "como", "estoy", "quiero", "necesito", "usted"]
@@ -189,6 +197,8 @@ def _detect_message_language(message: str, fallback_language: str = "english") -
         return "yoruba"
     if sum(word in lowered for word in pidgin_words) >= 2:
         return "nigerian_pidgin"
+    if sum(word in lowered for word in yoruba_words) >= 1 and sum(word in lowered for word in pidgin_words) >= 1:
+        return "code_switch"
     if sum(word in lowered for word in french_words) >= 2:
         return "french"
     if sum(word in lowered for word in spanish_words) >= 2:
@@ -525,11 +535,54 @@ def _build_creator_memory(
     else:
         audience_location = str(raw_audience_location).strip() if raw_audience_location else None
 
+    niches = [str(item).strip() for item in preferences.get("niches", []) if str(item).strip()]
+    creator_type = [str(item).strip() for item in preferences.get("creator_type", []) if str(item).strip()]
+    content_goals = [str(item).strip() for item in preferences.get("content_goals", []) if str(item).strip()]
+    posting_frequency = [str(item).strip() for item in preferences.get("posting_frequency", []) if str(item).strip()]
+    platforms_used = [str(item).strip() for item in preferences.get("platforms_used", []) if str(item).strip()]
+    tones = [str(item).strip() for item in preferences.get("tones", []) if str(item).strip()]
+
+    onboarding_memory_keys = {
+        "onboarding_creator_type",
+        "onboarding_platforms",
+        "onboarding_niches",
+        "onboarding_audience_locations",
+        "onboarding_content_goals",
+        "onboarding_posting_frequency",
+        "onboarding_tones",
+        "onboarding_personality",
+    }
+    onboarding_memories = [
+        memory for memory in recent_memories if memory.memory_key in onboarding_memory_keys and memory.memory_value
+    ]
+
     memory_facts = [
         f"{memory.memory_key}: {memory.memory_value}"
         for memory in recent_memories
         if memory.memory_key and memory.memory_value
     ]
+
+    onboarding_summary_parts = [
+        f"niche: {', '.join(niches[:3])}" if niches else None,
+        f"personality: {personality}" if personality else None,
+        f"creator type: {', '.join(creator_type[:2])}" if creator_type else None,
+        f"content goals: {', '.join(content_goals[:3])}" if content_goals else None,
+        f"posting frequency: {', '.join(posting_frequency[:2])}" if posting_frequency else None,
+        f"platforms: {', '.join(platforms_used[:4])}" if platforms_used else None,
+        f"tones: {', '.join(tones[:3])}" if tones else None,
+        f"audience location: {audience_location}" if audience_location else None,
+    ]
+    onboarding_summary = "; ".join(part for part in onboarding_summary_parts if part)
+    known_user_profile = onboarding_summary or f"primary niche: {profile.niche if profile else prompt_seed}"
+
+    enriched_memory_facts = []
+    if onboarding_summary:
+        enriched_memory_facts.append(f"known profile: {onboarding_summary}")
+    enriched_memory_facts.extend(memory_facts)
+    if onboarding_memories:
+        enriched_memory_facts.extend(
+            f"{memory.memory_key}: {memory.memory_value}" for memory in onboarding_memories[:4]
+        )
 
     return {
         "tone": profile.tone if profile else "conversational",
@@ -540,7 +593,15 @@ def _build_creator_memory(
         "personality": personality,
         "audience_location": audience_location,
         "multilingual_profile": profile.multilingual_profile if profile else [payload_language],
-        "memory_facts": memory_facts,
+        "creator_type": creator_type,
+        "content_goals": content_goals,
+        "posting_frequency": posting_frequency,
+        "platforms_used": platforms_used,
+        "niches": niches,
+        "tones": tones,
+        "known_user_profile": known_user_profile,
+        "onboarding_summary": onboarding_summary,
+        "memory_facts": enriched_memory_facts[:10],
     }
 
 
@@ -548,13 +609,16 @@ def _build_assistant_context(db: Session, user: User, profile: CreatorProfile | 
     recent_memories = list(
         db.scalars(
             select(CreatorMemory)
-            .where(CreatorMemory.user_id == user.id)
+            .where(
+                CreatorMemory.user_id == user.id,
+                CreatorMemory.memory_type != ASSISTANT_CHAT_MEMORY_TYPE,
+            )
             .order_by(
                 desc(CreatorMemory.confidence_score),
                 desc(CreatorMemory.last_used_at),
                 desc(CreatorMemory.created_at),
             )
-            .limit(6)
+            .limit(12)
         )
     )
 
@@ -1062,13 +1126,16 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
     recent_memories = list(
         db.scalars(
             select(CreatorMemory)
-            .where(CreatorMemory.user_id == user.id)
+            .where(
+                CreatorMemory.user_id == user.id,
+                CreatorMemory.memory_type != ASSISTANT_CHAT_MEMORY_TYPE,
+            )
             .order_by(
                 desc(CreatorMemory.confidence_score),
                 desc(CreatorMemory.last_used_at),
                 desc(CreatorMemory.created_at),
             )
-            .limit(6)
+            .limit(12)
         )
     )
 

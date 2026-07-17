@@ -26,6 +26,8 @@ SYSTEM_PROMPT = (
     "If the user writes with emojis, you may use 1-3 relevant emojis naturally. "
     "If the user is serious, urgent, or sensitive, reduce humor and keep a supportive direct tone. "
     "Use app_context and creator_memory as source-of-truth; never invent unavailable facts. "
+    "If the user asks what you know about them, answer from onboarding, profile, memory, preferences, recent posts, and activity context before saying anything is missing. "
+    "When the latest message is in Nigerian Pidgin, Yoruba, or code-switch, stay in that language style naturally and do not switch back to formal English. "
     "If information is missing, say what is missing and provide the best safe next step. "
     "Prefer concrete outputs: short plan, checklist, sequence, or decision recommendation. "
     "If relevant tools/routes are available in app_context.feature_catalog, mention them accurately. "
@@ -258,6 +260,19 @@ def _stringify_actions(actions: list[str]) -> list[str]:
     return cleaned[:4]
 
 
+def _is_self_knowledge_question(message: str) -> bool:
+    lowered = str(message or "").strip().lower()
+    prompts = [
+        "what do you know about me",
+        "tell me about me",
+        "what do you know bout me",
+        "wetin you know about me",
+        "ki lo mo nipa mi",
+        "what do you know abeg",
+    ]
+    return any(prompt in lowered for prompt in prompts)
+
+
 def _build_fallback(payload: dict) -> dict:
     language = str(payload.get("language") or "english").strip() or "english"
     tone = str(payload.get("tone") or "conversational").strip() or "conversational"
@@ -267,6 +282,8 @@ def _build_fallback(payload: dict) -> dict:
     summary = app_context.get("summary") if isinstance(app_context.get("summary"), dict) else {}
     recent_posts = app_context.get("recent_posts") if isinstance(app_context.get("recent_posts"), list) else []
     memory_facts = creator_memory.get("memory_facts") if isinstance(creator_memory.get("memory_facts"), list) else []
+    onboarding_summary = str(creator_memory.get("onboarding_summary") or "").strip()
+    known_user_profile = str(creator_memory.get("known_user_profile") or "").strip()
 
     user_message = str(payload.get("message", "")).strip()
     recent_chat_turns = payload.get("recent_chat_turns") if isinstance(payload.get("recent_chat_turns"), list) else []
@@ -276,6 +293,43 @@ def _build_fallback(payload: dict) -> dict:
         token in user_message.lower()
         for token in ["economy", "inflation", "market", "geopolit", "interest rate", "gdp", "news"]
     )
+    is_self_knowledge = _is_self_knowledge_question(user_message)
+
+    if is_self_knowledge:
+        if language == "nigerian_pidgin":
+            message = "From wetin I know, "
+        elif language == "yoruba":
+            message = "Lati ohun ti mo mo nipa re, "
+        elif language == "code_switch":
+            message = "From wetin I know about you, "
+        else:
+            message = "From what I know about you, "
+
+        facts = []
+        if known_user_profile:
+            facts.append(known_user_profile)
+        facts.extend(str(item).strip() for item in memory_facts[:4] if str(item).strip())
+
+        if facts:
+            message += "; ".join(facts[:4]) + "."
+        else:
+            message += "I only have a light profile so far. Go through onboarding or create a bit more so I can personalize better."
+
+        return {
+            "assistant_message": message,
+            "follow_up_question": "",
+            "suggested_actions": _stringify_actions([
+                "Summarize my niche",
+                "Show what you know about my style",
+                "Map my profile to content ideas",
+            ]),
+            "language": language,
+            "tone": tone,
+            "model": "assistant-local-fallback",
+            "prompt_template_version": PROMPT_TEMPLATE_VERSION,
+            "latency_ms": 0,
+            "usage": {"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
+        }
 
     if is_general:
         if vibe_profile["mood"] == "playful":
