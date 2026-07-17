@@ -5,11 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
-import {
-  generateAiTrendMap,
-  getApiErrorMessage,
-  type AiTrendMapperResponse,
-} from "@/lib/api";
+import { generateAiTrendMap, getApiErrorMessage, type AiTrendMapperResponse } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 const platformOptions = [
@@ -112,7 +108,11 @@ export default function TrendMapperPage() {
                 </option>
               ))}
             </select>
-            <select value={goal} onChange={(event) => setGoal(event.target.value)} className="xcr8-input">
+            <select
+              value={goal}
+              onChange={(event) => setGoal(event.target.value)}
+              className="xcr8-input"
+            >
               {goals.map((item) => (
                 <option key={item} value={item}>
                   {item}
@@ -146,7 +146,7 @@ export default function TrendMapperPage() {
               type="button"
               onClick={() =>
                 openCr8orAi(
-                  `Use Trend Mapper context for topic \"${topic}\" and give me a 7-day action plan for ${platform}.`,
+                  `Use Trend Mapper context for topic "${topic}" and give me a 7-day action plan for ${platform}.`,
                 )
               }
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-300 transition hover:bg-white/10 light:text-slate-700"
@@ -164,12 +164,16 @@ export default function TrendMapperPage() {
 
         {trendResult ? (
           <section className="ai-stage p-4">
-            <p className="text-sm text-slate-400 light:text-slate-600">{signalCount} signals found</p>
+            <p className="text-sm text-slate-400 light:text-slate-600">
+              {signalCount} signals found
+            </p>
             <div className="mt-3 space-y-3">
               {trendResult.signals.map((signal, index) => (
                 <article key={`${signal.title}-${index}`} className="ai-chat-log rounded-2xl p-4">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-white light:text-slate-900">{signal.title}</p>
+                    <p className="text-sm font-semibold text-white light:text-slate-900">
+                      {signal.title}
+                    </p>
                   </div>
                   <p className="text-sm text-slate-300 light:text-slate-700">{signal.action}</p>
                   <div className="mt-3">

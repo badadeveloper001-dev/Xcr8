@@ -149,7 +149,7 @@ export default function SettingsPage() {
     setError(null);
     setOauthLoading(platform);
     try {
-      const response = await startPlatformOAuth(userId as number, platform);
+      const response = await startPlatformOAuth(userId, platform);
       // Redirect user to platform OAuth page
       window.location.href = response.auth_url;
     } catch (err) {

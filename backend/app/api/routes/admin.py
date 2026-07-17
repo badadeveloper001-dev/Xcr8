@@ -4,7 +4,7 @@ from threading import Lock
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 import httpx
-from sqlalchemy import case, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings

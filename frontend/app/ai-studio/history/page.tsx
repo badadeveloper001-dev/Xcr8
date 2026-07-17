@@ -15,6 +15,22 @@ type HistoryItem = {
   createdAt: string;
 };
 
+function isHistoryItem(entry: unknown): entry is HistoryItem {
+  if (!entry || typeof entry !== "object") {
+    return false;
+  }
+
+  const candidate = entry as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.src === "string" &&
+    typeof candidate.downloadName === "string" &&
+    typeof candidate.prompt === "string" &&
+    typeof candidate.createdAt === "string"
+  );
+}
+
 const HISTORY_LIMIT = 30;
 
 export default function ImageHistoryPage() {
@@ -50,25 +66,7 @@ export default function ImageHistoryPage() {
         return;
       }
 
-      const safe = parsed
-        .filter(
-          (entry): entry is HistoryItem =>
-            typeof entry === "object" &&
-            entry !== null &&
-            "id" in entry &&
-            "title" in entry &&
-            "src" in entry &&
-            "downloadName" in entry &&
-            "prompt" in entry &&
-            "createdAt" in entry &&
-            typeof entry.id === "string" &&
-            typeof entry.title === "string" &&
-            typeof entry.src === "string" &&
-            typeof entry.downloadName === "string" &&
-            typeof entry.prompt === "string" &&
-            typeof entry.createdAt === "string",
-        )
-        .slice(0, HISTORY_LIMIT);
+      const safe = parsed.filter(isHistoryItem).slice(0, HISTORY_LIMIT);
 
       setHistory(safe);
     } catch {

@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, ImagePlus, RefreshCw, Upload } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
-import { useCreatorStore } from "@/lib/store";
 
 type GenerationMode = "text-to-image" | "image-enhance";
 
@@ -39,6 +38,22 @@ type HistoryImage = {
     realism: RealismLevel;
   };
 };
+
+function isHistoryImage(entry: unknown): entry is HistoryImage {
+  if (!entry || typeof entry !== "object") {
+    return false;
+  }
+
+  const candidate = entry as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.src === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.downloadName === "string" &&
+    typeof candidate.prompt === "string" &&
+    typeof candidate.createdAt === "string"
+  );
+}
 
 type RealismLevel = "balanced" | "realistic" | "ultra";
 type CameraAngle = "eye-level" | "low-angle" | "overhead" | "close-up";
@@ -216,7 +231,6 @@ function blobToPreviewDataUrl(blob: Blob): Promise<string> {
 }
 
 export default function ImageGeneratorPage() {
-  const userId = useCreatorStore((s) => s.userId);
   const historyStorageKey = useMemo(() => buildHistoryStorageKey(), []);
 
   const [subject, setSubject] = useState(defaultPreset.subject);
@@ -259,25 +273,7 @@ export default function ImageGeneratorPage() {
         return;
       }
 
-      const safe = parsed
-        .filter(
-          (entry): entry is HistoryImage =>
-            typeof entry === "object" &&
-            entry !== null &&
-            "id" in entry &&
-            "src" in entry &&
-            "title" in entry &&
-            "downloadName" in entry &&
-            "prompt" in entry &&
-            "createdAt" in entry &&
-            typeof entry.id === "string" &&
-            typeof entry.src === "string" &&
-            typeof entry.title === "string" &&
-            typeof entry.downloadName === "string" &&
-            typeof entry.prompt === "string" &&
-            typeof entry.createdAt === "string",
-        )
-        .slice(0, HISTORY_LIMIT);
+      const safe = parsed.filter(isHistoryImage).slice(0, HISTORY_LIMIT);
 
       setHistory(safe);
     } catch {

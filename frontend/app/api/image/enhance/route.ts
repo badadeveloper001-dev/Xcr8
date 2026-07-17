@@ -87,12 +87,10 @@ function buildTransformPreset(level: string, style: string) {
 export async function POST(request: Request) {
   const formData = await request.formData();
   const file = formData.get("file");
-  const level = String(formData.get("level") || "realistic")
-    .trim()
-    .toLowerCase();
-  const style = String(formData.get("style") || "clean-up")
-    .trim()
-    .toLowerCase();
+  const rawLevel = formData.get("level");
+  const rawStyle = formData.get("style");
+  const level = (typeof rawLevel === "string" ? rawLevel : "realistic").trim().toLowerCase();
+  const style = (typeof rawStyle === "string" ? rawStyle : "clean-up").trim().toLowerCase();
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No source image provided." }, { status: 400 });
