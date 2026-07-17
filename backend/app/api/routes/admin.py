@@ -111,6 +111,53 @@ def _supabase_user_series(auth_users: list[dict], now: datetime) -> tuple[int, i
     return auth_total, auth_onboarded, auth_active_7d, _daily_series(recent_created_rows, now)
 
 
+def _sync_auth_users_into_app(db: Session, auth_users: list[dict]) -> None:
+    if not auth_users:
+        return
+
+    existing_users = {
+        str(user.email or "").strip().lower(): user
+        for user in db.scalars(select(User)).all()
+        if str(user.email or "").strip()
+    }
+
+    created_or_updated = False
+
+    for auth_user in auth_users:
+        email = str(auth_user.get("email") or "").strip().lower()
+        if not email:
+            continue
+
+        user_metadata = auth_user.get("user_metadata") if isinstance(auth_user.get("user_metadata"), dict) else {}
+        app_metadata = auth_user.get("app_metadata") if isinstance(auth_user.get("app_metadata"), dict) else {}
+        display_name = str(user_metadata.get("full_name") or user_metadata.get("name") or email.split("@", 1)[0]).strip() or "Creator"
+        onboarding_complete = bool(user_metadata.get("onboarding_complete") or app_metadata.get("onboarding_complete"))
+
+        existing = existing_users.get(email)
+        if not existing:
+            candidate = User(
+                email=email,
+                display_name=display_name,
+                onboarding_complete=onboarding_complete,
+            )
+            db.add(candidate)
+            existing_users[email] = candidate
+            created_or_updated = True
+            continue
+
+        next_display = str(existing.display_name or "").strip()
+        if not next_display or next_display == email.split("@", 1)[0]:
+            existing.display_name = display_name
+            created_or_updated = True
+        if onboarding_complete and not existing.onboarding_complete:
+            existing.onboarding_complete = True
+            created_or_updated = True
+        db.add(existing)
+
+    if created_or_updated:
+        db.commit()
+
+
 def _resolve_client_id(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -269,6 +316,12 @@ def admin_overview(
     ]
 
     auth_users = _fetch_supabase_auth_users()
+    _sync_auth_users_into_app(db, auth_users)
+
+    total_users = db.scalar(select(func.count(User.id))) or total_users
+    onboarded_users = db.scalar(select(func.count(User.id)).where(User.onboarding_complete.is_(True))) or onboarded_users
+    active_users_7d = db.scalar(select(func.count(User.id)).where(User.updated_at >= last_7_days)) or active_users_7d
+
     auth_total_users, auth_onboarded_users, auth_active_users_7d, auth_user_series = _supabase_user_series(
         auth_users,
         now,
