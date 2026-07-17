@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ADMIN_PREFIX = "admin.";
+const ADMIN_PREFIX_DOT = "admin.";
+const ADMIN_PREFIX_DASH = "admin-";
 
 function isInternalPath(pathname: string) {
   return (
@@ -14,7 +15,7 @@ function isInternalPath(pathname: string) {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = request.headers.get("host")?.toLowerCase() ?? "";
-  const isAdminHost = host.startsWith(ADMIN_PREFIX);
+  const isAdminHost = host.startsWith(ADMIN_PREFIX_DOT) || host.startsWith(ADMIN_PREFIX_DASH);
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
 
   if (isAdminHost && !isInternalPath(pathname)) {

@@ -68,6 +68,11 @@ export type AdminTopCreatorItem = {
   published: number;
 };
 
+export type AdminSeriesPoint = {
+  date: string;
+  value: number;
+};
+
 export type AdminOverviewPayload = {
   generated_at: string;
   total_users: number;
@@ -80,6 +85,9 @@ export type AdminOverviewPayload = {
   ai_generations: number;
   trend_signals: number;
   top_creators: AdminTopCreatorItem[];
+  users_created_7d: AdminSeriesPoint[];
+  posts_created_7d: AdminSeriesPoint[];
+  ai_generations_7d: AdminSeriesPoint[];
 };
 
 export type PasswordResetPayload = {

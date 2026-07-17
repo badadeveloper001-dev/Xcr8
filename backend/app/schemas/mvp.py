@@ -134,6 +134,11 @@ class AdminTopCreatorItem(BaseModel):
     published: int
 
 
+class AdminSeriesPoint(BaseModel):
+    date: str
+    value: int
+
+
 class AdminOverview(BaseModel):
     generated_at: str
     total_users: int
@@ -146,6 +151,9 @@ class AdminOverview(BaseModel):
     ai_generations: int
     trend_signals: int
     top_creators: list[AdminTopCreatorItem] = Field(default_factory=list)
+    users_created_7d: list[AdminSeriesPoint] = Field(default_factory=list)
+    posts_created_7d: list[AdminSeriesPoint] = Field(default_factory=list)
+    ai_generations_7d: list[AdminSeriesPoint] = Field(default_factory=list)
 
 
 class DistributionCreateRequest(BaseModel):

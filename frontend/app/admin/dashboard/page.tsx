@@ -28,6 +28,41 @@ function StatCard({
   );
 }
 
+function MiniBarChart({
+  title,
+  points,
+  colorClass,
+}: {
+  title: string;
+  points: Array<{ date: string; value: number }>;
+  colorClass: string;
+}) {
+  const maxValue = Math.max(...points.map((point) => point.value), 1);
+
+  return (
+    <article className="xcr8-panel rounded-2xl p-4">
+      <h3 className="mb-3 text-sm font-semibold text-white light:text-slate-900">{title}</h3>
+      <div className="flex h-32 items-end gap-2 rounded-xl border border-white/10 bg-white/5 p-3 light:border-slate-200 light:bg-slate-50">
+        {points.map((point) => {
+          const heightPercent = Math.max(8, Math.round((point.value / maxValue) * 100));
+          const label = point.date.slice(5);
+          return (
+            <div key={`${title}-${point.date}`} className="flex flex-1 flex-col items-center gap-1">
+              <span className="text-[10px] text-slate-400">{point.value}</span>
+              <div
+                className={`w-full rounded-md ${colorClass}`}
+                style={{ height: `${heightPercent}%` }}
+                title={`${point.date}: ${point.value}`}
+              />
+              <span className="text-[10px] text-slate-500">{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
 
@@ -145,6 +180,24 @@ export default function AdminDashboardPage() {
               ) : null}
             </div>
           </article>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <MiniBarChart
+            title="New Users (7d)"
+            points={data?.users_created_7d ?? []}
+            colorClass="bg-cyan-500/70"
+          />
+          <MiniBarChart
+            title="Posts Created (7d)"
+            points={data?.posts_created_7d ?? []}
+            colorClass="bg-violet-500/70"
+          />
+          <MiniBarChart
+            title="AI Generations (7d)"
+            points={data?.ai_generations_7d ?? []}
+            colorClass="bg-emerald-500/70"
+          />
         </section>
       </div>
     </main>
