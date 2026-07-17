@@ -14,6 +14,7 @@ from app.db.deps import get_db
 from app.db.models import AuthCredential, CreatorMemory, CreatorProfile, User
 from app.schemas.mvp import (
     AvatarUpdateRequest,
+    AuthGoogleTokenRequest,
     AuthProfileUpdateRequest,
     AuthLoginRequest,
     AuthSignupLinkVerifyRequest,
@@ -31,6 +32,7 @@ from app.services.auth import (
     SupabaseAuthError,
     supabase_request_password_reset,
     supabase_admin_confirm_email,
+    supabase_get_user,
     supabase_sign_in,
     supabase_update_password,
     supabase_verify_email_link,
@@ -574,6 +576,97 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
     credential.remember_me_default = payload.remember_me
     db.commit()
     db.refresh(user)
+    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    return _session_payload(user, credential, profile)
+
+
+@router.post("/google/session", response_model=AuthSessionResponse)
+def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    try:
+        auth_user = supabase_get_user(str(payload.access_token).strip())
+    except SupabaseAuthError as exc:
+        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+
+    normalized_email = _normalize_email(str(auth_user.get("email") or ""))
+    if not normalized_email:
+        raise HTTPException(status_code=400, detail="Google account is missing email.")
+
+    user_meta = auth_user.get("user_metadata") if isinstance(auth_user, dict) else {}
+    if not isinstance(user_meta, dict):
+        user_meta = {}
+
+    full_name = str(user_meta.get("full_name") or normalized_email.split("@")[0]).strip()
+    username_seed = str(user_meta.get("user_name") or user_meta.get("preferred_username") or normalized_email.split("@")[0])
+
+    user = db.scalar(select(User).where(User.email == normalized_email))
+    if not user:
+        user = User(
+            email=normalized_email,
+            display_name=full_name,
+            onboarding_complete=False,
+        )
+        db.add(user)
+        db.flush()
+
+        placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
+        credential = AuthCredential(
+            user_id=user.id,
+            username=_ensure_unique_username(db, username_seed),
+            full_name=full_name,
+            password_salt=placeholder_salt,
+            password_hash=placeholder_hash,
+            remember_me_default=True,
+        )
+        db.add(credential)
+
+        profile = CreatorProfile(
+            user_id=user.id,
+            multilingual_profile=[user.language],
+            preferences={
+                "email_code_verified": True,
+                "email_verification_method": "google_oauth",
+                "email_verified_at": datetime.now(tz=UTC).isoformat(),
+            },
+        )
+        db.add(profile)
+    else:
+        if not user.display_name or user.display_name == normalized_email.split("@")[0]:
+            user.display_name = full_name
+
+        credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
+        if not credential:
+            placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
+            credential = AuthCredential(
+                user_id=user.id,
+                username=_ensure_unique_username(db, username_seed),
+                full_name=full_name,
+                password_salt=placeholder_salt,
+                password_hash=placeholder_hash,
+                remember_me_default=True,
+            )
+            db.add(credential)
+
+        profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+        if not profile:
+            profile = CreatorProfile(
+                user_id=user.id,
+                multilingual_profile=[user.language],
+                preferences={},
+            )
+            db.add(profile)
+
+        profile.preferences = {
+            **(profile.preferences or {}),
+            "email_code_verified": True,
+            "email_verification_method": "google_oauth",
+            "email_verified_at": datetime.now(tz=UTC).isoformat(),
+        }
+        db.add(profile)
+
+    db.commit()
+    db.refresh(user)
+
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
     return _session_payload(user, credential, profile)

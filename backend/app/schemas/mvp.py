@@ -37,6 +37,10 @@ class AuthLoginRequest(BaseModel):
     remember_me: bool = False
 
 
+class AuthGoogleTokenRequest(BaseModel):
+    access_token: str = Field(min_length=20, max_length=4096)
+
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr
 

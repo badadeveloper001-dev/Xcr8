@@ -129,6 +129,36 @@ def supabase_sign_in(email: str, password: str) -> dict:
     return response.json()
 
 
+def supabase_get_user(access_token: str) -> dict:
+    if not settings.supabase_url.strip() or not settings.supabase_anon_key.strip():
+        raise SupabaseAuthError(
+            detail="Authentication service is not configured. Please contact support.",
+            status_code=503,
+        )
+
+    with httpx.Client(timeout=15.0) as client:
+        try:
+            response = client.get(
+                f"{settings.supabase_url}/auth/v1/user",
+                headers={
+                    "apikey": settings.supabase_anon_key,
+                    "Authorization": f"Bearer {access_token}",
+                },
+            )
+        except httpx.RequestError as exc:
+            raise SupabaseAuthError(
+                detail="Authentication service is temporarily unavailable. Please try again.",
+                status_code=503,
+            ) from exc
+
+    if response.status_code >= 400:
+        _raise_auth_error(response, "Invalid or expired Google session.")
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise SupabaseAuthError(detail="Invalid Google user payload.", status_code=400)
+    return payload
+
+
 def supabase_request_email_otp(email: str) -> None:
     if not settings.supabase_url.strip() or not settings.supabase_anon_key.strip():
         raise SupabaseAuthError(

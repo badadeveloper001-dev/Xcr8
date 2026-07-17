@@ -54,6 +54,10 @@ export type LoginPayload = {
   remember_me: boolean;
 };
 
+export type GoogleSessionPayload = {
+  access_token: string;
+};
+
 export type PasswordResetPayload = {
   email: string;
 };
@@ -479,6 +483,11 @@ export async function verifySignupPassword(
 
 export async function login(payload: LoginPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/login", payload);
+  return data;
+}
+
+export async function loginWithGoogle(payload: GoogleSessionPayload): Promise<SessionPayload> {
+  const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/google/session", payload);
   return data;
 }
 

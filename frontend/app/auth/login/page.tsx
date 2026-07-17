@@ -65,7 +65,11 @@ export default function LoginPage() {
       setError("Google auth is not configured yet.");
       return;
     }
-    await supabaseClient.auth.signInWithOAuth({ provider: "google" });
+    const redirectTo = `${window.location.origin}/auth/google/callback`;
+    await supabaseClient.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
   };
 
   return (
