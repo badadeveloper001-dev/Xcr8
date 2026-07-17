@@ -15,6 +15,7 @@ from app.db.models import (
     TrendSignalEvent,
     User,
 )
+from app.api.routes.intelligence import _profile_interests, _refresh_local_signals
 from app.schemas.mvp import Cr8orAIAlert, DashboardOverview, PlatformConnection
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -29,24 +30,6 @@ def _clean_list(value: object) -> list[str]:
         if text:
             cleaned.append(text)
     return cleaned
-
-
-def _fallback_trend_titles(niche: str, personality: str) -> list[str]:
-    niche_label = niche or "creator"
-    personality_label = personality.lower()
-    titles = [
-        f"Behind-the-scenes {niche_label} storytelling",
-        f"Mini-series explainers for {niche_label}",
-        f"Audience choice hooks around {niche_label}",
-    ]
-
-    if any(token in personality_label for token in ["fun", "humor", "play", "bold"]):
-        titles[0] = f"Relatable POV takes in {niche_label}"
-        titles[2] = f"Funny hot takes that fit {niche_label}"
-    elif any(token in personality_label for token in ["educat", "calm", "strategy"]):
-        titles[1] = f"Myth-vs-reality breakdowns in {niche_label}"
-
-    return titles[:3]
 
 
 def _localized_alert(language: str, niche: str, personality: str, trend_titles: list[str]) -> Cr8orAIAlert:
@@ -200,9 +183,28 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
             .limit(3)
         )
     )
+    latest_signal_time = trend_signal_rows[0].created_at if trend_signal_rows else None
+    if latest_signal_time and latest_signal_time.tzinfo is None:
+        latest_signal_time = latest_signal_time.replace(tzinfo=UTC)
+
+    should_refresh_trends = user.onboarding_complete and (
+        not trend_signal_rows
+        or not latest_signal_time
+        or (datetime.now(tz=UTC) - latest_signal_time).total_seconds() >= 12 * 60 * 60
+    )
+    if should_refresh_trends:
+        interests = _profile_interests(profile)
+        _refresh_local_signals(db, user, interests, "all")
+        trend_signal_rows = list(
+            db.scalars(
+                select(TrendSignalEvent)
+                .where(TrendSignalEvent.user_id == user_id, TrendSignalEvent.status != "dismissed")
+                .order_by(TrendSignalEvent.created_at.desc())
+                .limit(3)
+            )
+        )
+
     trend_titles = [row.title for row in trend_signal_rows if row.title.strip()][:3]
-    if len(trend_titles) < 3:
-        trend_titles = _fallback_trend_titles(str(niche_label), str(personality_label))
 
     user_language = str(user.language or "english").strip().lower()
 
@@ -261,11 +263,12 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         max(0, (datetime.now(tz=UTC) - last_activity_at).days) if last_activity_at else 0
     )
 
+    cr8or_ai_alert = None
     if inactive_days >= 5:
         cr8or_ai_alert = _localized_inactive_alert(user_language, inactive_days)
     elif (drafts or 0) + (scheduled or 0) >= 2:
         cr8or_ai_alert = _localized_pending_alert(user_language, drafts or 0, scheduled or 0)
-    else:
+    elif trend_titles:
         cr8or_ai_alert = _localized_alert(
             user_language,
             str(niche_label),
@@ -279,7 +282,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         platforms_connected=sum(1 for _ in platforms),
         drafts=drafts or 0,
         scheduled=scheduled or 0,
-        ai_suggestions=len(cr8or_ai_alert.trend_titles),
+        ai_suggestions=len(cr8or_ai_alert.trend_titles) if cr8or_ai_alert else 0,
         recent_posts=recent_posts,
         ai_insights=[
             {
