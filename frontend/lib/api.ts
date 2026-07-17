@@ -579,6 +579,20 @@ export async function updateAdminIncident(
   return data;
 }
 
+export async function triggerAdminTestIncident(accessCode: string): Promise<PulseIncidentItem> {
+  const { data } = await apiClient.post<PulseIncidentItem>(
+    "/admin/data/incidents/test",
+    {},
+    {
+      headers: {
+        "x-admin-code": accessCode,
+      },
+      timeout: 30_000,
+    },
+  );
+  return data;
+}
+
 export async function requestPasswordReset(
   payload: PasswordResetPayload,
 ): Promise<{ message: string; reset_url?: string | null }> {

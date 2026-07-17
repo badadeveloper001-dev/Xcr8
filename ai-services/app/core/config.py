@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     ai_service_port: int = 8100
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_image_model: str = "gpt-image-1"
     pinecone_api_key: str = ""
     pinecone_environment: str = "us-east-1-aws"
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/xcr8"

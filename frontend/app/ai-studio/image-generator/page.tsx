@@ -108,12 +108,7 @@ const cleanPhotorealismDirective =
 const qualityNegativeDirectives =
   "blurry, soft focus, low resolution, noisy image, jpeg artifacts, cartoon, painting, illustration, cgi, wax skin, deformed face, extra fingers, extra limbs, duplicate people, asymmetrical eyes, broken teeth, distorted anatomy, text overlay, watermark, logo";
 
-const variationLabels = ["Hero", "Alternative A", "Alternative B"] as const;
-const variationDirections = [
-  "hero framing, premium composition",
-  "alternative framing, changed angle",
-  "alternative framing, changed spacing",
-] as const;
+const primaryDirection = "hero framing, premium composition, single subject focus";
 
 const enhancementStyleLabels: Record<EnhancementStyle, string> = {
   "clean-up": "Clean up",
@@ -425,33 +420,30 @@ export default function ImageGeneratorPage() {
       qualityNegativeDirectives,
     ].join(", ");
 
-  const generateVariation = async (
-    label: string,
-    index: number,
+  const generatePrimaryImage = async (
     cleanSubject: string,
     cleanMood: string,
     cleanPalette: string,
   ): Promise<GeneratedImage> => {
-    const direction = variationDirections[index] ?? "alternative framing";
-    const prompt = buildPrompt(cleanSubject, cleanMood, cleanPalette, direction);
+    const prompt = buildPrompt(cleanSubject, cleanMood, cleanPalette, primaryDirection);
     const dimensions = getDimensions(ratio, realism);
-    const seed = Date.now() + index * 97;
+    const seed = Date.now();
     const resolved = await resolveImageBlobUrl(
       prompt,
       dimensions.width,
       dimensions.height,
       seed,
-      realismAttempts[realism],
+      Math.max(realismAttempts[realism] + 1, 4),
     );
     const now = new Date().toISOString();
 
     return {
-      id: `${seed}-${index}`,
+      id: `${seed}-single`,
       kind: "text-to-image",
-      title: label,
+      title: "Generated image",
       src: resolved.blobUrl,
       historySrc: resolved.historySrc,
-      downloadName: `xcr8-${useCase}-${style}-${ratio.replace(":", "x")}-${index + 1}.png`,
+      downloadName: `xcr8-${useCase}-${style}-${ratio.replace(":", "x")}-hd.png`,
       prompt,
       createdAt: now,
     };
@@ -546,33 +538,19 @@ export default function ImageGeneratorPage() {
     }
     setImages([]);
 
-    const settled = await Promise.allSettled(
-      variationLabels.map((label, index) =>
-        generateVariation(label, index, cleanSubject, cleanMood, cleanPalette),
-      ),
-    );
+    setPromptPreview(buildPrompt(cleanSubject, cleanMood, cleanPalette, primaryDirection));
 
-    setPromptPreview(buildPrompt(cleanSubject, cleanMood, cleanPalette, variationDirections[0]));
-
-    const built: GeneratedImage[] = [];
-    for (const item of settled) {
-      if (item.status === "fulfilled") {
-        built.push(item.value);
-      }
-    }
-
-    if (built.length === 0) {
-      setError("Could not generate images right now. Please try again.");
-    } else {
-      setImages(built);
+    try {
+      const built = await generatePrimaryImage(cleanSubject, cleanMood, cleanPalette);
+      setImages([built]);
       setHistory((previous) => {
-        const newEntries: HistoryImage[] = built.map((item) => ({
-          id: item.id,
-          title: item.title,
-          src: item.historySrc,
-          downloadName: item.downloadName,
-          prompt: item.prompt,
-          createdAt: item.createdAt,
+        const newEntry: HistoryImage = {
+          id: built.id,
+          title: built.title,
+          src: built.historySrc,
+          downloadName: built.downloadName,
+          prompt: built.prompt,
+          createdAt: built.createdAt,
           settings: {
             mode: "text-to-image",
             subject: cleanSubject,
@@ -585,21 +563,18 @@ export default function ImageGeneratorPage() {
             useCase,
             realism,
           },
-        }));
+        };
 
-        return [...newEntries, ...previous].slice(0, HISTORY_LIMIT);
+        return [newEntry, ...previous].slice(0, HISTORY_LIMIT);
       });
-      if (built.length < variationLabels.length) {
-        setError(
-          `Generated ${built.length} of ${variationLabels.length} images. Please regenerate for more.`,
-        );
-      }
+    } catch {
+      setError("Could not generate images right now. Please try again.");
     }
 
     setGenerating(false);
   };
 
-  const handleRegenerateVariation = async (target: GeneratedImage, index: number) => {
+  const handleRegenerateVariation = async (target: GeneratedImage) => {
     const cleanSubject = cleanText(subject);
     const cleanMood = cleanText(mood);
     const cleanPalette = cleanText(palette);
@@ -613,13 +588,7 @@ export default function ImageGeneratorPage() {
     setError(null);
 
     try {
-      const regenerated = await generateVariation(
-        variationLabels[index] ?? "Alternative",
-        index,
-        cleanSubject,
-        cleanMood,
-        cleanPalette,
-      );
+      const regenerated = await generatePrimaryImage(cleanSubject, cleanMood, cleanPalette);
 
       setImages((previous) =>
         previous.map((item) => {
@@ -932,10 +901,10 @@ export default function ImageGeneratorPage() {
             {generating
               ? mode === "image-enhance"
                 ? "Enhancing image..."
-                : "Generating images..."
+                : "Generating image..."
               : mode === "image-enhance"
                 ? "Enhance image"
-                : "Generate images"}
+                : "Generate image"}
           </button>
 
           {error ? (
@@ -950,7 +919,7 @@ export default function ImageGeneratorPage() {
           <p className="text-xs text-slate-500">
             {mode === "image-enhance"
               ? "Upload an existing image to clean it up, sharpen details, and improve overall polish."
-              : "Photorealism mode controls strictness and internal rerolls. Generated images are loaded as downloadable files to reduce broken renders."}
+              : "Generates one high-quality HD image at a time with stricter realism and cleaner output."}
           </p>
 
           {promptPreview ? (
@@ -962,7 +931,7 @@ export default function ImageGeneratorPage() {
 
         <div className="space-y-3.5">
           {images.length ? (
-            images.map((image, index) => (
+            images.slice(0, 1).map((image) => (
               <article key={image.id} className="ai-stage p-4">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 light:border-violet-500/20 light:bg-violet-50 light:text-violet-700">
                   <ImagePlus size={11} />
@@ -989,14 +958,14 @@ export default function ImageGeneratorPage() {
                     <button
                       type="button"
                       disabled={Boolean(regeneratingImageId)}
-                      onClick={() => void handleRegenerateVariation(image, index)}
+                      onClick={() => void handleRegenerateVariation(image)}
                       className="inline-flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-60"
                     >
                       <RefreshCw
                         size={12}
                         className={regeneratingImageId === image.id ? "animate-spin" : ""}
                       />
-                      {regeneratingImageId === image.id ? "Regenerating..." : "Regenerate this"}
+                      {regeneratingImageId === image.id ? "Regenerating..." : "Regenerate image"}
                     </button>
                   ) : null}
                 </div>
@@ -1006,7 +975,7 @@ export default function ImageGeneratorPage() {
             <div className="ai-stage p-4 text-sm text-slate-500 light:text-slate-600">
               {mode === "image-enhance"
                 ? "Your enhanced image will appear here with one-click download."
-                : "Generated images will appear here with one-click download."}
+                : "Your generated HD image will appear here with one-click download."}
             </div>
           )}
         </div>

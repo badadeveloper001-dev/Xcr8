@@ -174,3 +174,18 @@ class AssistantResponse(BaseModel):
     prompt_template_version: str
     latency_ms: int = 0
     usage: dict = Field(default_factory=dict)
+
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=4000)
+    width: int = Field(default=1024, ge=512, le=1792)
+    height: int = Field(default=1280, ge=512, le=1792)
+    quality: str = Field(default="high", max_length=24)
+
+
+class ImageGenerateResponse(BaseModel):
+    mime_type: str
+    image_base64: str
+    model: str
+    prompt_template_version: str
+    latency_ms: int = 0

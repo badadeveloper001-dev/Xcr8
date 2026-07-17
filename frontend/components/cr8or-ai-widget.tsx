@@ -9,15 +9,21 @@ export function Cr8orAiWidget() {
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
   const pathname = usePathname();
+  const isAdminHost =
+    typeof window !== "undefined" &&
+    (window.location.hostname.startsWith("admin.") ||
+      window.location.hostname.startsWith("admin-"));
 
   if (!hasHydrated || !userId) {
     return null;
   }
 
   const hideOnboardingWidget =
+    isAdminHost ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/welcome") ||
-    pathname.startsWith("/auth/");
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/admin");
 
   if (hideOnboardingWidget) {
     return null;

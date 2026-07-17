@@ -8,6 +8,7 @@ import {
   getAdminIncidents,
   getAdminOverview,
   getApiErrorMessage,
+  triggerAdminTestIncident,
   updateAdminIncident,
 } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -109,6 +110,14 @@ export default function AdminDashboardPage() {
       incidentId: number;
       status: "investigating" | "fixed";
     }) => updateAdminIncident(accessCode, incidentId, { status }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
+    },
+  });
+
+  const triggerTestIncidentMutation = useMutation({
+    mutationFn: () => triggerAdminTestIncident(accessCode),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
@@ -268,7 +277,17 @@ export default function AdminDashboardPage() {
                 Real-time platform issues detected from the main app backend.
               </p>
             </div>
-            {incidentsLoading ? <p className="text-sm text-slate-400">Refreshing...</p> : null}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => triggerTestIncidentMutation.mutate()}
+                disabled={triggerTestIncidentMutation.isPending}
+                className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/15 disabled:opacity-60"
+              >
+                {triggerTestIncidentMutation.isPending ? "Triggering..." : "Trigger test incident"}
+              </button>
+              {incidentsLoading ? <p className="text-sm text-slate-400">Refreshing...</p> : null}
+            </div>
           </div>
 
           {error ? (

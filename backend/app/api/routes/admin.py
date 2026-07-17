@@ -18,6 +18,7 @@ from app.schemas.mvp import (
     PulseStatusUpdateRequest,
 )
 from app.services.pulse import resolve_pulse_incident
+from app.services.pulse import record_pulse_event
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -421,6 +422,48 @@ def update_admin_incident(
         db.add(incident)
         db.commit()
         db.refresh(incident)
+
+    return PulseIncidentItem(
+        id=incident.id,
+        title=incident.title,
+        feature=incident.feature,
+        error_type=incident.error_type,
+        severity=incident.severity,
+        provider=incident.provider,
+        possible_reason=incident.possible_reason,
+        status=incident.status,
+        affected_users_count=incident.affected_users_count,
+        total_events_count=incident.total_events_count,
+        first_seen_at=incident.first_seen_at.isoformat() if incident.first_seen_at else "",
+        last_seen_at=incident.last_seen_at.isoformat() if incident.last_seen_at else "",
+        resolved_at=incident.resolved_at.isoformat() if incident.resolved_at else None,
+    )
+
+
+@router.post("/incidents/test", response_model=PulseIncidentItem)
+def trigger_test_incident(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> PulseIncidentItem:
+    _require_admin_access(x_admin_code, request)
+
+    event = record_pulse_event(
+        db,
+        {
+            "event_type": "error",
+            "feature": "pulse_test",
+            "route": "/api/v1/admin/incidents/test",
+            "method": "POST",
+            "http_status": 503,
+            "detail": "Manual Pulse test incident triggered from admin dashboard.",
+            "provider": "XCR8",
+            "event_meta": {"manual_test": True},
+        },
+    )
+    incident = db.get(PulseIncident, event.incident_id)
+    if not incident:
+        raise HTTPException(status_code=500, detail="Test incident was not created")
 
     return PulseIncidentItem(
         id=incident.id,
