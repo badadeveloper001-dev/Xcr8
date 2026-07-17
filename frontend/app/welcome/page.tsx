@@ -51,7 +51,7 @@ export default function WelcomePage() {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
               href="/auth/signup"
-              className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
+              className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 light:bg-cyan-600 light:text-white light:shadow-[0_10px_28px_rgba(8,145,178,0.3)] light:hover:bg-cyan-500 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
             >
               Get started
               <ArrowRight size={16} />

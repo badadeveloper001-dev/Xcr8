@@ -52,34 +52,28 @@ def _raise_auth_error(response: httpx.Response, fallback: str) -> None:
 
 
 def supabase_sign_up(email: str, password: str, metadata: dict | None = None) -> dict:
-    metadata_payload = metadata or {}
-    with httpx.Client(timeout=15.0) as client:
-        response = client.post(
-            f"{settings.supabase_url}/auth/v1/signup",
-            headers=_auth_headers(),
-            json={"email": email, "password": password, "data": metadata_payload},
+    if not settings.supabase_url.strip() or not settings.supabase_anon_key.strip():
+        raise SupabaseAuthError(
+            detail="Authentication service is not configured. Please contact support.",
+            status_code=503,
         )
 
-        if response.status_code < 400:
-            return response.json()
-
-        fallback_message = "Supabase signup failed"
+    metadata_payload = metadata or {}
+    with httpx.Client(timeout=15.0) as client:
         try:
-            payload = response.json()
-            message = payload.get("msg") or payload.get("message") or payload.get("error_description")
-            if isinstance(message, str) and message.strip():
-                fallback_message = message
-        except ValueError:
-            pass
+            response = client.post(
+                f"{settings.supabase_url}/auth/v1/signup",
+                headers=_auth_headers(),
+                json={"email": email, "password": password, "data": metadata_payload},
+            )
+        except httpx.RequestError as exc:
+            raise SupabaseAuthError(
+                detail="Authentication service is temporarily unavailable. Please try again.",
+                status_code=503,
+            ) from exc
 
-    if response.status_code in {429, 500, 502, 503, 504}:
-        return {
-            "id": f"fallback-{abs(hash(email))}",
-            "email": email,
-            "user_metadata": metadata_payload,
-            "created_at": "fallback",
-            "message": fallback_message,
-        }
+    if response.status_code < 400:
+        return response.json()
 
     _raise_auth_error(response, "Supabase signup failed")
 
@@ -122,43 +116,82 @@ def supabase_sign_in(email: str, password: str) -> dict:
 
 
 def supabase_request_email_otp(email: str) -> None:
+    if not settings.supabase_url.strip() or not settings.supabase_anon_key.strip():
+        raise SupabaseAuthError(
+            detail="Authentication service is not configured. Please contact support.",
+            status_code=503,
+        )
+
     last_response: httpx.Response | None = None
     with httpx.Client(timeout=15.0) as client:
-        for create_user in (False, True):
-            response = client.post(
-                f"{settings.supabase_url}/auth/v1/otp",
+        try:
+            # Prefer resend for signup users so they receive a fresh real verification code.
+            resend_response = client.post(
+                f"{settings.supabase_url}/auth/v1/resend",
                 headers=_auth_headers(),
                 json={
                     "email": email,
-                    "create_user": create_user,
+                    "type": "signup",
                 },
             )
-
-            if response.status_code < 400:
+            if resend_response.status_code < 400:
                 return
+            last_response = resend_response
 
-            last_response = response
             try:
-                payload = response.json()
-                message = payload.get("msg") or payload.get("message") or payload.get("error_description")
-                detail = str(message).strip() if isinstance(message, str) else ""
+                resend_payload = resend_response.json()
+                resend_message = (
+                    resend_payload.get("msg")
+                    or resend_payload.get("message")
+                    or resend_payload.get("error_description")
+                )
+                resend_detail = str(resend_message).strip() if isinstance(resend_message, str) else ""
             except ValueError:
-                detail = ""
+                resend_detail = ""
 
-            if _is_rate_limited(detail, response.status_code):
-                _raise_auth_error(response, "Too many email attempts. Please wait and retry.")
+            if _is_rate_limited(resend_detail, resend_response.status_code):
+                _raise_auth_error(resend_response, "Too many email attempts. Please wait and retry.")
 
-            if create_user is False:
-                lowered = detail.lower()
-                if (
-                    "not found" in lowered
-                    or "no user" in lowered
-                    or "sign up" in lowered
-                    or response.status_code == 422
-                ):
-                    continue
+            for create_user in (False, True):
+                response = client.post(
+                    f"{settings.supabase_url}/auth/v1/otp",
+                    headers=_auth_headers(),
+                    json={
+                        "email": email,
+                        "create_user": create_user,
+                    },
+                )
 
-            _raise_auth_error(response, "Could not send verification code.")
+                if response.status_code < 400:
+                    return
+
+                last_response = response
+                try:
+                    payload = response.json()
+                    message = payload.get("msg") or payload.get("message") or payload.get("error_description")
+                    detail = str(message).strip() if isinstance(message, str) else ""
+                except ValueError:
+                    detail = ""
+
+                if _is_rate_limited(detail, response.status_code):
+                    _raise_auth_error(response, "Too many email attempts. Please wait and retry.")
+
+                if create_user is False:
+                    lowered = detail.lower()
+                    if (
+                        "not found" in lowered
+                        or "no user" in lowered
+                        or "sign up" in lowered
+                        or response.status_code == 422
+                    ):
+                        continue
+
+                _raise_auth_error(response, "Could not send verification code.")
+        except httpx.RequestError as exc:
+            raise SupabaseAuthError(
+                detail="Authentication service is temporarily unavailable. Please try again.",
+                status_code=503,
+            ) from exc
 
     if last_response is not None:
         _raise_auth_error(last_response, "Could not send verification code.")

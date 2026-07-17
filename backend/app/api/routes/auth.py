@@ -45,6 +45,19 @@ def _is_auth_rate_limited(message: str, status_code: int) -> bool:
     return status_code == 429 or "rate limit" in lowered or "too many" in lowered
 
 
+def _is_supabase_user_exists_error(message: str, status_code: int) -> bool:
+    lowered = message.lower()
+    return (
+        status_code in {400, 409, 422}
+        and (
+            "already registered" in lowered
+            or "already exists" in lowered
+            or "user already" in lowered
+            or "already been registered" in lowered
+        )
+    )
+
+
 def _request_email_code_with_grace(email: str) -> str:
     try:
         supabase_request_email_otp(email)
@@ -196,31 +209,22 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
         "onboarding_complete": False,
     }
 
-    signup_result: dict | None = None
     try:
-        signup_result = supabase_sign_up(
+        supabase_sign_up(
             email=normalized_email,
             password=payload.password,
             metadata=metadata_payload,
         )
     except SupabaseAuthError as exc:
-        message = str(exc)
-        signup_result = {
-            "id": f"fallback-{abs(hash(normalized_email))}",
-            "email": normalized_email,
-            "user_metadata": metadata_payload,
-            "created_at": "fallback",
-            "message": message,
-        }
-
-    used_fallback_auth = bool(signup_result and signup_result.get("created_at") == "fallback")
+        if not _is_supabase_user_exists_error(str(exc), exc.status_code):
+            raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
 
     existing = db.scalar(select(User).where(User.email == normalized_email))
     if existing:
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == existing.id))
         profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == existing.id))
 
-        if _is_email_code_verified(profile) and not used_fallback_auth:
+        if _is_email_code_verified(profile):
             raise HTTPException(status_code=409, detail="Account already exists. Please log in.")
 
         desired_username = payload.username
@@ -252,8 +256,8 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
         if profile:
             profile.preferences = {
                 **(profile.preferences or {}),
-                "email_code_verified": used_fallback_auth,
-                "email_verification_method": "fallback" if used_fallback_auth else "pending",
+                "email_code_verified": False,
+                "email_verification_method": "pending",
             }
         db.commit()
         message = _request_email_code_with_grace(normalized_email)
@@ -290,8 +294,8 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
         user_id=user.id,
         multilingual_profile=[payload.language],
         preferences={
-            "email_code_verified": used_fallback_auth,
-            "email_verification_method": "fallback" if used_fallback_auth else "pending",
+            "email_code_verified": False,
+            "email_verification_method": "pending",
         },
     )
     db.add(profile)
@@ -300,7 +304,7 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
     message = _request_email_code_with_grace(normalized_email)
     return SignupResponse(
         message=message,
-        requires_verification=not used_fallback_auth,
+        requires_verification=True,
     )
 
 

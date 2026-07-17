@@ -31,6 +31,7 @@ const niches = [
   "lifestyle",
   "sports",
   "gaming",
+  "other",
 ];
 
 const audienceLocations = ["Nigeria", "US", "UK", "Global", "African diaspora"];
