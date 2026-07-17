@@ -3,6 +3,7 @@ from collections import defaultdict
 from threading import Lock
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+import httpx
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,90 @@ MAX_ADMIN_FAILED_ATTEMPTS = 5
 ADMIN_LOCKOUT_MINUTES = 15
 _admin_attempts_lock = Lock()
 _admin_attempts: dict[str, dict[str, int | str]] = {}
+
+
+def _supabase_admin_headers() -> dict[str, str] | None:
+    url = str(settings.supabase_url or "").strip()
+    key = str(settings.supabase_service_role_key or "").strip()
+    if not url or not key:
+        return None
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+
+def _fetch_supabase_auth_users() -> list[dict]:
+    headers = _supabase_admin_headers()
+    if not headers:
+        return []
+
+    collected: list[dict] = []
+    page = 1
+    per_page = 200
+    base_url = str(settings.supabase_url or "").rstrip("/")
+
+    with httpx.Client(timeout=15.0) as client:
+        while page <= 25:
+            response = client.get(
+                f"{base_url}/auth/v1/admin/users",
+                headers=headers,
+                params={"page": page, "per_page": per_page},
+            )
+            if response.status_code >= 400:
+                return collected
+
+            payload = response.json()
+            users = payload.get("users") if isinstance(payload, dict) else None
+            if not isinstance(users, list) or not users:
+                break
+
+            collected.extend(user for user in users if isinstance(user, dict))
+            if len(users) < per_page:
+                break
+            page += 1
+
+    return collected
+
+
+def _parse_supabase_dt(value: object) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    candidate = raw.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _supabase_user_series(auth_users: list[dict], now: datetime) -> tuple[int, int, int, list[AdminSeriesPoint]]:
+    auth_total = len(auth_users)
+    auth_onboarded = 0
+    auth_active_7d = 0
+    recent_created_rows: list[datetime] = []
+    last_7_days = now - timedelta(days=7)
+
+    for user in auth_users:
+        user_metadata = user.get("user_metadata") if isinstance(user.get("user_metadata"), dict) else {}
+        app_metadata = user.get("app_metadata") if isinstance(user.get("app_metadata"), dict) else {}
+
+        if bool(user_metadata.get("onboarding_complete")) or bool(app_metadata.get("onboarding_complete")):
+            auth_onboarded += 1
+
+        created_at = _parse_supabase_dt(user.get("created_at"))
+        if created_at and created_at >= last_7_days:
+            recent_created_rows.append(created_at)
+
+        last_seen = _parse_supabase_dt(user.get("last_sign_in_at")) or _parse_supabase_dt(user.get("updated_at"))
+        if last_seen and last_seen >= last_7_days:
+            auth_active_7d += 1
+
+    return auth_total, auth_onboarded, auth_active_7d, _daily_series(recent_created_rows, now)
 
 
 def _resolve_client_id(request: Request) -> str:
@@ -183,6 +268,21 @@ def admin_overview(
         for row in top_rows
     ]
 
+    auth_users = _fetch_supabase_auth_users()
+    auth_total_users, auth_onboarded_users, auth_active_users_7d, auth_user_series = _supabase_user_series(
+        auth_users,
+        now,
+    )
+
+    if auth_total_users > total_users:
+        total_users = auth_total_users
+    if auth_onboarded_users > onboarded_users:
+        onboarded_users = auth_onboarded_users
+    if auth_active_users_7d > active_users_7d:
+        active_users_7d = auth_active_users_7d
+
+    user_series = auth_user_series if auth_total_users > len(recent_user_rows) else _daily_series(recent_user_rows, now)
+
     return AdminOverview(
         generated_at=now.isoformat(),
         total_users=total_users,
@@ -197,7 +297,7 @@ def admin_overview(
         pulse_open_incidents=pulse_open_incidents,
         pulse_critical_incidents=pulse_critical_incidents,
         top_creators=top_creators,
-        users_created_7d=_daily_series(recent_user_rows, now),
+        users_created_7d=user_series,
         posts_created_7d=_daily_series(recent_post_rows, now),
         ai_generations_7d=_daily_series(recent_ai_rows, now),
     )
