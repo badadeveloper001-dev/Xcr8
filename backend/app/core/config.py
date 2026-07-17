@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
     signup_code_ttl_minutes: int = 10
     admin_access_code: str = "XCR800"
+    founder_alert_emails: str = ""
+    pulse_slack_webhook_url: str = ""
+    pulse_discord_webhook_url: str = ""
+    pulse_internal_token: str = ""
+    pulse_slow_request_ms: int = 6000
 
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"

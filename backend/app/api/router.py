@@ -10,6 +10,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.intelligence import router as intelligence_router
 from app.api.routes.memory import router as memory_router
 from app.api.routes.platforms import router as platforms_router
+from app.api.routes.pulse import router as pulse_router
 from app.api.routes.scheduling import router as scheduling_router
 from app.api.routes.social_publish import router as social_router
 from app.api.routes.upload import router as upload_router
@@ -24,6 +25,7 @@ api_router.include_router(scheduling_router)
 api_router.include_router(memory_router)
 api_router.include_router(analytics_router)
 api_router.include_router(ai_router)
+api_router.include_router(pulse_router)
 api_router.include_router(intelligence_router)
 api_router.include_router(platforms_router)
 api_router.include_router(social_router)

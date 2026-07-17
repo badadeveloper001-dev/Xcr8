@@ -8,8 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
-from app.db.models import AIGeneration, ContentPost, PostStatus, TrendSignalEvent, User
-from app.schemas.mvp import AdminOverview, AdminSeriesPoint, AdminTopCreatorItem
+from app.db.models import AIGeneration, ContentPost, PostStatus, PulseIncident, TrendSignalEvent, User
+from app.schemas.mvp import (
+    AdminOverview,
+    AdminSeriesPoint,
+    AdminTopCreatorItem,
+    PulseIncidentItem,
+    PulseStatusUpdateRequest,
+)
+from app.services.pulse import resolve_pulse_incident
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -124,6 +131,18 @@ def admin_overview(
 
     ai_generations = db.scalar(select(func.count(AIGeneration.id))) or 0
     trend_signals = db.scalar(select(func.count(TrendSignalEvent.id))) or 0
+    pulse_open_incidents = (
+        db.scalar(select(func.count(PulseIncident.id)).where(PulseIncident.status != "fixed")) or 0
+    )
+    pulse_critical_incidents = (
+        db.scalar(
+            select(func.count(PulseIncident.id)).where(
+                PulseIncident.status != "fixed",
+                PulseIncident.severity == "critical",
+            )
+        )
+        or 0
+    )
 
     recent_user_rows = list(
         db.scalars(select(User.created_at).where(User.created_at >= last_7_days))
@@ -175,8 +194,93 @@ def admin_overview(
         published_posts=published_posts,
         ai_generations=ai_generations,
         trend_signals=trend_signals,
+        pulse_open_incidents=pulse_open_incidents,
+        pulse_critical_incidents=pulse_critical_incidents,
         top_creators=top_creators,
         users_created_7d=_daily_series(recent_user_rows, now),
         posts_created_7d=_daily_series(recent_post_rows, now),
         ai_generations_7d=_daily_series(recent_ai_rows, now),
+    )
+
+
+@router.get("/incidents", response_model=list[PulseIncidentItem])
+def list_admin_incidents(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> list[PulseIncidentItem]:
+    _require_admin_access(x_admin_code, request)
+
+    incidents = list(
+        db.scalars(
+            select(PulseIncident)
+            .order_by(
+                case((PulseIncident.status != "fixed", 0), else_=1),
+                case((PulseIncident.severity == "critical", 0), else_=1),
+                desc(PulseIncident.last_seen_at),
+            )
+            .limit(60)
+        )
+    )
+
+    return [
+        PulseIncidentItem(
+            id=incident.id,
+            title=incident.title,
+            feature=incident.feature,
+            error_type=incident.error_type,
+            severity=incident.severity,
+            provider=incident.provider,
+            possible_reason=incident.possible_reason,
+            status=incident.status,
+            affected_users_count=incident.affected_users_count,
+            total_events_count=incident.total_events_count,
+            first_seen_at=incident.first_seen_at.isoformat() if incident.first_seen_at else "",
+            last_seen_at=incident.last_seen_at.isoformat() if incident.last_seen_at else "",
+            resolved_at=incident.resolved_at.isoformat() if incident.resolved_at else None,
+        )
+        for incident in incidents
+    ]
+
+
+@router.patch("/incidents/{incident_id}", response_model=PulseIncidentItem)
+def update_admin_incident(
+    incident_id: int,
+    payload: PulseStatusUpdateRequest,
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> PulseIncidentItem:
+    _require_admin_access(x_admin_code, request)
+
+    incident = db.get(PulseIncident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    if payload.status == "fixed":
+        incident = resolve_pulse_incident(db, incident_id, payload.resolution_summary)
+        if not incident:
+            raise HTTPException(status_code=404, detail="Incident not found")
+    else:
+        incident.status = payload.status
+        if payload.resolution_summary:
+            incident.resolution_summary = payload.resolution_summary
+        db.add(incident)
+        db.commit()
+        db.refresh(incident)
+
+    return PulseIncidentItem(
+        id=incident.id,
+        title=incident.title,
+        feature=incident.feature,
+        error_type=incident.error_type,
+        severity=incident.severity,
+        provider=incident.provider,
+        possible_reason=incident.possible_reason,
+        status=incident.status,
+        affected_users_count=incident.affected_users_count,
+        total_events_count=incident.total_events_count,
+        first_seen_at=incident.first_seen_at.isoformat() if incident.first_seen_at else "",
+        last_seen_at=incident.last_seen_at.isoformat() if incident.last_seen_at else "",
+        resolved_at=incident.resolved_at.isoformat() if incident.resolved_at else None,
     )

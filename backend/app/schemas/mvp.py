@@ -139,6 +139,42 @@ class AdminSeriesPoint(BaseModel):
     value: int
 
 
+class PulseIncidentItem(BaseModel):
+    id: int
+    title: str
+    feature: str
+    error_type: str
+    severity: str
+    provider: str | None = None
+    possible_reason: str
+    status: str
+    affected_users_count: int
+    total_events_count: int
+    first_seen_at: str
+    last_seen_at: str
+    resolved_at: str | None = None
+
+
+class PulseStatusUpdateRequest(BaseModel):
+    status: str = Field(pattern=r"^(investigating|fixed)$")
+    resolution_summary: str | None = Field(default=None, max_length=1000)
+
+
+class PulseEventIngestRequest(BaseModel):
+    event_type: str = Field(default="error", max_length=32)
+    feature: str | None = Field(default=None, max_length=80)
+    route: str | None = Field(default=None, max_length=220)
+    method: str | None = Field(default=None, max_length=12)
+    http_status: int | None = None
+    detail: str = Field(min_length=3, max_length=4000)
+    provider: str | None = Field(default=None, max_length=80)
+    request_id: str | None = Field(default=None, max_length=80)
+    response_ms: int | None = Field(default=None, ge=0)
+    user_id: int | None = None
+    affected_user_email: str | None = None
+    event_meta: dict = Field(default_factory=dict)
+
+
 class AdminOverview(BaseModel):
     generated_at: str
     total_users: int
@@ -150,6 +186,8 @@ class AdminOverview(BaseModel):
     published_posts: int
     ai_generations: int
     trend_signals: int
+    pulse_open_incidents: int = 0
+    pulse_critical_incidents: int = 0
     top_creators: list[AdminTopCreatorItem] = Field(default_factory=list)
     users_created_7d: list[AdminSeriesPoint] = Field(default_factory=list)
     posts_created_7d: list[AdminSeriesPoint] = Field(default_factory=list)

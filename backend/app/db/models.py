@@ -53,6 +53,8 @@ class User(Base):
     trend_signals: Mapped[list[TrendSignalEvent]] = relationship(back_populates="user")
     intelligence_feedback: Mapped[list[IntelligenceFeedback]] = relationship(back_populates="user")
     intelligence_notifications: Mapped[list[IntelligenceNotification]] = relationship(back_populates="user")
+    pulse_events: Mapped[list[PulseEvent]] = relationship(back_populates="user")
+    pulse_affected_incidents: Mapped[list[PulseAffectedUser]] = relationship(back_populates="user")
 
 
 class CreatorProfile(Base):
@@ -294,3 +296,91 @@ class IntelligenceNotification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     user: Mapped[User] = relationship(back_populates="intelligence_notifications")
+
+
+class PulseEvent(Base):
+    __tablename__ = "pulse_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    incident_id: Mapped[int | None] = mapped_column(ForeignKey("pulse_incidents.id"), index=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(32), default="error", index=True)
+    feature: Mapped[str] = mapped_column(String(80), default="unknown", index=True)
+    error_type: Mapped[str] = mapped_column(String(32), default="system_error", index=True)
+    severity: Mapped[str] = mapped_column(String(24), default="medium", index=True)
+    provider: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    detail: Mapped[str] = mapped_column(Text)
+    route: Mapped[str | None] = mapped_column(String(220), nullable=True, index=True)
+    method: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    fingerprint: Mapped[str] = mapped_column(String(160), index=True)
+    response_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    affected_user_email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    event_meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    incident: Mapped[PulseIncident | None] = relationship(back_populates="events")
+    user: Mapped[User | None] = relationship(back_populates="pulse_events")
+
+
+class PulseIncident(Base):
+    __tablename__ = "pulse_incidents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    feature: Mapped[str] = mapped_column(String(80), default="unknown", index=True)
+    error_type: Mapped[str] = mapped_column(String(32), default="system_error", index=True)
+    severity: Mapped[str] = mapped_column(String(24), default="medium", index=True)
+    provider: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    possible_reason: Mapped[str] = mapped_column(Text, default="Unknown")
+    status: Mapped[str] = mapped_column(String(24), default="investigating", index=True)
+    total_events_count: Mapped[int] = mapped_column(Integer, default=0)
+    affected_users_count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_founder_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    incident_meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True
+    )
+
+    events: Mapped[list[PulseEvent]] = relationship(back_populates="incident")
+    affected_users: Mapped[list[PulseAffectedUser]] = relationship(back_populates="incident")
+    notifications: Mapped[list[PulseNotification]] = relationship(back_populates="incident")
+
+
+class PulseAffectedUser(Base):
+    __tablename__ = "pulse_affected_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    incident_id: Mapped[int] = mapped_column(ForeignKey("pulse_incidents.id"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    latest_event_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    notified_issue_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notified_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="affected", index=True)
+
+    incident: Mapped[PulseIncident] = relationship(back_populates="affected_users")
+    user: Mapped[User | None] = relationship(back_populates="pulse_affected_incidents")
+
+
+class PulseNotification(Base):
+    __tablename__ = "pulse_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    incident_id: Mapped[int] = mapped_column(ForeignKey("pulse_incidents.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(32), index=True)
+    notification_type: Mapped[str] = mapped_column(String(32), index=True)
+    target: Mapped[str] = mapped_column(String(255), index=True)
+    delivery_status: Mapped[str] = mapped_column(String(24), default="sent", index=True)
+    response_meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    incident: Mapped[PulseIncident] = relationship(back_populates="notifications")

@@ -39,6 +39,11 @@
 - `SMTP_USE_SSL`: use implicit SSL (`true`/`false`)
 - `SIGNUP_CODE_TTL_MINUTES`: verification code expiry time in minutes (default `10`)
 - `ADMIN_ACCESS_CODE`: admin dashboard access code (default `XCR800`)
+- `FOUNDER_ALERT_EMAILS`: comma-separated founder emails for Pulse incident alerts
+- `PULSE_SLACK_WEBHOOK_URL`: optional Slack webhook for founder alerts
+- `PULSE_DISCORD_WEBHOOK_URL`: optional Discord webhook for founder alerts
+- `PULSE_INTERNAL_TOKEN`: shared secret for internal Pulse event ingestion from workers/services
+- `PULSE_SLOW_REQUEST_MS`: threshold for slow-response incident capture (default `6000`)
 
 ## AI Services
 

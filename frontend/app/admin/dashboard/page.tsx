@@ -2,9 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BarChart3, LogOut, Radar, Users } from "lucide-react";
-import { getAdminOverview, getApiErrorMessage } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, BarChart3, LogOut, Radar, ShieldAlert, Users } from "lucide-react";
+import {
+  getAdminIncidents,
+  getAdminOverview,
+  getApiErrorMessage,
+  updateAdminIncident,
+} from "@/lib/api";
 
 const ADMIN_SESSION_KEY = "xcr8-admin-access";
 
@@ -65,6 +70,7 @@ function MiniBarChart({
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const accessCode = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -83,6 +89,27 @@ export default function AdminDashboardPage() {
     queryFn: () => getAdminOverview(accessCode),
     enabled: Boolean(accessCode),
     refetchInterval: 25000,
+  });
+
+  const { data: incidents = [], isLoading: incidentsLoading } = useQuery({
+    queryKey: ["admin-incidents"],
+    queryFn: () => getAdminIncidents(accessCode),
+    enabled: Boolean(accessCode),
+    refetchInterval: 15000,
+  });
+
+  const incidentMutation = useMutation({
+    mutationFn: ({
+      incidentId,
+      status,
+    }: {
+      incidentId: number;
+      status: "investigating" | "fixed";
+    }) => updateAdminIncident(accessCode, incidentId, { status }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
+    },
   });
 
   return (
@@ -125,6 +152,21 @@ export default function AdminDashboardPage() {
           <StatCard label="Onboarded users" value={data?.onboarded_users ?? 0} icon={Users} />
           <StatCard label="Active users (7d)" value={data?.active_users_7d ?? 0} icon={Radar} />
           <StatCard label="AI generations" value={data?.ai_generations ?? 0} icon={BarChart3} />
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Open incidents"
+            value={data?.pulse_open_incidents ?? 0}
+            icon={ShieldAlert}
+          />
+          <StatCard
+            label="Critical incidents"
+            value={data?.pulse_critical_incidents ?? 0}
+            icon={AlertTriangle}
+          />
+          <StatCard label="Trend signals" value={data?.trend_signals ?? 0} icon={Radar} />
+          <StatCard label="Published posts" value={data?.published_posts ?? 0} icon={BarChart3} />
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -198,6 +240,82 @@ export default function AdminDashboardPage() {
             points={data?.ai_generations_7d ?? []}
             colorClass="bg-emerald-500/70"
           />
+        </section>
+
+        <section className="xcr8-panel rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="xcr8-title-lg text-white light:text-slate-900">Pulse Incidents</h2>
+              <p className="text-sm text-slate-400">
+                Real-time platform issues detected from the main app backend.
+              </p>
+            </div>
+            {incidentsLoading ? <p className="text-sm text-slate-400">Refreshing...</p> : null}
+          </div>
+
+          <div className="space-y-3">
+            {incidents.map((incident) => (
+              <article key={incident.id} className="surface-soft rounded-xl px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-white light:text-slate-900">
+                        {incident.title}
+                      </p>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                        {incident.feature}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                        {incident.severity}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                        {incident.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">{incident.possible_reason}</p>
+                    <p className="text-xs text-slate-500">
+                      {incident.affected_users_count} users affected • {incident.total_events_count}{" "}
+                      events • last seen {new Date(incident.last_seen_at).toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {incident.status !== "investigating" ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          incidentMutation.mutate({
+                            incidentId: incident.id,
+                            status: "investigating",
+                          })
+                        }
+                        className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-500/15"
+                      >
+                        Mark investigating
+                      </button>
+                    ) : null}
+                    {incident.status !== "fixed" ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          incidentMutation.mutate({ incidentId: incident.id, status: "fixed" })
+                        }
+                        className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/15"
+                      >
+                        Mark fixed
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            ))}
+
+            {!incidentsLoading && incidents.length === 0 ? (
+              <p className="text-sm text-slate-400">
+                No incidents detected yet. Pulse is watching the platform.
+              </p>
+            ) : null}
+          </div>
         </section>
       </div>
     </main>

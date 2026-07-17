@@ -73,6 +73,22 @@ export type AdminSeriesPoint = {
   value: number;
 };
 
+export type PulseIncidentItem = {
+  id: number;
+  title: string;
+  feature: string;
+  error_type: string;
+  severity: string;
+  provider?: string | null;
+  possible_reason: string;
+  status: "investigating" | "fixed";
+  affected_users_count: number;
+  total_events_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at?: string | null;
+};
+
 export type AdminOverviewPayload = {
   generated_at: string;
   total_users: number;
@@ -84,6 +100,8 @@ export type AdminOverviewPayload = {
   published_posts: number;
   ai_generations: number;
   trend_signals: number;
+  pulse_open_incidents: number;
+  pulse_critical_incidents: number;
   top_creators: AdminTopCreatorItem[];
   users_created_7d: AdminSeriesPoint[];
   posts_created_7d: AdminSeriesPoint[];
@@ -530,6 +548,34 @@ export async function getAdminOverview(accessCode: string): Promise<AdminOvervie
     },
     timeout: 30_000,
   });
+  return data;
+}
+
+export async function getAdminIncidents(accessCode: string): Promise<PulseIncidentItem[]> {
+  const { data } = await apiClient.get<PulseIncidentItem[]>("/api/v1/admin/incidents", {
+    headers: {
+      "x-admin-code": accessCode,
+    },
+    timeout: 30_000,
+  });
+  return data;
+}
+
+export async function updateAdminIncident(
+  accessCode: string,
+  incidentId: number,
+  payload: { status: "investigating" | "fixed"; resolution_summary?: string | null },
+): Promise<PulseIncidentItem> {
+  const { data } = await apiClient.patch<PulseIncidentItem>(
+    `/api/v1/admin/incidents/${incidentId}`,
+    payload,
+    {
+      headers: {
+        "x-admin-code": accessCode,
+      },
+      timeout: 30_000,
+    },
+  );
   return data;
 }
 
