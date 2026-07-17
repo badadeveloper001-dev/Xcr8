@@ -58,6 +58,30 @@ export type GoogleSessionPayload = {
   access_token: string;
 };
 
+export type AdminTopCreatorItem = {
+  user_id: number;
+  display_name: string;
+  email: string;
+  posts: number;
+  draft_posts: number;
+  scheduled: number;
+  published: number;
+};
+
+export type AdminOverviewPayload = {
+  generated_at: string;
+  total_users: number;
+  onboarded_users: number;
+  active_users_7d: number;
+  total_posts: number;
+  draft_posts: number;
+  scheduled_posts: number;
+  published_posts: number;
+  ai_generations: number;
+  trend_signals: number;
+  top_creators: AdminTopCreatorItem[];
+};
+
 export type PasswordResetPayload = {
   email: string;
 };
@@ -488,6 +512,16 @@ export async function login(payload: LoginPayload): Promise<SessionPayload> {
 
 export async function loginWithGoogle(payload: GoogleSessionPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/google/session", payload);
+  return data;
+}
+
+export async function getAdminOverview(accessCode: string): Promise<AdminOverviewPayload> {
+  const { data } = await apiClient.get<AdminOverviewPayload>("/api/v1/admin/overview", {
+    headers: {
+      "x-admin-code": accessCode,
+    },
+    timeout: 30_000,
+  });
   return data;
 }
 

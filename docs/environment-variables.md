@@ -38,6 +38,7 @@
 - `SMTP_USE_TLS`: use STARTTLS (`true`/`false`)
 - `SMTP_USE_SSL`: use implicit SSL (`true`/`false`)
 - `SIGNUP_CODE_TTL_MINUTES`: verification code expiry time in minutes (default `10`)
+- `ADMIN_ACCESS_CODE`: admin dashboard access code (default `XCR800`)
 
 ## AI Services
 

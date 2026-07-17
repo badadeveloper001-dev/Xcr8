@@ -124,6 +124,30 @@ class DashboardOverview(BaseModel):
     ai_ops: dict | None = None
 
 
+class AdminTopCreatorItem(BaseModel):
+    user_id: int
+    display_name: str
+    email: str
+    posts: int
+    draft_posts: int
+    scheduled: int
+    published: int
+
+
+class AdminOverview(BaseModel):
+    generated_at: str
+    total_users: int
+    onboarded_users: int
+    active_users_7d: int
+    total_posts: int
+    draft_posts: int
+    scheduled_posts: int
+    published_posts: int
+    ai_generations: int
+    trend_signals: int
+    top_creators: list[AdminTopCreatorItem] = Field(default_factory=list)
+
+
 class DistributionCreateRequest(BaseModel):
     user_id: int
     title: str = "Untitled Post"

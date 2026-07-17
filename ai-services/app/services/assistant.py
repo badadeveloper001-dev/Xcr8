@@ -26,6 +26,7 @@ SYSTEM_PROMPT = (
     "If the user writes with emojis, you may use 1-3 relevant emojis naturally. "
     "If the user is serious, urgent, or sensitive, reduce humor and keep a supportive direct tone. "
     "Use app_context and creator_memory as source-of-truth; never invent unavailable facts. "
+    "Never claim trend counts, performance lifts, or personal facts unless they are explicitly present in app_context/creator_memory. "
     "If the user asks what you know about them, answer from onboarding, profile, memory, preferences, recent posts, and activity context before saying anything is missing. "
     "When the latest message is in Nigerian Pidgin, Yoruba, or code-switch, stay in that language style naturally and do not switch back to formal English. "
     "If information is missing, say what is missing and provide the best safe next step. "
@@ -332,50 +333,20 @@ def _build_fallback(payload: dict) -> dict:
         }
 
     if is_general:
-        if vibe_profile["mood"] == "playful":
-            message = (
-                "Love this kind of question. Let us break it down creator-to-creator: key drivers first, "
-                "then second-order effects, then the signals worth watching."
-            )
-        else:
-            message = (
-                "I can help with broader knowledge too. For this topic, focus on the key drivers, second-order effects, "
-                "and what signals to monitor next. If you want, I can break this down into a short decision framework."
-            )
+        message = (
+            "I can help with broader questions. Let us break this down into key drivers, second-order effects, "
+            "and the signals worth monitoring next."
+        )
     else:
-        if vibe_profile["mood"] == "playful":
-            message = (
-                f"I have your back. We can keep this {tone} and still make it fun. "
-                f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
-                f"and {summary.get('published', 0)} published posts, so you are not starting from zero."
-            )
-        else:
-            message = (
-                f"I can help with your Xcr8 workspace and general questions in a {tone} way, keeping the reply in {language}. "
-                f"Right now I can see {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled posts, "
-                f"and {summary.get('published', 0)} published posts."
-            )
-    if persona == "playful_creator_friend":
-        message = "Creator-friend mode on. " + message
-    elif persona == "calm_strategist_friend":
-        message = "I am with you. Let us move step by step. " + message
-    if vibe:
-        message += f" I’m matching your vibe: {vibe}."
-    if memory_facts:
-        message += f" One thing I remember about you: {memory_facts[0]}."
-    if recent_posts:
-        latest = recent_posts[0]
-        title = latest.get("title") or "your latest post"
-        message += f" Your latest post is {title}."
-
-    if vibe_profile["emoji_style"] != "none":
-        message += " 😊"
+        message = (
+            f"I can help with your Xcr8 workspace in a {tone} style and keep replies in {language}. "
+            f"Current workspace summary: {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled, "
+            f"{summary.get('published', 0)} published."
+        )
 
     intent_actions = _intent_suggested_actions(payload.get("message", ""), app_context)
 
-    follow_up = ""
-    if vibe_profile["mood"] == "playful" and not is_general:
-        follow_up = "Want quick witty caption options, or a stronger hook first?"
+    follow_up = "What should I help with next?"
 
     return {
         "assistant_message": message,

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
     signup_code_ttl_minutes: int = 10
+    admin_access_code: str = "XCR800"
 
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"

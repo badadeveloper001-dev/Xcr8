@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db
 from app.db.models import (
     AIGeneration,
+    AnalyticsSnapshot,
     ConnectedPlatform,
     ContentPost,
     CreatorProfile,
@@ -183,11 +184,36 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
             .limit(3)
         )
     )
+
+    total_posts = db.scalar(select(func.count(ContentPost.id)).where(ContentPost.user_id == user_id)) or 0
+    analytics_snapshots = (
+        db.scalar(select(func.count(AnalyticsSnapshot.id)).where(AnalyticsSnapshot.user_id == user_id)) or 0
+    )
+    ai_generations = (
+        db.scalar(
+            select(func.count(AIGeneration.id))
+            .join(ContentPost, AIGeneration.post_id == ContentPost.id)
+            .where(ContentPost.user_id == user_id)
+        )
+        or 0
+    )
+
+    created_at = user.created_at
+    if created_at and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    account_age_days = (datetime.now(tz=UTC) - created_at).days if created_at else 0
+
+    has_trend_signal_readiness = (
+        total_posts >= 3
+        or analytics_snapshots >= 3
+        or ai_generations >= 6
+        or account_age_days >= 10
+    )
     latest_signal_time = trend_signal_rows[0].created_at if trend_signal_rows else None
     if latest_signal_time and latest_signal_time.tzinfo is None:
         latest_signal_time = latest_signal_time.replace(tzinfo=UTC)
 
-    should_refresh_trends = user.onboarding_complete and (
+    should_refresh_trends = user.onboarding_complete and has_trend_signal_readiness and (
         not trend_signal_rows
         or not latest_signal_time
         or (datetime.now(tz=UTC) - latest_signal_time).total_seconds() >= 12 * 60 * 60
@@ -205,6 +231,8 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         )
 
     trend_titles = [row.title for row in trend_signal_rows if row.title.strip()][:3]
+    if not has_trend_signal_readiness:
+        trend_titles = []
 
     user_language = str(user.language or "english").strip().lower()
 
@@ -268,7 +296,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         cr8or_ai_alert = _localized_inactive_alert(user_language, inactive_days)
     elif (drafts or 0) + (scheduled or 0) >= 2:
         cr8or_ai_alert = _localized_pending_alert(user_language, drafts or 0, scheduled or 0)
-    elif trend_titles:
+    elif trend_titles and has_trend_signal_readiness:
         cr8or_ai_alert = _localized_alert(
             user_language,
             str(niche_label),

@@ -115,6 +115,11 @@ APP_FEATURE_CATALOG = [
         "description": "Profile, theme, account, and workspace preferences.",
     },
     {
+        "name": "Admin",
+        "route": "/admin",
+        "description": "Access-code protected platform analytics dashboard.",
+    },
+    {
         "name": "Onboarding",
         "route": "/onboarding",
         "description": "Initial creator setup and preference capture.",
@@ -1201,28 +1206,18 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
         parsed_response.chat_id = chat_id
         return parsed_response
     except Exception:
-        memory_facts = creator_memory.get("memory_facts", [])
-        recent_posts = app_context.get("recent_posts", [])
-        first_post = recent_posts[0]["title"] if recent_posts else None
+        summary = app_context.get("summary") if isinstance(app_context.get("summary"), dict) else {}
         assistant_message = (
-            f"I can help with your Xcr8 workspace in a {resolved_tone} way and keep the reply in {resolved_language}."
+            f"I hit a temporary assistant issue, but I can still help. "
+            f"Workspace snapshot: {summary.get('drafts', 0)} drafts, {summary.get('scheduled', 0)} scheduled, "
+            f"{summary.get('published', 0)} published."
         )
-        if resolved_vibe:
-            assistant_message += f" I’m matching your vibe: {resolved_vibe}."
-        assistant_message += (
-            f" Right now I can see {app_context['summary']['drafts']} drafts, "
-            f"{app_context['summary']['scheduled']} scheduled posts, and {app_context['summary']['published']} published posts."
-        )
-        if memory_facts:
-            assistant_message += f" One thing I remember about you: {memory_facts[0]}."
-        if first_post:
-            assistant_message += f" Your latest post is {first_post}."
 
         fallback_response = AIAssistantResponse(
             chat_id=chat_id,
             assistant_message=assistant_message,
-            follow_up_question="What should I help you figure out next?",
-            suggested_actions=["Summarize my dashboard", "Review my latest post", "Help me plan content"],
+            follow_up_question="What should I help you with first?",
+            suggested_actions=["Summarize my dashboard", "Plan content for this week", "Draft one caption"],
             language=resolved_language,
             tone=resolved_tone,
             model="backend-local-assistant-fallback",
