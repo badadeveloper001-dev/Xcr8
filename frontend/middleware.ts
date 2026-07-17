@@ -27,12 +27,6 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!isAdminHost && isAdminPath) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/welcome";
-    return NextResponse.redirect(url);
-  }
-
   return NextResponse.next();
 }
 
