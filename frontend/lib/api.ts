@@ -112,6 +112,13 @@ export type DashboardOverviewPayload = {
   recent_posts: Array<{ post_id: number; title: string; status: string; media_url: string }>;
   ai_insights: Array<{ title: string; description: string }>;
   connected_platforms: Array<{ platform: string; account_handle: string; is_active: boolean }>;
+  cr8or_ai_alert?: {
+    title: string;
+    message: string;
+    prompt: string;
+    trend_titles: string[];
+    language: string;
+  } | null;
   ai_ops?: {
     total_generations: number;
     total_prompt_tokens: number;

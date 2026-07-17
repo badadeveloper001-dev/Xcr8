@@ -23,16 +23,6 @@ export type StudioTool = {
 
 export const studioTools: StudioTool[] = [
   {
-    id: "intelligence",
-    name: "Intelligence Engine",
-    tagline: "Discover opportunities before they become obvious.",
-    description:
-      "Offline-first trend feed that maps signals to actionable content and creator goals.",
-    status: "live",
-    icon: TrendingUp,
-    href: "/ai-studio/intelligence",
-  },
-  {
     id: "assistant",
     name: "Cr8or AI",
     tagline: "Your named AI copilot across every creator screen.",

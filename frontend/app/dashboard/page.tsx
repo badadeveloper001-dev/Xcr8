@@ -119,6 +119,8 @@ export default function DashboardPage() {
     ];
   }, [data?.recent_posts]);
 
+  const proactiveAlert = data?.cr8or_ai_alert ?? null;
+
   if (!hasHydrated || !userId) return null;
 
   return (
@@ -154,6 +156,40 @@ export default function DashboardPage() {
             ))}
           </div>
         </motion.section>
+
+        {proactiveAlert ? (
+          <motion.button
+            type="button"
+            {...fadeUp(0.04)}
+            onClick={() =>
+              router.push(
+                `/ai-studio/assistant?fresh=1&assistant_seed=${encodeURIComponent(
+                  proactiveAlert.message,
+                )}&prompt=${encodeURIComponent(proactiveAlert.prompt)}`,
+              )
+            }
+            className="xcr8-panel w-full rounded-2xl border border-emerald-300/30 bg-emerald-500/10 p-4 text-left transition hover:bg-emerald-500/15"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                  {proactiveAlert.title}
+                </p>
+                <p className="mt-2 text-sm font-medium text-white light:text-slate-900">
+                  {proactiveAlert.message}
+                </p>
+                {proactiveAlert.trend_titles.length > 0 ? (
+                  <p className="mt-2 text-xs text-emerald-100/80 light:text-emerald-800">
+                    {proactiveAlert.trend_titles.join(" • ")}
+                  </p>
+                ) : null}
+              </div>
+              <div className="rounded-xl bg-white/10 p-2 text-emerald-200">
+                <Sparkles size={16} />
+              </div>
+            </div>
+          </motion.button>
+        ) : null}
 
         <motion.section {...fadeUp(0.08)} className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">

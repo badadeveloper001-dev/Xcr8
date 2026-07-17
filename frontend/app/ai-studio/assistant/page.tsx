@@ -65,6 +65,13 @@ function buildWelcomeMessage(displayName: string | null): ChatItem {
   };
 }
 
+function buildSeededAssistantMessage(message: string): ChatItem {
+  return {
+    role: "assistant",
+    content: message,
+  };
+}
+
 function isChatItem(value: unknown): value is ChatItem {
   if (!value || typeof value !== "object") {
     return false;
@@ -117,10 +124,21 @@ export default function AssistantPage() {
   const [isMobileInputMode, setIsMobileInputMode] = useState(false);
   const [isHistoryReady, setIsHistoryReady] = useState(true);
   const [requestedChatId, setRequestedChatId] = useState<string | null>(null);
+  const lastAssistantSeedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const forceFreshChat = searchParams.get("fresh") === "1";
     const nextChatId = searchParams.get("chat")?.trim() || null;
     setRequestedChatId((current) => (current === nextChatId ? current : nextChatId));
+
+    const nextAssistantSeed = searchParams.get("assistant_seed")?.trim() || "";
+    if (forceFreshChat && nextAssistantSeed && lastAssistantSeedRef.current !== nextAssistantSeed) {
+      setActiveChatId(null);
+      setMessages([buildSeededAssistantMessage(nextAssistantSeed)]);
+      setError(null);
+      setIsHistoryReady(true);
+      lastAssistantSeedRef.current = nextAssistantSeed;
+    }
 
     const nextPrompt = searchParams.get("prompt")?.trim() || "";
     if (nextPrompt && lastPromptParamRef.current !== nextPrompt) {
@@ -192,11 +210,13 @@ export default function AssistantPage() {
       if (cachedSessions.length > 0) {
         setChatSessions(cachedSessions);
         const storedChatId = localStorage.getItem(storageKey);
-        const cachedActive =
-          requestedChatId ??
-          (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
-            ? storedChatId
-            : (cachedSessions[0]?.chat_id ?? null));
+        const forceFreshChat = searchParams.get("fresh") === "1";
+        const cachedActive = forceFreshChat
+          ? null
+          : (requestedChatId ??
+            (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+              ? storedChatId
+              : (cachedSessions[0]?.chat_id ?? null)));
         setActiveChatId(cachedActive);
       }
 
@@ -212,26 +232,30 @@ export default function AssistantPage() {
 
         setChatSessions(sessions);
         const storedChatId = localStorage.getItem(storageKey);
-        const nextChatId =
-          requestedChatId ??
-          (storedChatId && sessions.some((session) => session.chat_id === storedChatId)
-            ? storedChatId
-            : (sessions[0]?.chat_id ?? null));
+        const forceFreshChat = searchParams.get("fresh") === "1";
+        const nextChatId = forceFreshChat
+          ? null
+          : (requestedChatId ??
+            (storedChatId && sessions.some((session) => session.chat_id === storedChatId)
+              ? storedChatId
+              : (sessions[0]?.chat_id ?? null)));
         setActiveChatId(nextChatId);
       } catch {
         if (!cancelled) {
           if (cachedSessions.length > 0) {
             setChatSessions(cachedSessions);
             const storedChatId = localStorage.getItem(storageKey);
-            const nextChatId =
-              requestedChatId ??
-              (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
-                ? storedChatId
-                : (cachedSessions[0]?.chat_id ?? null));
+            const forceFreshChat = searchParams.get("fresh") === "1";
+            const nextChatId = forceFreshChat
+              ? null
+              : (requestedChatId ??
+                (storedChatId && cachedSessions.some((session) => session.chat_id === storedChatId)
+                  ? storedChatId
+                  : (cachedSessions[0]?.chat_id ?? null)));
             setActiveChatId(nextChatId);
           } else {
             setChatSessions([]);
-            setActiveChatId(requestedChatId ?? null);
+            setActiveChatId(searchParams.get("fresh") === "1" ? null : (requestedChatId ?? null));
             setMessages([welcomeMessage]);
           }
         }
@@ -243,7 +267,7 @@ export default function AssistantPage() {
     return () => {
       cancelled = true;
     };
-  }, [email, requestedChatId, userId, welcomeMessage]);
+  }, [email, requestedChatId, searchParams, userId, welcomeMessage]);
 
   useEffect(() => {
     if (!userId) {
@@ -353,7 +377,7 @@ export default function AssistantPage() {
       updated_at: new Date().toISOString(),
     };
 
-    setActiveChatId(chatId);
+    setActiveChatId(null);
     setMessages([welcomeMessage]);
     setError(null);
     setPrompt("");

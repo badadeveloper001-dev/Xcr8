@@ -92,6 +92,14 @@ class PlatformConnection(BaseModel):
     is_active: bool
 
 
+class Cr8orAIAlert(BaseModel):
+    title: str
+    message: str
+    prompt: str
+    trend_titles: list[str] = Field(default_factory=list)
+    language: str = "english"
+
+
 class DashboardOverview(BaseModel):
     greeting: str
     creator_name: str
@@ -102,6 +110,7 @@ class DashboardOverview(BaseModel):
     recent_posts: list[dict]
     ai_insights: list[dict]
     connected_platforms: list[PlatformConnection]
+    cr8or_ai_alert: Cr8orAIAlert | None = None
     ai_ops: dict | None = None
 
 
