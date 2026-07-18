@@ -3,6 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.deps import get_db
 
 router = APIRouter(tags=["health"])
@@ -20,4 +21,5 @@ def health_db(db: Session = Depends(get_db)) -> dict[str, str]:
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
 
-    return {"status": "ok", "service": "backend", "database": "ok"}
+    db_type = "postgres" if settings.database_url.startswith("postgresql") else "sqlite"
+    return {"status": "ok", "service": "backend", "database": "ok", "db_type": db_type}
