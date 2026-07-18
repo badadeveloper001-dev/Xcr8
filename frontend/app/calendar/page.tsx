@@ -32,6 +32,9 @@ export default function CalendarPage() {
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
 
+  // Detect the user's local timezone from the browser.
+  const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
   }, [hasHydrated, router, userId]);
@@ -144,7 +147,7 @@ export default function CalendarPage() {
         </motion.div>
       )}
 
-      {/* Mini calendar hint */}
+      {/* Schedule context */}
       <div className="xcr8-panel mt-5 rounded-2xl p-4">
         <p className="xcr8-eyebrow mb-2">Schedule context</p>
         <div className="flex items-center gap-3">
@@ -153,9 +156,9 @@ export default function CalendarPage() {
           </span>
           <div>
             <p className="text-sm font-semibold text-white light:text-slate-900">
-              Timezone: Africa/Lagos
+              Timezone: {localTimezone}
             </p>
-            <p className="text-xs text-slate-500">All schedules use your local timezone (WAT).</p>
+            <p className="text-xs text-slate-500">Schedules use your detected local timezone.</p>
           </div>
         </div>
       </div>

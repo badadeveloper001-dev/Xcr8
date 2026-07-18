@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
-from app.db.models import AIGeneration, ContentPost, PostStatus, PulseIncident, TrendSignalEvent, User
+from app.db.models import AIGeneration, ContentPost, CreatorProfile, PostStatus, PulseIncident, TrendSignalEvent, User
 from app.schemas.mvp import (
     AdminOverview,
     AdminSeriesPoint,
@@ -480,3 +480,44 @@ def trigger_test_incident(
         last_seen_at=incident.last_seen_at.isoformat() if incident.last_seen_at else "",
         resolved_at=incident.resolved_at.isoformat() if incident.resolved_at else None,
     )
+
+
+@router.post("/users/backfill-onboarding")
+def backfill_onboarding(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """One-shot: mark users as onboarded when their creator profile has onboarding preferences.
+
+    Fixes users whose `onboarding_complete` is False in the DB because their account was
+    created via the Supabase admin sync (which doesn't carry over the onboarding flag) but
+    who did in fact complete onboarding in a previous session.
+    """
+    _require_admin_access(x_admin_code, request)
+
+    unfinished = list(
+        db.scalars(select(User).where(User.onboarding_complete.is_(False)))
+    )
+
+    updated = 0
+    for user in unfinished:
+        profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+        if not profile:
+            continue
+        prefs = profile.preferences if isinstance(profile.preferences, dict) else {}
+        # Presence of any onboarding-written preference key means they completed onboarding.
+        if (
+            prefs.get("initialized_at") or
+            prefs.get("creator_type") or
+            prefs.get("niches") or
+            prefs.get("platforms_used")
+        ):
+            user.onboarding_complete = True
+            db.add(user)
+            updated += 1
+
+    if updated:
+        db.commit()
+
+    return {"updated": updated, "checked": len(unfinished)}

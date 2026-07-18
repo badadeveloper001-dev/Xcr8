@@ -625,18 +625,19 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
     full_name = str(user_meta.get("full_name") or normalized_email.split("@")[0]).strip()
     username_seed = str(user_meta.get("user_name") or user_meta.get("preferred_username") or normalized_email.split("@")[0])
 
-    # Resolve onboarding state from Supabase metadata using the same logic as the email
-    # login flow.  For accounts that pre-date the onboarding_complete metadata flag the
-    # helper defaults to True (skip onboarding) — UNLESS the Supabase account was just
-    # created (< 15 min), which indicates a brand-new Google sign-up that still needs it.
-    has_flag, onboarding_from_meta = _extract_onboarding_state(user_meta)
-    if not has_flag:
-        if _google_account_is_new(auth_user):
-            onboarding_from_meta = False   # brand-new account → needs onboarding
-        # else: existing account without the flag → keep True (skip onboarding)
-
     user = db.scalar(select(User).where(User.email == normalized_email))
     if not user:
+        # ── Brand-new vs existing user detection ──────────────────────────────
+        # If no local record exists, check Supabase metadata and account age.
+        # Accounts created < 15 min ago are genuinely new and need onboarding.
+        # Older accounts are existing users (e.g. signed up via email before)
+        # who should skip onboarding entirely.
+        has_flag, onboarding_from_meta = _extract_onboarding_state(user_meta)
+        if not has_flag:
+            onboarding_from_meta = not _google_account_is_new(auth_user)
+        # onboarding_from_meta = True  → existing user, skip onboarding
+        # onboarding_from_meta = False → brand-new Google signup, needs onboarding
+
         user = User(
             email=normalized_email,
             display_name=full_name,
@@ -667,13 +668,42 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
         )
         db.add(profile)
     else:
+        # ── Existing user found by email ───────────────────────────────────────
+        # This user is definitively in the system.  We must never send them back
+        # to onboarding.  Resolve their onboarding status using multiple signals
+        # in priority order so we always reach the correct answer:
+        #
+        #   1. DB already says True  → nothing to do.
+        #   2. Supabase metadata explicitly says True  → trust it.
+        #   3. Creator profile has onboarding preferences  → they completed it.
+        #   4. Supabase account exists and is not brand-new  → assume complete.
+        #
         if not user.display_name or user.display_name == normalized_email.split("@")[0]:
             user.display_name = full_name
 
-        # Apply Supabase-derived onboarding state: never go backwards (True→False), but
-        # do go forwards when Supabase or the heuristic says the user is already onboarded.
-        if onboarding_from_meta and not user.onboarding_complete:
-            user.onboarding_complete = True
+        if not user.onboarding_complete:
+            has_flag, onboarding_from_supabase = _extract_onboarding_state(user_meta)
+
+            if has_flag and onboarding_from_supabase:
+                # Supabase metadata explicitly confirms completion.
+                user.onboarding_complete = True
+            else:
+                # Check creator profile for signals written during the onboarding flow.
+                existing_profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+                profile_prefs = (existing_profile.preferences or {}) if existing_profile and isinstance(existing_profile.preferences, dict) else {}
+                completed_via_profile = bool(
+                    profile_prefs.get("initialized_at") or
+                    profile_prefs.get("creator_type") or
+                    profile_prefs.get("niches") or
+                    profile_prefs.get("platforms_used")
+                )
+
+                if completed_via_profile:
+                    user.onboarding_complete = True
+                elif not _google_account_is_new(auth_user):
+                    # Account is not brand-new → existing user in the system.
+                    # Treat as onboarded to avoid forcing a returning user through onboarding.
+                    user.onboarding_complete = True
 
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
         if not credential:

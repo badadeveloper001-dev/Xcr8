@@ -68,7 +68,6 @@ export default function AnalyticsPage() {
 
   const engagement = data?.engagement ?? [];
   const platformOptions = Array.from(new Set(engagement.map((item) => item.platform)));
-
   const filtered =
     selectedPlatform === "all"
       ? engagement
@@ -101,7 +100,6 @@ export default function AnalyticsPage() {
       "Top Recommendations:",
       ...topRecommendations.map((item) => `- ${item}`),
     ];
-
     const blob = new Blob([lines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -114,6 +112,7 @@ export default function AnalyticsPage() {
   return (
     <MobileShell title="Analytics" subtitle="Understand performance in under a minute.">
       <div className="space-y-4">
+        {/* Header controls */}
         <motion.section
           {...fadeUp(0)}
           className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
@@ -158,7 +157,7 @@ export default function AnalyticsPage() {
             </select>
 
             <span className="text-xs text-slate-500">
-              Showing data for {selectedPlatform === "all" ? "all channels" : selectedPlatform}
+              Showing {selectedPlatform === "all" ? "all channels" : selectedPlatform}
             </span>
 
             <button
@@ -171,117 +170,159 @@ export default function AnalyticsPage() {
           </div>
         </motion.section>
 
-        <motion.section {...fadeUp(0.05)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: "Total Reach", value: totalReach.toLocaleString() },
-            { label: "Audience Growth", value: `+${audienceGrowth}` },
-            { label: "Avg Engagement", value: `${avgEngagement.toFixed(1)}%` },
-            { label: "Caption Fit", value: `${avgCaptionFit.toFixed(0)}%` },
-          ].map((card) => (
-            <article key={card.label} className="xcr8-panel rounded-2xl p-4">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{card.label}</p>
-              <p className="mt-1 text-2xl font-semibold text-white light:text-slate-900">
-                {card.value}
-              </p>
-            </article>
-          ))}
-        </motion.section>
+        {/* Loading skeleton */}
+        {!data && (
+          <motion.section {...fadeUp(0.03)} className="xcr8-panel rounded-2xl p-6 text-center">
+            <BarChart3 size={32} className="mx-auto mb-3 text-violet-400 opacity-50" />
+            <p className="text-sm text-slate-400">Loading your analytics…</p>
+          </motion.section>
+        )}
 
-        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <motion.section {...fadeUp(0.1)} className="xcr8-panel rounded-2xl p-4">
-            <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
-              <Sparkles size={16} className="text-cyan-300" />
-              What to focus on
-            </h2>
-            <div className="space-y-2.5">
-              {topRecommendations.map((item) => (
-                <div
-                  key={item}
-                  className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-200 light:text-slate-800"
-                >
-                  {item}
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {/* No data — connect platform CTA */}
+        {data && engagement.length === 0 && (
+          <motion.section
+            {...fadeUp(0.03)}
+            className="xcr8-panel rounded-2xl border border-dashed border-white/10 p-6 text-center light:border-slate-200"
+          >
+            <BarChart3 size={32} className="mx-auto mb-3 text-slate-500" />
+            <p className="text-sm font-semibold text-white light:text-slate-900">
+              No live analytics yet
+            </p>
+            <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
+              Connect a platform in Settings, then publish a post to start seeing real data here.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  router.push(
-                    `/ai-studio/assistant?prompt=${encodeURIComponent(
-                      `Review my ${analyticsWindow} performance and give me a simple 3-step improvement plan.`,
-                    )}`,
-                  )
-                }
-                className="cta-btn rounded-xl px-3 py-2.5 text-sm font-semibold"
+                onClick={() => router.push("/settings")}
+                className="cta-btn rounded-xl px-4 py-2 text-sm font-semibold"
               >
-                Ask Cr8or AI
+                Connect a platform
               </button>
               <button
                 type="button"
                 onClick={() => router.push("/compose")}
-                className="surface-soft rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-200 light:text-slate-800"
+                className="surface-soft rounded-xl px-4 py-2 text-sm font-medium text-slate-200 light:text-slate-700"
               >
-                Create next post
+                Create a post
               </button>
             </div>
           </motion.section>
+        )}
 
-          <motion.section {...fadeUp(0.13)} className="xcr8-panel rounded-2xl p-4">
-            <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
-              <BarChart3 size={16} className="text-violet-300" />
-              Platform performance
-            </h2>
-            <div className="space-y-2.5">
-              {filtered.length > 0 ? (
-                filtered.map((item) => (
-                  <article key={item.platform} className="surface-soft rounded-xl px-3 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold capitalize text-white light:text-slate-900">
-                        {item.platform.replace(/_/g, " ")}
-                      </p>
-                      <p className="text-xs text-emerald-400">
-                        {(item.engagement_rate * 100).toFixed(1)}%
-                      </p>
-                    </div>
-                    <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-500 light:text-slate-600">
-                      <div>
-                        <p>Followers</p>
-                        <p className="mt-0.5 text-slate-300 light:text-slate-800">
-                          +{item.followers_delta}
-                        </p>
-                      </div>
-                      <div>
-                        <p>Caption Fit</p>
-                        <p className="mt-0.5 text-slate-300 light:text-slate-800">
-                          {(item.caption_effectiveness * 100).toFixed(0)}%
-                        </p>
-                      </div>
-                      <div>
-                        <p>Status</p>
-                        <p className="mt-0.5 text-slate-300 light:text-slate-800">Active</p>
-                      </div>
-                    </div>
-                  </article>
-                ))
-              ) : (
-                <div className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-400 light:text-slate-600">
-                  No live analytics yet. Connect platforms and publish content to populate this
-                  section.
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => router.push("/calendar")}
-              className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200"
+        {/* Live data */}
+        {data && engagement.length > 0 && (
+          <>
+            <motion.section
+              {...fadeUp(0.05)}
+              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
             >
-              Plan posting windows
-              <ArrowRight size={14} />
-            </button>
-          </motion.section>
-        </div>
+              {[
+                { label: "Total Reach", value: totalReach.toLocaleString() },
+                { label: "Audience Growth", value: `+${audienceGrowth}` },
+                { label: "Avg Engagement", value: `${avgEngagement.toFixed(1)}%` },
+                { label: "Caption Fit", value: `${avgCaptionFit.toFixed(0)}%` },
+              ].map((card) => (
+                <article key={card.label} className="xcr8-panel rounded-2xl p-4">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                    {card.label}
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-white light:text-slate-900">
+                    {card.value}
+                  </p>
+                </article>
+              ))}
+            </motion.section>
+
+            <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+              <motion.section {...fadeUp(0.1)} className="xcr8-panel rounded-2xl p-4">
+                <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
+                  <Sparkles size={16} className="text-cyan-300" />
+                  What to focus on
+                </h2>
+                <div className="space-y-2.5">
+                  {topRecommendations.map((item) => (
+                    <div
+                      key={item}
+                      className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-200 light:text-slate-800"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/ai-studio/assistant?prompt=${encodeURIComponent(
+                          `Review my ${analyticsWindow} performance and give me a simple 3-step improvement plan.`,
+                        )}`,
+                      )
+                    }
+                    className="cta-btn rounded-xl px-3 py-2.5 text-sm font-semibold"
+                  >
+                    Ask Cr8or AI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/compose")}
+                    className="surface-soft rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-200 light:text-slate-800"
+                  >
+                    Create next post
+                  </button>
+                </div>
+              </motion.section>
+
+              <motion.section {...fadeUp(0.13)} className="xcr8-panel rounded-2xl p-4">
+                <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
+                  <BarChart3 size={16} className="text-violet-300" />
+                  Platform performance
+                </h2>
+                <div className="space-y-2.5">
+                  {filtered.map((item) => (
+                    <article key={item.platform} className="surface-soft rounded-xl px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold capitalize text-white light:text-slate-900">
+                          {item.platform.replace(/_/g, " ")}
+                        </p>
+                        <p className="text-xs text-emerald-400">
+                          {(item.engagement_rate * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-500 light:text-slate-600">
+                        <div>
+                          <p>Followers</p>
+                          <p className="mt-0.5 text-slate-300 light:text-slate-800">
+                            +{item.followers_delta}
+                          </p>
+                        </div>
+                        <div>
+                          <p>Caption Fit</p>
+                          <p className="mt-0.5 text-slate-300 light:text-slate-800">
+                            {(item.caption_effectiveness * 100).toFixed(0)}%
+                          </p>
+                        </div>
+                        <div>
+                          <p>Status</p>
+                          <p className="mt-0.5 text-slate-300 light:text-slate-800">Active</p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push("/calendar")}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200"
+                >
+                  Plan posting windows
+                  <ArrowRight size={14} />
+                </button>
+              </motion.section>
+            </div>
+          </>
+        )}
       </div>
     </MobileShell>
   );
