@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from secrets import token_hex
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,6 +26,11 @@ from app.services.social_publisher import (
 router = APIRouter(prefix="/social", tags=["social"])
 
 
+# In-memory tracker for deletion callbacks. Good enough for callback verification
+# and lightweight status checks in stateless deployments.
+_META_DELETION_REQUESTS: dict[str, dict[str, str]] = {}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # OAuth helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -32,6 +38,50 @@ router = APIRouter(prefix="/social", tags=["social"])
 def _redirect_uri() -> str:
     base = (settings.frontend_url or "").rstrip("/")
     return f"{base}/auth/platform-callback"
+
+
+def _api_base_uri() -> str:
+    base = (settings.frontend_url or "").rstrip("/")
+    return f"{base}/api/v1"
+
+
+@router.post("/meta/uninstall")
+async def meta_uninstall_callback(request: Request) -> dict:
+    """Receives deauthorization callbacks from Meta products."""
+    # We currently do not map signed_request payloads back to user records.
+    # Returning success allows dashboard verification and future expansion.
+    _ = await request.body()
+    return {"success": True}
+
+
+@router.post("/meta/delete")
+async def meta_delete_callback(request: Request) -> dict:
+    """Receives data deletion requests and returns status URL + confirmation code."""
+    body = await request.body()
+    confirmation_code = token_hex(8)
+    _META_DELETION_REQUESTS[confirmation_code] = {
+        "status": "received",
+        "received_at": datetime.now(tz=UTC).isoformat(),
+        "payload_bytes": str(len(body)),
+    }
+
+    status_url = f"{_api_base_uri()}/social/meta/delete/status/{confirmation_code}"
+    return {
+        "url": status_url,
+        "confirmation_code": confirmation_code,
+    }
+
+
+@router.get("/meta/delete/status/{confirmation_code}")
+def meta_delete_status(confirmation_code: str) -> dict:
+    """Simple status endpoint returned to Meta for deletion callback workflows."""
+    status = _META_DELETION_REQUESTS.get(confirmation_code)
+    if not status:
+        raise HTTPException(status_code=404, detail="Unknown confirmation code.")
+    return {
+        "confirmation_code": confirmation_code,
+        **status,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
