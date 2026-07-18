@@ -13,6 +13,7 @@ from app.db.models import ConnectedPlatform, ContentPost, Platform, PostVariant,
 from app.services.social_publisher import (
     configured_platforms,
     exchange_code_for_token,
+    fetch_facebook_page_connection,
     fetch_platform_user_info,
     get_oauth_authorize_url,
     is_platform_configured,
@@ -128,6 +129,30 @@ def oauth_callback(
     handle = user_info.get("handle") or platform
     platform_user_id = user_info.get("platform_user_id") or ""
 
+    page_info: dict[str, str] | None = None
+    source_user_access_token = access_token
+    if platform == "facebook":
+        page_info = fetch_facebook_page_connection(source_user_access_token)
+        if not page_info:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Facebook connected, but no publishable Page was found for this account. "
+                    "Grant page permissions and ensure your Facebook Page is linked to the app."
+                ),
+            )
+
+        page_token = str(page_info.get("page_access_token") or "").strip()
+        page_id = str(page_info.get("page_id") or "").strip()
+        page_name = str(page_info.get("page_name") or "").strip()
+
+        if page_token:
+            access_token = page_token
+        if page_id:
+            platform_user_id = page_id
+        if page_name:
+            handle = page_name
+
     try:
         platform_enum = Platform(platform)
     except ValueError:
@@ -143,6 +168,14 @@ def oauth_callback(
         "linked_at": datetime.now(tz=UTC).isoformat(),
         "scopes": token_data.get("scope") or token_data.get("scopes") or "",
     }
+    if platform == "facebook" and page_info:
+        auth_meta.update(
+            {
+                "page_id": page_info.get("page_id") or platform_user_id,
+                "page_name": page_info.get("page_name") or handle,
+                "source_user_access_token": source_user_access_token,
+            }
+        )
 
     existing = db.scalar(
         select(ConnectedPlatform).where(

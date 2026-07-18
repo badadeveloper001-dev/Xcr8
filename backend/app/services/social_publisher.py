@@ -64,7 +64,7 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
     "facebook": {
         "auth_url": "https://www.facebook.com/v19.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v19.0/oauth/access_token",
-        "scopes": "pages_manage_posts,pages_read_engagement",
+        "scopes": "pages_manage_posts,pages_read_engagement,pages_show_list,pages_manage_metadata",
         "cred_keys": ("meta_app_id", "meta_app_secret"),
     },
     "x": {
@@ -287,6 +287,67 @@ def fetch_platform_user_info(platform: str, access_token: str) -> dict[str, str]
         logger.warning("Could not fetch user info from %s: %s", platform, exc)
 
     return {"platform_user_id": "", "handle": ""}
+
+
+def fetch_facebook_page_connection(user_access_token: str) -> dict[str, str] | None:
+    """Resolve a publishable Facebook Page and page access token from a user token."""
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.get(
+                "https://graph.facebook.com/v19.0/me/accounts",
+                params={
+                    "access_token": user_access_token,
+                    "fields": "id,name,access_token,tasks",
+                    "limit": 25,
+                },
+            )
+
+        if response.status_code >= 400:
+            logger.warning(
+                "Facebook page lookup failed: %s %s",
+                response.status_code,
+                response.text[:300],
+            )
+            return None
+
+        pages = response.json().get("data", [])
+        if not isinstance(pages, list) or not pages:
+            return None
+
+        selected: dict[str, Any] | None = None
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            page_token = str(page.get("access_token") or "").strip()
+            tasks = page.get("tasks") or []
+            can_publish = isinstance(tasks, list) and (
+                "CREATE_CONTENT" in tasks or "MODERATE" in tasks or "MANAGE" in tasks
+            )
+            if page_token and can_publish:
+                selected = page
+                break
+
+        if selected is None:
+            selected = next(
+                (
+                    page
+                    for page in pages
+                    if isinstance(page, dict) and str(page.get("access_token") or "").strip()
+                ),
+                None,
+            )
+
+        if not selected:
+            return None
+
+        return {
+            "page_id": str(selected.get("id") or "").strip(),
+            "page_name": str(selected.get("name") or "").strip(),
+            "page_access_token": str(selected.get("access_token") or "").strip(),
+        }
+    except Exception as exc:
+        logger.warning("Could not resolve Facebook page connection: %s", exc)
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
