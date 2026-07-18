@@ -55,12 +55,15 @@ def oauth_start(platform: str, user_id: int, db: Session = Depends(get_db)) -> d
         raise HTTPException(status_code=404, detail="User not found")
 
     if not is_platform_configured(platform):
+        hint = "META_APP_ID, META_APP_SECRET"
+        if platform == "threads":
+            hint = "THREADS_APP_ID, THREADS_APP_SECRET"
         raise HTTPException(
             status_code=501,
             detail=(
                 f"{platform.title()} OAuth is not configured on this deployment. "
                 "Please add the platform app credentials to your environment variables "
-                "(e.g. META_APP_ID, META_APP_SECRET) and redeploy. "
+                f"(e.g. {hint}) and redeploy. "
                 "You can still connect a channel manually using the handle form."
             ),
         )
