@@ -105,14 +105,10 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
 def _platform_creds(platform: str) -> tuple[str, str]:
     cfg = _PLATFORM_OAUTH.get(platform, {})
     client_id_key, secret_key = cfg.get("cred_keys", ("", ""))
-    client_id = getattr(settings, client_id_key, "") or ""
-    client_secret = getattr(settings, secret_key, "") or ""
-
-    if platform == "threads" and (not client_id.strip() or not client_secret.strip()):
-        client_id = settings.meta_app_id or ""
-        client_secret = settings.meta_app_secret or ""
-
-    return (client_id, client_secret)
+    return (
+        getattr(settings, client_id_key, "") or "",
+        getattr(settings, secret_key, "") or "",
+    )
 
 
 def is_platform_configured(platform: str) -> bool:
