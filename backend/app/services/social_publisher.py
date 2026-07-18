@@ -94,10 +94,10 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
         "extra_auth_params": {"access_type": "offline", "prompt": "consent"},
     },
     "threads": {
-        "auth_url": "https://api.threads.net/oauth/authorize",
+        "auth_url": "https://threads.net/oauth/authorize",
         "token_url": "https://graph.threads.net/oauth/access_token",
         "scopes": "threads_basic,threads_content_publish",
-        "cred_keys": ("meta_app_id", "meta_app_secret"),
+        "cred_keys": ("threads_app_id", "threads_app_secret"),
     },
 }
 
@@ -105,10 +105,14 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
 def _platform_creds(platform: str) -> tuple[str, str]:
     cfg = _PLATFORM_OAUTH.get(platform, {})
     client_id_key, secret_key = cfg.get("cred_keys", ("", ""))
-    return (
-        getattr(settings, client_id_key, "") or "",
-        getattr(settings, secret_key, "") or "",
-    )
+    client_id = getattr(settings, client_id_key, "") or ""
+    client_secret = getattr(settings, secret_key, "") or ""
+
+    if platform == "threads" and (not client_id.strip() or not client_secret.strip()):
+        client_id = settings.meta_app_id or ""
+        client_secret = settings.meta_app_secret or ""
+
+    return (client_id, client_secret)
 
 
 def is_platform_configured(platform: str) -> bool:

@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     tiktok_client_secret: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
+    threads_app_id: str = ""
+    threads_app_secret: str = ""
 
     # Public frontend URL used for OAuth redirect_uri construction
     frontend_url: str = ""
