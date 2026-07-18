@@ -117,6 +117,26 @@ def _extract_onboarding_state(user_meta: dict | None) -> tuple[bool, bool]:
     return True, bool(user_meta.get("onboarding_complete"))
 
 
+def _google_account_is_new(auth_user: dict, threshold_minutes: int = 15) -> bool:
+    """Return True when the Supabase account was created within the last `threshold_minutes`.
+
+    A recently-created account means this is a genuinely new Google sign-up that still needs
+    onboarding.  An older account without the onboarding_complete flag is an existing
+    email-signup user connecting their Google identity for the first time, so they should
+    skip onboarding.
+    """
+    created_raw = str(auth_user.get("created_at") or "").strip()
+    if not created_raw:
+        return False  # Cannot determine → treat as existing
+    try:
+        created_at = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        return (datetime.now(tz=UTC) - created_at) < timedelta(minutes=threshold_minutes)
+    except (ValueError, TypeError):
+        return False
+
+
 def _normalize_email(value: str) -> str:
     return str(value or "").strip().lower()
 
@@ -605,12 +625,22 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
     full_name = str(user_meta.get("full_name") or normalized_email.split("@")[0]).strip()
     username_seed = str(user_meta.get("user_name") or user_meta.get("preferred_username") or normalized_email.split("@")[0])
 
+    # Resolve onboarding state from Supabase metadata using the same logic as the email
+    # login flow.  For accounts that pre-date the onboarding_complete metadata flag the
+    # helper defaults to True (skip onboarding) — UNLESS the Supabase account was just
+    # created (< 15 min), which indicates a brand-new Google sign-up that still needs it.
+    has_flag, onboarding_from_meta = _extract_onboarding_state(user_meta)
+    if not has_flag:
+        if _google_account_is_new(auth_user):
+            onboarding_from_meta = False   # brand-new account → needs onboarding
+        # else: existing account without the flag → keep True (skip onboarding)
+
     user = db.scalar(select(User).where(User.email == normalized_email))
     if not user:
         user = User(
             email=normalized_email,
             display_name=full_name,
-            onboarding_complete=False,
+            onboarding_complete=onboarding_from_meta,
         )
         db.add(user)
         db.flush()
@@ -639,6 +669,11 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
     else:
         if not user.display_name or user.display_name == normalized_email.split("@")[0]:
             user.display_name = full_name
+
+        # Apply Supabase-derived onboarding state: never go backwards (True→False), but
+        # do go forwards when Supabase or the heuristic says the user is already onboarded.
+        if onboarding_from_meta and not user.onboarding_complete:
+            user.onboarding_complete = True
 
         credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
         if not credential:

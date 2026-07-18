@@ -13,12 +13,22 @@ import {
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
-function chatSessionsStorageKey(userId: number) {
-  return `xcr8-assistant-chat-summaries:${userId}`;
+function chatSessionsStorageKey(email: string) {
+  return `xcr8-assistant-chat-summaries:e:${email}`;
 }
 
-function activeChatStorageKey(userId: number) {
-  return `xcr8-assistant-active-chat:${userId}`;
+function activeChatStorageKey(email: string) {
+  return `xcr8-assistant-active-chat:e:${email}`;
+}
+
+function migrateLegacyKey(newKey: string, oldKey: string): string | null {
+  const existing = localStorage.getItem(newKey);
+  if (existing) return existing;
+  const legacy = localStorage.getItem(oldKey);
+  if (!legacy) return null;
+  localStorage.setItem(newKey, legacy);
+  localStorage.removeItem(oldKey);
+  return legacy;
 }
 
 function isChatSummary(value: unknown): value is AiAssistantChatSummary {
@@ -57,13 +67,15 @@ export default function AssistantHistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !email) {
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-    const sessionsKey = chatSessionsStorageKey(userId);
+    const sessionsKey = chatSessionsStorageKey(email);
+    migrateLegacyKey(sessionsKey, `xcr8-assistant-chat-summaries:${userId}`);
+    migrateLegacyKey(activeChatStorageKey(email), `xcr8-assistant-active-chat:${userId}`);
 
     const load = async () => {
       const cachedRaw = localStorage.getItem(sessionsKey);
@@ -110,7 +122,7 @@ export default function AssistantHistoryPage() {
   }, [email, userId]);
 
   const renameSession = async (session: AiAssistantChatSummary) => {
-    if (!userId) {
+    if (!userId || !email) {
       return;
     }
 
@@ -128,7 +140,7 @@ export default function AssistantHistoryPage() {
       );
       setSessions((current) => {
         const next = current.map((item) => (item.chat_id === updated.chat_id ? updated : item));
-        localStorage.setItem(chatSessionsStorageKey(userId), JSON.stringify(next));
+        localStorage.setItem(chatSessionsStorageKey(email), JSON.stringify(next));
         return next;
       });
       setError(null);
@@ -138,7 +150,7 @@ export default function AssistantHistoryPage() {
   };
 
   const deleteSession = async (session: AiAssistantChatSummary) => {
-    if (!userId) {
+    if (!userId || !email) {
       return;
     }
 
@@ -150,7 +162,7 @@ export default function AssistantHistoryPage() {
       await deleteAiAssistantChat(userId, session.chat_id, email ?? undefined);
       setSessions((current) => {
         const remaining = current.filter((item) => item.chat_id !== session.chat_id);
-        const activeKey = activeChatStorageKey(userId);
+        const activeKey = activeChatStorageKey(email);
         const currentActive = localStorage.getItem(activeKey);
         if (currentActive === session.chat_id) {
           if (remaining[0]) {
@@ -159,7 +171,7 @@ export default function AssistantHistoryPage() {
             localStorage.removeItem(activeKey);
           }
         }
-        localStorage.setItem(chatSessionsStorageKey(userId), JSON.stringify(remaining));
+        localStorage.setItem(chatSessionsStorageKey(email), JSON.stringify(remaining));
         return remaining;
       });
       setError(null);
@@ -243,8 +255,8 @@ export default function AssistantHistoryPage() {
                       <Link
                         href={`/ai-studio/assistant?chat=${encodeURIComponent(session.chat_id)}`}
                         onClick={() => {
-                          if (userId) {
-                            localStorage.setItem(activeChatStorageKey(userId), session.chat_id);
+                          if (email) {
+                            localStorage.setItem(activeChatStorageKey(email), session.chat_id);
                           }
                         }}
                         className="inline-flex items-center rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200 transition hover:bg-cyan-500/15 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"

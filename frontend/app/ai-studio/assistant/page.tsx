@@ -29,20 +29,33 @@ const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_s
 const MAX_RENDERED_MESSAGES = 240;
 const MAX_SENT_MESSAGES = 40;
 
-function chatSessionsStorageKey(userId: number) {
-  return `xcr8-assistant-chat-summaries:${userId}`;
+// Storage keys are scoped to email (stable across DB resets).
+// The ":e:" prefix avoids collisions with legacy userId-based keys.
+function chatSessionsStorageKey(email: string) {
+  return `xcr8-assistant-chat-summaries:e:${email}`;
 }
 
-function activeChatStorageKey(userId: number) {
-  return `xcr8-assistant-active-chat:${userId}`;
+function activeChatStorageKey(email: string) {
+  return `xcr8-assistant-active-chat:e:${email}`;
 }
 
-function draftStorageKey(userId: number, chatId: string) {
-  return `xcr8-assistant-draft:${userId}:${chatId}`;
+function draftStorageKey(email: string, chatId: string) {
+  return `xcr8-assistant-draft:e:${email}:${chatId}`;
 }
 
-function messagesStorageKey(userId: number, chatId: string) {
-  return `xcr8-assistant-messages:${userId}:${chatId}`;
+function messagesStorageKey(email: string, chatId: string) {
+  return `xcr8-assistant-messages:e:${email}:${chatId}`;
+}
+
+/** One-time silent migration from the old userId-scoped key to the email-scoped key. */
+function migrateLegacyKey(newKey: string, oldKey: string): string | null {
+  const existing = localStorage.getItem(newKey);
+  if (existing) return existing;
+  const legacy = localStorage.getItem(oldKey);
+  if (!legacy) return null;
+  localStorage.setItem(newKey, legacy);
+  localStorage.removeItem(oldKey);
+  return legacy;
 }
 
 function buildChatTitle(value: string) {
@@ -184,15 +197,19 @@ export default function AssistantPage() {
   }, [requestedChatId]);
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !email) {
       return;
     }
 
     let cancelled = false;
 
     const loadChatSessions = async () => {
-      const storageKey = activeChatStorageKey(userId);
-      const sessionsKey = chatSessionsStorageKey(userId);
+      const storageKey = activeChatStorageKey(email);
+      const sessionsKey = chatSessionsStorageKey(email);
+
+      // One-time silent migration from the old userId-scoped key.
+      migrateLegacyKey(sessionsKey, `xcr8-assistant-chat-summaries:${userId}`);
+      migrateLegacyKey(storageKey, `xcr8-assistant-active-chat:${userId}`);
 
       let cachedSessions: AiAssistantChatSummary[] = [];
       const cachedRaw = localStorage.getItem(sessionsKey);
@@ -270,32 +287,32 @@ export default function AssistantPage() {
   }, [email, requestedChatId, searchParams, userId, welcomeMessage]);
 
   useEffect(() => {
-    if (!userId) {
+    if (!email) {
       return;
     }
 
-    localStorage.setItem(chatSessionsStorageKey(userId), JSON.stringify(chatSessions));
-  }, [chatSessions, userId]);
+    localStorage.setItem(chatSessionsStorageKey(email), JSON.stringify(chatSessions));
+  }, [chatSessions, email]);
 
   useEffect(() => {
-    if (!userId || !activeChatId) {
+    if (!email || !activeChatId) {
       return;
     }
 
-    localStorage.setItem(activeChatStorageKey(userId), activeChatId);
-  }, [activeChatId, userId]);
+    localStorage.setItem(activeChatStorageKey(email), activeChatId);
+  }, [activeChatId, email]);
 
   useEffect(() => {
-    if (!userId || !activeChatId) {
+    if (!email || !activeChatId) {
       return;
     }
 
-    const draft = localStorage.getItem(draftStorageKey(userId, activeChatId));
+    const draft = localStorage.getItem(draftStorageKey(email, activeChatId));
     if (typeof draft === "string") {
       setPrompt(draft);
     }
 
-    const cachedMessagesRaw = localStorage.getItem(messagesStorageKey(userId, activeChatId));
+    const cachedMessagesRaw = localStorage.getItem(messagesStorageKey(email, activeChatId));
     if (cachedMessagesRaw) {
       try {
         const parsed = JSON.parse(cachedMessagesRaw) as unknown;
@@ -309,26 +326,26 @@ export default function AssistantPage() {
         // Ignore invalid cache and rely on server history.
       }
     }
-  }, [activeChatId, userId]);
+  }, [activeChatId, email]);
 
   useEffect(() => {
-    if (!userId || !activeChatId) {
+    if (!email || !activeChatId) {
       return;
     }
 
-    localStorage.setItem(draftStorageKey(userId, activeChatId), prompt);
-  }, [activeChatId, prompt, userId]);
+    localStorage.setItem(draftStorageKey(email, activeChatId), prompt);
+  }, [activeChatId, email, prompt]);
 
   useEffect(() => {
-    if (!userId || !activeChatId) {
+    if (!email || !activeChatId) {
       return;
     }
 
     localStorage.setItem(
-      messagesStorageKey(userId, activeChatId),
+      messagesStorageKey(email, activeChatId),
       JSON.stringify(messages.slice(-MAX_RENDERED_MESSAGES)),
     );
-  }, [activeChatId, messages, userId]);
+  }, [activeChatId, email, messages]);
 
   useEffect(() => {
     if (!userId || !activeChatId) {
@@ -381,7 +398,7 @@ export default function AssistantPage() {
     setMessages([welcomeMessage]);
     setError(null);
     setPrompt("");
-    localStorage.removeItem(draftStorageKey(userId, chatId));
+    if (email) localStorage.removeItem(draftStorageKey(email, chatId));
     setSuggestedActions(starterPrompts);
     setChatSessions((current) => [
       summary,
@@ -466,7 +483,7 @@ export default function AssistantPage() {
         return [updatedSession, ...current.filter((session) => session.chat_id !== resolvedChatId)];
       });
       setPrompt("");
-      localStorage.removeItem(draftStorageKey(userId, resolvedChatId));
+      if (email) localStorage.removeItem(draftStorageKey(email, resolvedChatId));
     } catch (err) {
       const errorMessage = getApiErrorMessage(
         err,
