@@ -392,6 +392,8 @@ def list_admin_incidents(
             first_seen_at=incident.first_seen_at.isoformat() if incident.first_seen_at else "",
             last_seen_at=incident.last_seen_at.isoformat() if incident.last_seen_at else "",
             resolved_at=incident.resolved_at.isoformat() if incident.resolved_at else None,
+            resolution_summary=incident.resolution_summary,
+            incident_meta=incident.incident_meta or {},
         )
         for incident in incidents
     ]
@@ -437,6 +439,8 @@ def update_admin_incident(
         first_seen_at=incident.first_seen_at.isoformat() if incident.first_seen_at else "",
         last_seen_at=incident.last_seen_at.isoformat() if incident.last_seen_at else "",
         resolved_at=incident.resolved_at.isoformat() if incident.resolved_at else None,
+        resolution_summary=incident.resolution_summary,
+        incident_meta=incident.incident_meta or {},
     )
 
 
@@ -479,6 +483,8 @@ def trigger_test_incident(
         first_seen_at=incident.first_seen_at.isoformat() if incident.first_seen_at else "",
         last_seen_at=incident.last_seen_at.isoformat() if incident.last_seen_at else "",
         resolved_at=incident.resolved_at.isoformat() if incident.resolved_at else None,
+        resolution_summary=incident.resolution_summary,
+        incident_meta=incident.incident_meta or {},
     )
 
 

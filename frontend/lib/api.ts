@@ -88,6 +88,8 @@ export type PulseIncidentItem = {
   first_seen_at: string;
   last_seen_at: string;
   resolved_at?: string | null;
+  resolution_summary?: string | null;
+  incident_meta?: Record<string, unknown>;
 };
 
 export type AdminOverviewPayload = {

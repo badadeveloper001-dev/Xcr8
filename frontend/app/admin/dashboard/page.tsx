@@ -99,7 +99,29 @@ export default function AdminDashboardPage() {
     enabled: Boolean(accessCode),
     refetchInterval: 15000,
   });
-  const openIncidents = incidents.filter((incident) => incident.status !== "fixed");
+  const isTestIncident = (incident: (typeof incidents)[number]) => {
+    const meta = incident.incident_meta ?? {};
+    return (
+      incident.feature === "pulse_test" ||
+      meta.manual_test === true ||
+      incident.title.toLowerCase().includes("pulse test")
+    );
+  };
+
+  const openIncidents = incidents.filter(
+    (incident) => incident.status !== "fixed" && !isTestIncident(incident),
+  );
+  const openTestIncidents = incidents.filter(
+    (incident) => incident.status !== "fixed" && isTestIncident(incident),
+  );
+  const resolvedIncidents = incidents
+    .filter((incident) => incident.status === "fixed")
+    .sort((a, b) => {
+      const aTs = a.resolved_at ? new Date(a.resolved_at).getTime() : 0;
+      const bTs = b.resolved_at ? new Date(b.resolved_at).getTime() : 0;
+      return bTs - aTs;
+    })
+    .slice(0, 8);
 
   const statValue = (value: number | undefined) => (isLoading ? "..." : (value ?? 0));
 
@@ -296,6 +318,14 @@ export default function AdminDashboardPage() {
             repeated failures still stay open until manually resolved.
           </p>
 
+          {openTestIncidents.length > 0 ? (
+            <p className="mb-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 light:border-amber-300 light:bg-amber-50 light:text-amber-700">
+              {openTestIncidents.length} open Pulse test incident
+              {openTestIncidents.length === 1 ? " is" : "s are"} from manual checks. These are
+              expected during monitoring drills and can be marked fixed after validation.
+            </p>
+          ) : null}
+
           {error ? (
             <p className="mb-3 text-sm text-rose-300">
               Admin data failed to load from the live API. Retry after sign-in or refresh.
@@ -364,6 +394,51 @@ export default function AdminDashboardPage() {
                 No incidents detected yet. Pulse is watching the platform.
               </p>
             ) : null}
+          </div>
+
+          <div className="mt-5">
+            <h3 className="mb-2 text-sm font-semibold text-white light:text-slate-900">
+              Recent Resolved Incidents
+            </h3>
+            <div className="space-y-2">
+              {resolvedIncidents.map((incident) => {
+                const resolvedAt = incident.resolved_at
+                  ? new Date(incident.resolved_at).toLocaleString()
+                  : "Unknown";
+                const reason =
+                  incident.resolution_summary?.trim() || "Resolved without a custom summary.";
+                const autoClosed = reason.toLowerCase().includes("auto-closed");
+
+                return (
+                  <article
+                    key={`resolved-${incident.id}`}
+                    className="surface-soft rounded-xl px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-white light:text-slate-900">
+                        {incident.title}
+                      </p>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                        {incident.feature}
+                      </span>
+                      {autoClosed ? (
+                        <span className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cyan-300 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700">
+                          Auto-closed
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">{reason}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">Resolved at {resolvedAt}</p>
+                  </article>
+                );
+              })}
+
+              {!incidentsLoading && resolvedIncidents.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No resolved incidents in recent history yet.
+                </p>
+              ) : null}
+            </div>
           </div>
         </section>
       </div>

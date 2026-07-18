@@ -157,6 +157,8 @@ class PulseIncidentItem(BaseModel):
     first_seen_at: str
     last_seen_at: str
     resolved_at: str | None = None
+    resolution_summary: str | None = None
+    incident_meta: dict = Field(default_factory=dict)
 
 
 class PulseStatusUpdateRequest(BaseModel):
