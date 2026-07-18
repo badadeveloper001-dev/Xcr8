@@ -64,7 +64,7 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
     "facebook": {
         "auth_url": "https://www.facebook.com/v19.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v19.0/oauth/access_token",
-        "scopes": "pages_manage_posts,pages_read_engagement,pages_show_list",
+        "scopes": "pages_manage_posts,pages_show_list",
         "cred_keys": ("meta_app_id", "meta_app_secret"),
     },
     "x": {
