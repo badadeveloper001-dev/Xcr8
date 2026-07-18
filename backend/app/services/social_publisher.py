@@ -205,9 +205,16 @@ def exchange_code_for_token(
                     },
                     data=data,
                 )
-            elif platform in ("instagram", "facebook", "threads"):
-                # Meta uses GET for token exchange
+            elif platform in ("instagram", "facebook"):
+                # Facebook/Instagram token exchange accepts query params.
                 response = client.get(cfg["token_url"], params=data)
+            elif platform == "threads":
+                # Threads OAuth token exchange expects form-encoded POST.
+                response = client.post(
+                    cfg["token_url"],
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    data=data,
+                )
             else:
                 response = client.post(
                     cfg["token_url"],
@@ -234,13 +241,25 @@ def exchange_code_for_token(
 def fetch_platform_user_info(platform: str, access_token: str) -> dict[str, str]:
     try:
         with httpx.Client(timeout=12.0) as client:
-            if platform in ("instagram", "facebook", "threads"):
+            if platform in ("instagram", "facebook"):
                 resp = client.get(
                     "https://graph.facebook.com/v19.0/me",
                     params={"fields": "id,name", "access_token": access_token},
                 )
                 d = resp.json()
                 return {"platform_user_id": d.get("id", ""), "handle": d.get("name", "")}
+
+            elif platform == "threads":
+                resp = client.get(
+                    "https://graph.threads.net/v1.0/me",
+                    params={"fields": "id,username", "access_token": access_token},
+                )
+                d = resp.json()
+                username = str(d.get("username", "")).strip()
+                return {
+                    "platform_user_id": str(d.get("id", "")).strip(),
+                    "handle": f"@{username}" if username else "Threads",
+                }
 
             elif platform == "x":
                 resp = client.get(
