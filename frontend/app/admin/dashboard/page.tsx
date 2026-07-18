@@ -99,6 +99,7 @@ export default function AdminDashboardPage() {
     enabled: Boolean(accessCode),
     refetchInterval: 15000,
   });
+  const openIncidents = incidents.filter((incident) => incident.status !== "fixed");
 
   const statValue = (value: number | undefined) => (isLoading ? "..." : (value ?? 0));
 
@@ -297,7 +298,7 @@ export default function AdminDashboardPage() {
           ) : null}
 
           <div className="space-y-3">
-            {incidents.map((incident) => (
+            {openIncidents.map((incident) => (
               <article key={incident.id} className="surface-soft rounded-xl px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
@@ -353,7 +354,7 @@ export default function AdminDashboardPage() {
               </article>
             ))}
 
-            {!incidentsLoading && incidents.length === 0 ? (
+            {!incidentsLoading && openIncidents.length === 0 ? (
               <p className="text-sm text-slate-400">
                 No incidents detected yet. Pulse is watching the platform.
               </p>
