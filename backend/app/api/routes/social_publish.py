@@ -14,6 +14,7 @@ from app.services.social_publisher import (
     configured_platforms,
     exchange_code_for_token,
     fetch_facebook_page_connection,
+    fetch_instagram_business_connection,
     fetch_platform_user_info,
     get_oauth_authorize_url,
     is_platform_configured,
@@ -153,6 +154,35 @@ def oauth_callback(
         if page_name:
             handle = page_name
 
+    if platform == "instagram":
+        ig_info = fetch_instagram_business_connection(source_user_access_token)
+        if not ig_info:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Instagram connected, but no Instagram business account was found on linked Facebook Pages. "
+                    "Link your Instagram professional account to a Facebook Page and try again."
+                ),
+            )
+
+        ig_user_id = str(ig_info.get("ig_user_id") or "").strip()
+        ig_username = str(ig_info.get("ig_username") or "").strip()
+        page_token = str(ig_info.get("page_access_token") or "").strip()
+
+        if not ig_user_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Instagram business account ID is missing. Reconnect after linking IG to a Facebook Page.",
+            )
+
+        if page_token:
+            access_token = page_token
+        platform_user_id = ig_user_id
+        if ig_username:
+            handle = f"@{ig_username}"
+        elif ig_info.get("page_name"):
+            handle = str(ig_info.get("page_name"))
+
     try:
         platform_enum = Platform(platform)
     except ValueError:
@@ -176,6 +206,8 @@ def oauth_callback(
                 "source_user_access_token": source_user_access_token,
             }
         )
+    if platform == "instagram":
+        auth_meta["source_user_access_token"] = source_user_access_token
 
     existing = db.scalar(
         select(ConnectedPlatform).where(

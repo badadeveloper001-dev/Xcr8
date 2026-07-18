@@ -58,7 +58,7 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
     "instagram": {
         "auth_url": "https://www.facebook.com/v19.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v19.0/oauth/access_token",
-        "scopes": "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement",
+        "scopes": "instagram_basic,instagram_content_publish,pages_show_list",
         "cred_keys": ("meta_app_id", "meta_app_secret"),
     },
     "facebook": {
@@ -347,6 +347,58 @@ def fetch_facebook_page_connection(user_access_token: str) -> dict[str, str] | N
         }
     except Exception as exc:
         logger.warning("Could not resolve Facebook page connection: %s", exc)
+        return None
+
+
+def fetch_instagram_business_connection(user_access_token: str) -> dict[str, str] | None:
+    """Resolve an Instagram business account + page access token from a Meta user token."""
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.get(
+                "https://graph.facebook.com/v19.0/me/accounts",
+                params={
+                    "access_token": user_access_token,
+                    "fields": "id,name,access_token,instagram_business_account{id,username}",
+                    "limit": 25,
+                },
+            )
+
+        if response.status_code >= 400:
+            logger.warning(
+                "Instagram account lookup failed: %s %s",
+                response.status_code,
+                response.text[:300],
+            )
+            return None
+
+        pages = response.json().get("data", [])
+        if not isinstance(pages, list) or not pages:
+            return None
+
+        selected: dict[str, Any] | None = None
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            page_token = str(page.get("access_token") or "").strip()
+            ig = page.get("instagram_business_account") or {}
+            ig_id = str((ig or {}).get("id") or "").strip() if isinstance(ig, dict) else ""
+            if page_token and ig_id:
+                selected = page
+                break
+
+        if not selected:
+            return None
+
+        ig = selected.get("instagram_business_account") or {}
+        return {
+            "ig_user_id": str((ig or {}).get("id") or "").strip(),
+            "ig_username": str((ig or {}).get("username") or "").strip(),
+            "page_id": str(selected.get("id") or "").strip(),
+            "page_name": str(selected.get("name") or "").strip(),
+            "page_access_token": str(selected.get("access_token") or "").strip(),
+        }
+    except Exception as exc:
+        logger.warning("Could not resolve Instagram business connection: %s", exc)
         return None
 
 
