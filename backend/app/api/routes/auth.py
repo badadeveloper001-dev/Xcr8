@@ -76,12 +76,14 @@ def _session_payload(
         if resolved_profile and isinstance(resolved_profile.preferences, dict)
         else {}
     )
+    phone = str(preferences.get("phone") or "").strip() or None
     return AuthSessionResponse(
         user_id=user.id,
         email=user.email,
         display_name=user.display_name,
         full_name=credential.full_name if credential else user.display_name,
         username=credential.username if credential else None,
+        phone=phone,
         avatar_url=str(preferences.get("avatar_url") or "").strip() or None,
         onboarding_complete=user.onboarding_complete,
         google_oauth_enabled=settings.google_oauth_enabled,
@@ -789,25 +791,16 @@ def update_profile(payload: AuthProfileUpdateRequest, db: Session = Depends(get_
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    display_name = str(payload.display_name or "").strip()
-    if len(display_name) < 2:
-        raise HTTPException(status_code=400, detail="Display name must be at least 2 characters.")
-
-    user.display_name = display_name
-
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     if credential:
         if payload.username is not None:
             next_username = str(payload.username).strip()
+            if len(next_username) < 3:
+                raise HTTPException(status_code=400, detail="Username must be at least 3 characters.")
             username_taken = db.scalar(select(AuthCredential).where(AuthCredential.username == next_username))
             if username_taken and username_taken.user_id != user.id:
                 raise HTTPException(status_code=409, detail="Username is already taken.")
             credential.username = next_username
-
-        if payload.full_name is not None:
-            credential.full_name = str(payload.full_name).strip() or display_name
-        else:
-            credential.full_name = credential.full_name or display_name
     else:
         placeholder_salt, placeholder_hash = _hash_password(secrets.token_urlsafe(16))
         requested_username = str(payload.username or "").strip() or user.email.split("@")[0]
@@ -815,12 +808,23 @@ def update_profile(payload: AuthProfileUpdateRequest, db: Session = Depends(get_
         credential = AuthCredential(
             user_id=user.id,
             username=safe_username,
-            full_name=str(payload.full_name or "").strip() or display_name,
+            full_name=user.display_name,
             password_salt=placeholder_salt,
             password_hash=placeholder_hash,
             remember_me_default=False,
         )
         db.add(credential)
+
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    if not profile:
+        profile = CreatorProfile(user_id=user.id, preferences={})
+        db.add(profile)
+
+    preferences = dict(profile.preferences or {}) if isinstance(profile.preferences, dict) else {}
+    if payload.phone is not None:
+        next_phone = str(payload.phone).strip()
+        preferences["phone"] = next_phone or None
+    profile.preferences = preferences
 
     db.commit()
     db.refresh(user)

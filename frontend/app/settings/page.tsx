@@ -42,6 +42,7 @@ export default function SettingsPage() {
   const displayName = useCreatorStore((s) => s.displayName);
   const fullName = useCreatorStore((s) => s.fullName);
   const username = useCreatorStore((s) => s.username);
+  const phone = useCreatorStore((s) => s.phone);
   const onboardingComplete = useCreatorStore((s) => s.onboardingComplete);
   const setSession = useCreatorStore((s) => s.setSession);
   const avatarUrl = useCreatorStore((s) => s.avatarUrl);
@@ -56,9 +57,8 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [platformDraft, setPlatformDraft] = useState<PlatformConnectPayload | null>(null);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const [profileDisplayName, setProfileDisplayName] = useState(displayName ?? "");
-  const [profileFullName, setProfileFullName] = useState(fullName ?? displayName ?? "");
   const [profileUsername, setProfileUsername] = useState(username ?? "");
+  const [profilePhone, setProfilePhone] = useState(phone ?? "");
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -89,16 +89,12 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    setProfileDisplayName(displayName ?? "");
-  }, [displayName]);
-
-  useEffect(() => {
-    setProfileFullName(fullName ?? displayName ?? "");
-  }, [fullName, displayName]);
-
-  useEffect(() => {
     setProfileUsername(username ?? "");
   }, [username]);
+
+  useEffect(() => {
+    setProfilePhone(phone ?? "");
+  }, [phone]);
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["platform-connections", userId],
@@ -114,10 +110,10 @@ export default function SettingsPage() {
 
   const activeConnections = (connections ?? []).filter((item) => item.active);
   const oauthConnections = activeConnections.filter((item) => item.connection_method === "oauth");
-  const filledProfileFields = [profileDisplayName, profileFullName, profileUsername].filter(
+  const filledProfileFields = [profileUsername, profilePhone].filter(
     (value) => value.trim().length > 0,
   ).length;
-  const profileCompleteness = Math.round((filledProfileFields / 3) * 100);
+  const profileCompleteness = Math.round((filledProfileFields / 2) * 100);
 
   const connectMutation = useMutation({
     mutationFn: async (payload: PlatformConnectPayload) =>
@@ -200,12 +196,11 @@ export default function SettingsPage() {
   };
 
   const handleProfileSave = async () => {
-    const nextDisplayName = profileDisplayName.trim();
-    const nextFullName = profileFullName.trim();
     const nextUsername = profileUsername.trim();
+    const nextPhone = profilePhone.trim();
 
-    if (nextDisplayName.length < 2) {
-      setError("Display name must be at least 2 characters.");
+    if (nextUsername.length < 3) {
+      setError("Username must be at least 3 characters.");
       return;
     }
 
@@ -215,9 +210,8 @@ export default function SettingsPage() {
     try {
       const session = await updateProfile({
         user_id: userId,
-        display_name: nextDisplayName,
-        full_name: nextFullName || null,
         username: nextUsername || null,
+        phone: nextPhone || null,
       });
 
       setSession({
@@ -226,6 +220,7 @@ export default function SettingsPage() {
         displayName: session.display_name,
         fullName: session.full_name,
         username: session.username,
+        phone: session.phone,
         avatarUrl: session.avatar_url ?? avatarUrl,
         onboardingComplete,
       });
@@ -316,9 +311,9 @@ export default function SettingsPage() {
                 hint: oauthConnections.length ? "Can publish" : "Manual only",
               },
               {
-                label: "Profile",
+                label: "Identity",
                 value: `${profileCompleteness}%`,
-                hint: `${filledProfileFields}/3 fields filled`,
+                hint: `${filledProfileFields}/2 fields filled`,
               },
               {
                 label: "Status",
@@ -399,24 +394,23 @@ export default function SettingsPage() {
           className="xcr8-panel rounded-2xl border-2 border-indigo-300/25 p-4"
         >
           <p className="xcr8-eyebrow mb-3">Profile</p>
+          <p className="mb-3 text-xs text-slate-500">
+            Username and phone are editable here. Display name stays read-only.
+          </p>
           <div className="space-y-2.5">
-            <input
-              value={profileDisplayName}
-              onChange={(event) => setProfileDisplayName(event.target.value)}
-              className="xcr8-input"
-              placeholder="Display name"
-            />
-            <input
-              value={profileFullName}
-              onChange={(event) => setProfileFullName(event.target.value)}
-              className="xcr8-input"
-              placeholder="Full name"
-            />
             <input
               value={profileUsername}
               onChange={(event) => setProfileUsername(event.target.value)}
               className="xcr8-input"
               placeholder="Username"
+            />
+            <input
+              value={profilePhone}
+              onChange={(event) => setProfilePhone(event.target.value)}
+              className="xcr8-input"
+              placeholder="Phone number"
+              inputMode="tel"
+              autoComplete="tel"
             />
             <button
               type="button"

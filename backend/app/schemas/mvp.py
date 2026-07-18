@@ -67,6 +67,7 @@ class AuthSessionResponse(BaseModel):
     display_name: str
     full_name: str | None = None
     username: str | None = None
+    phone: str | None = None
     avatar_url: str | None = None
     onboarding_complete: bool
     google_oauth_enabled: bool
@@ -79,9 +80,12 @@ class AvatarUpdateRequest(BaseModel):
 
 class AuthProfileUpdateRequest(BaseModel):
     user_id: int
-    display_name: str = Field(min_length=2, max_length=120)
-    full_name: str | None = Field(default=None, min_length=2, max_length=120)
     username: str | None = Field(default=None, min_length=3, max_length=40, pattern=r"^[a-zA-Z0-9_.-]+$")
+    phone: str | None = Field(default=None, max_length=32)
+
+
+class IntelligenceNotificationReadRequest(BaseModel):
+    user_id: int
 
 
 class OnboardingRequest(BaseModel):

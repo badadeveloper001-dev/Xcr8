@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { Bell, CheckCheck, RefreshCw, Sparkles } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowUpRight, Bell, CheckCheck, RefreshCw, Sparkles } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   getApiErrorMessage,
   getIntelligenceFeed,
+  markIntelligenceNotificationRead,
   refreshIntelligence,
   type IntelligenceFeedResponse,
   type IntelligenceNotification,
@@ -33,8 +34,11 @@ function formatCreatedAt(value: string) {
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
+  const selectedNotificationId = Number(searchParams.get("notification") || 0) || null;
 
   useEffect(() => {
     if (hasHydrated && !userId) {
@@ -50,9 +54,39 @@ export default function NotificationsPage() {
     refetchOnWindowFocus: true,
   });
 
+  const markReadMutation = useMutation({
+    mutationFn: async (notificationId: number) =>
+      markIntelligenceNotificationRead(notificationId, userId as number),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<IntelligenceFeedResponse>(["notifications", userId], (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          notifications: current.notifications.map((item) =>
+            item.id === updated.id ? updated : item,
+          ),
+        };
+      });
+    },
+  });
+
   const notifications = data?.notifications ?? [];
   const unreadCount = notifications.filter((item) => !item.is_read).length;
   const latestSeverity = notifications[0]?.severity ?? "info";
+  const selectedNotification = selectedNotificationId
+    ? (notifications.find((item) => item.id === selectedNotificationId) ?? null)
+    : null;
+
+  useEffect(() => {
+    if (!selectedNotificationId || !selectedNotification || selectedNotification.is_read) {
+      return;
+    }
+
+    void markReadMutation.mutateAsync(selectedNotificationId);
+  }, [markReadMutation, selectedNotification, selectedNotificationId]);
 
   const handleRefresh = async () => {
     if (!userId) {
@@ -71,20 +105,20 @@ export default function NotificationsPage() {
     return null;
   }
 
+  const openNotification = (notificationId: number) => {
+    router.push(`/notifications?notification=${notificationId}`);
+  };
+
   return (
-    <MobileShell title="Notifications" subtitle="Your in-app inbox before email delivery is ready.">
+    <MobileShell title="Notifications" subtitle="Open one to mark it read.">
       <div className="space-y-4">
         <section className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-                In-App Inbox
+                Inbox
               </p>
               <h1 className="xcr8-title-xl text-white light:text-slate-900">Notifications</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-400 light:text-slate-600">
-                This is where we can alert creators inside the app now, before email campaigns are
-                wired in. Use it for product updates, trend alerts, and action prompts.
-              </p>
             </div>
 
             <button
@@ -139,8 +173,7 @@ export default function NotificationsPage() {
                     No notifications yet
                   </h2>
                   <p className="mt-2 text-sm text-slate-400 light:text-slate-600">
-                    When product updates, trend alerts, or creator reminders are generated, they
-                    will show up here.
+                    New items will appear here and can be opened directly from the list.
                   </p>
                   <Link
                     href="/dashboard"
@@ -156,7 +189,7 @@ export default function NotificationsPage() {
             notifications.map((item: IntelligenceNotification) => (
               <article
                 key={item.id}
-                className="xcr8-panel rounded-2xl border border-white/10 p-4 transition hover:bg-white/5 light:border-slate-200"
+                className={`xcr8-panel rounded-2xl border p-4 transition hover:bg-white/5 light:border-slate-200 ${selectedNotification?.id === item.id ? "border-cyan-300/40 bg-cyan-500/5" : "border-white/10"}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -182,21 +215,50 @@ export default function NotificationsPage() {
                   </div>
                 </div>
 
-                {item.is_read ? (
-                  <div className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-500">
-                    <CheckCheck size={13} />
-                    Read
-                  </div>
-                ) : (
-                  <div className="mt-3 inline-flex items-center gap-1.5 text-xs text-cyan-300">
-                    <Sparkles size={13} />
-                    Unread
-                  </div>
-                )}
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  {item.is_read ? (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                      <CheckCheck size={13} />
+                      Read
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-cyan-300">
+                      <Sparkles size={13} />
+                      Unread
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => openNotification(item.id)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"
+                  >
+                    Open
+                    <ArrowUpRight size={12} />
+                  </button>
+                </div>
               </article>
             ))
           )}
         </section>
+
+        {selectedNotification ? (
+          <section className="xcr8-panel rounded-2xl border border-cyan-300/25 p-5">
+            <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+              Opened notification
+            </p>
+            <h2 className="xcr8-title-lg text-white light:text-slate-900">
+              {selectedNotification.title}
+            </h2>
+            <p className="mt-2 text-sm text-slate-300 light:text-slate-700">
+              {selectedNotification.body}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              {formatCreatedAt(selectedNotification.created_at)}
+              {selectedNotification.related_topic ? ` • ${selectedNotification.related_topic}` : ""}
+            </p>
+          </section>
+        ) : null}
       </div>
     </MobileShell>
   );

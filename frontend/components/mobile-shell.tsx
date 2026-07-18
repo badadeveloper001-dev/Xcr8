@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { NotificationBellButton } from "@/components/notification-bell-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/mobile-nav";
 
@@ -39,7 +40,10 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
                 </p>
               ) : null}
             </div>
-            <ThemeToggle />
+            <div className="flex shrink-0 items-center gap-2">
+              <NotificationBellButton />
+              <ThemeToggle />
+            </div>
           </header>
         ) : null}
         <main id="main-content" className="relative">

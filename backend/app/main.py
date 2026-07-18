@@ -12,7 +12,7 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.db import models
 from app.db.session import SessionLocal, engine
-from app.services.pulse import record_pulse_event
+from app.services.pulse import auto_resolve_stable_incidents, record_pulse_event
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +143,20 @@ async def pulse_request_middleware(request: Request, call_next):
         except Exception:
             db.rollback()
             logger.exception("Pulse failed to record slow response")
+        finally:
+            db.close()
+
+    if (
+        response.status_code < 400
+        and elapsed_ms < max(1, int(settings.pulse_slow_request_ms or 6000))
+        and request.url.path.startswith("/api/v1")
+    ):
+        db = SessionLocal()
+        try:
+            auto_resolve_stable_incidents(db, request.url.path, request.method, response.status_code)
+        except Exception:
+            db.rollback()
+            logger.exception("Pulse failed to auto-resolve stable incidents")
         finally:
             db.close()
 

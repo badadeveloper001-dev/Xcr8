@@ -17,6 +17,7 @@ export type SessionPayload = {
   display_name: string;
   full_name?: string | null;
   username?: string | null;
+  phone?: string | null;
   avatar_url?: string | null;
   onboarding_complete: boolean;
   google_oauth_enabled: boolean;
@@ -119,9 +120,8 @@ export type AvatarUpdatePayload = {
 
 export type ProfileUpdatePayload = {
   user_id: number;
-  display_name: string;
-  full_name?: string | null;
   username?: string | null;
+  phone?: string | null;
 };
 
 export type PasswordResetConfirmPayload = {
@@ -351,6 +351,8 @@ export type IntelligenceNotification = {
   is_read: boolean;
   created_at: string;
 };
+
+export type IntelligenceNotificationReadResponse = IntelligenceNotification;
 
 export type IntelligenceFeedResponse = {
   user_id: number;
@@ -755,6 +757,18 @@ export async function composeAiContent(payload: AiComposePayload): Promise<AiCom
   const { data } = await apiClient.post<AiComposeResponse>("/api/v1/ai/compose", payload, {
     timeout: 60_000,
   });
+  return data;
+}
+
+export async function markIntelligenceNotificationRead(
+  notificationId: number,
+  userId: number,
+): Promise<IntelligenceNotificationReadResponse> {
+  const { data } = await apiClient.post<IntelligenceNotificationReadResponse>(
+    `/api/v1/intelligence/notifications/${notificationId}/read`,
+    { user_id: userId },
+    { timeout: 30_000 },
+  );
   return data;
 }
 

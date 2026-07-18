@@ -22,6 +22,7 @@ from app.schemas.mvp import (
     IntelligenceFeedbackRequest,
     IntelligenceFeedResponse,
     IntelligenceNotificationItem,
+    IntelligenceNotificationReadRequest,
     IntelligenceRecommendation,
     IntelligenceRefreshRequest,
     IntelligenceResearchBrief,
@@ -329,6 +330,37 @@ def intelligence_feed(
             "notifications": len(notification_items),
             "mode": 1,
         },
+    )
+
+
+@router.post("/notifications/{notification_id}/read", response_model=IntelligenceNotificationItem)
+def mark_notification_read(
+    notification_id: int,
+    payload: IntelligenceNotificationReadRequest,
+    db: Session = Depends(get_db),
+) -> IntelligenceNotificationItem:
+    notification = db.scalar(
+        select(IntelligenceNotification).where(
+            IntelligenceNotification.id == notification_id,
+            IntelligenceNotification.user_id == payload.user_id,
+        )
+    )
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    notification.is_read = True
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    return IntelligenceNotificationItem(
+        id=notification.id,
+        title=notification.title,
+        body=notification.body,
+        severity=notification.severity,
+        related_topic=notification.related_topic,
+        is_read=notification.is_read,
+        created_at=_as_iso(notification.created_at),
     )
 
 

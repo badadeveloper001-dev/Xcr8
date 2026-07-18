@@ -15,6 +15,8 @@ from app.core.config import settings
 from app.db.models import PulseAffectedUser, PulseEvent, PulseIncident, PulseNotification, User
 
 FOUNDER_NOTIFY_COOLDOWN_MINUTES = 30
+AUTO_RESOLVE_MINUTES = 3
+AUTO_RESOLVE_MAX_EVENTS = 5
 
 
 class PulseInput(dict):
@@ -417,6 +419,48 @@ def resolve_pulse_incident(db: Session, incident_id: int, resolution_summary: st
     db.commit()
     db.refresh(incident)
     return incident
+
+
+def auto_resolve_stable_incidents(
+    db: Session,
+    route: str | None,
+    method: str | None,
+    response_status: int,
+) -> list[PulseIncident]:
+    if response_status >= 400:
+        return []
+
+    feature = detect_feature(route)
+    if feature == "unknown":
+        return []
+
+    cutoff = datetime.now(tz=UTC) - timedelta(minutes=AUTO_RESOLVE_MINUTES)
+    incidents = list(
+        db.scalars(
+            select(PulseIncident)
+            .where(
+                PulseIncident.status == "investigating",
+                PulseIncident.resolved_at.is_(None),
+                PulseIncident.feature == feature,
+                PulseIncident.severity.in_({"low", "medium"}),
+                PulseIncident.total_events_count <= AUTO_RESOLVE_MAX_EVENTS,
+                PulseIncident.last_seen_at <= cutoff,
+            )
+            .order_by(desc(PulseIncident.last_seen_at))
+            .limit(3)
+        )
+    )
+
+    resolved: list[PulseIncident] = []
+    method_label = _clean_text(method, "request").upper()
+    route_label = _clean_text(route, "this route")
+    for incident in incidents:
+        summary = f"Auto-closed after healthy {method_label} traffic resumed on {route_label}."
+        resolved_incident = resolve_pulse_incident(db, incident.id, summary)
+        if resolved_incident:
+            resolved.append(resolved_incident)
+
+    return resolved
 
 
 def sign_internal_pulse_token(timestamp: str) -> str:

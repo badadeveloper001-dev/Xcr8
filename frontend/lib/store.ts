@@ -12,6 +12,7 @@ type CreatorState = {
   avatarUrl: string | null;
   fullName: string | null;
   username: string | null;
+  phone: string | null;
   onboardingComplete: boolean;
   theme: "dark" | "light" | "system";
   distributionDraft: {
@@ -31,6 +32,7 @@ type CreatorState = {
     displayName: string;
     fullName?: string | null;
     username?: string | null;
+    phone?: string | null;
     avatarUrl?: string | null;
     onboardingComplete: boolean;
   }) => void;
@@ -53,6 +55,7 @@ export const useCreatorStore = create<CreatorState>()(
       avatarUrl: null,
       fullName: null,
       username: null,
+      phone: null,
       onboardingComplete: false,
       theme: "system",
       distributionDraft: null,
@@ -62,6 +65,7 @@ export const useCreatorStore = create<CreatorState>()(
         displayName,
         fullName,
         username,
+        phone,
         avatarUrl,
         onboardingComplete,
       }) =>
@@ -72,6 +76,7 @@ export const useCreatorStore = create<CreatorState>()(
           avatarUrl: avatarUrl ?? null,
           fullName: fullName ?? displayName,
           username: username ?? null,
+          phone: phone ?? null,
           onboardingComplete,
           activeCreatorId: String(userId),
         }),
@@ -83,6 +88,7 @@ export const useCreatorStore = create<CreatorState>()(
           avatarUrl: null,
           fullName: null,
           username: null,
+          phone: null,
           onboardingComplete: false,
           activeCreatorId: null,
           distributionDraft: null,
@@ -104,6 +110,7 @@ export const useCreatorStore = create<CreatorState>()(
         avatarUrl: state.avatarUrl,
         fullName: state.fullName,
         username: state.username,
+        phone: state.phone,
         onboardingComplete: state.onboardingComplete,
         theme: state.theme,
         activeCreatorId: state.activeCreatorId,

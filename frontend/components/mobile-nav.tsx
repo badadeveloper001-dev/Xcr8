@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Bell, CalendarDays, Home, Palette, PlusCircle, User2 } from "lucide-react";
+import { BarChart3, CalendarDays, Home, Palette, PlusCircle, User2 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/compose", label: "Create", icon: PlusCircle },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/notifications", label: "Alerts", icon: Bell },
   { href: "/ai-studio", label: "AI Studio", icon: Palette },
   { href: "/settings", label: "Profile", icon: User2 },
 ];
