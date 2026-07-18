@@ -18,12 +18,29 @@ export function Cr8orAiWidget() {
     return null;
   }
 
+  const visibleRoutes = [
+    "/dashboard",
+    "/compose",
+    "/calendar",
+    "/analytics",
+    "/settings",
+    "/upload",
+    "/notifications",
+  ];
+
+  const isVisibleRoute = visibleRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
   const hideOnboardingWidget =
     isAdminHost ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/welcome") ||
     pathname.startsWith("/auth/") ||
-    pathname.startsWith("/admin");
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/ai-studio") ||
+    pathname.startsWith("/assistant") ||
+    !isVisibleRoute;
 
   if (hideOnboardingWidget) {
     return null;

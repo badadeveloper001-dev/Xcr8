@@ -466,18 +466,19 @@ def _persist_assistant_chat_memory(
 
 
 def _resolve_assistant_user(db: Session, payload: AIAssistantRequest) -> User | None:
-    user = db.get(User, payload.user_id)
-    if user:
-        return user
+    email_user = _get_or_create_user_by_email(db, payload.email)
+    if email_user:
+        return email_user
 
-    return _get_or_create_user_by_email(db, payload.email)
+    return db.get(User, payload.user_id)
 
 
 def _resolve_user_by_identity(db: Session, user_id: int, email: str | None) -> User | None:
-    user = db.get(User, user_id)
-    if user:
-        return user
-    return _get_or_create_user_by_email(db, email)
+    email_user = _get_or_create_user_by_email(db, email)
+    if email_user:
+        return email_user
+
+    return db.get(User, user_id)
 
 
 def _build_chat_history_response(memory_record: CreatorMemory, fallback_chat_id: str) -> AIAssistantChatHistory:

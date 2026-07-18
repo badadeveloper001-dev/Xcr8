@@ -112,6 +112,13 @@ export default function SettingsPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const activeConnections = (connections ?? []).filter((item) => item.active);
+  const oauthConnections = activeConnections.filter((item) => item.connection_method === "oauth");
+  const filledProfileFields = [profileDisplayName, profileFullName, profileUsername].filter(
+    (value) => value.trim().length > 0,
+  ).length;
+  const profileCompleteness = Math.round((filledProfileFields / 3) * 100);
+
   const connectMutation = useMutation({
     mutationFn: async (payload: PlatformConnectPayload) =>
       connectPlatform(userId as number, payload),
@@ -264,7 +271,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <MobileShell title="Settings" subtitle="Only the essentials, clearly grouped.">
+    <MobileShell title="Settings" subtitle="Profile, connections, and safety controls.">
       <div className="space-y-4">
         <motion.section
           initial={{ opacity: 0, y: 12 }}
@@ -273,7 +280,7 @@ export default function SettingsPage() {
           className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
         >
           <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-            Essentials View
+            Creator Snapshot
           </p>
           <div className="flex items-center gap-3">
             <div className="relative h-14 w-14 overflow-hidden rounded-2xl bg-violet-500/20 ring-2 ring-violet-500/30">
@@ -290,9 +297,47 @@ export default function SettingsPage() {
               <p className="text-lg font-semibold text-white light:text-slate-900">
                 {displayName ?? "Creator"}
               </p>
+              <p className="text-xs text-slate-500">
+                Keep this profile synced with your creator identity and publishing connections.
+              </p>
               <p className="text-sm text-slate-500">{email ?? "user@xcr8.app"}</p>
             </div>
           </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              {
+                label: "Platforms",
+                value: activeConnections.length,
+                hint: activeConnections.length ? "Connected" : "None linked",
+              },
+              {
+                label: "OAuth",
+                value: oauthConnections.length,
+                hint: oauthConnections.length ? "Can publish" : "Manual only",
+              },
+              {
+                label: "Profile",
+                value: `${profileCompleteness}%`,
+                hint: `${filledProfileFields}/3 fields filled`,
+              },
+              {
+                label: "Status",
+                value: onboardingComplete ? "Ready" : "Pending",
+                hint: onboardingComplete ? "Setup complete" : "Finish onboarding",
+              },
+            ].map((chip) => (
+              <div key={chip.label} className="surface-soft rounded-xl px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  {chip.label}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
+                  {chip.value}
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-500">{chip.hint}</p>
+              </div>
+            ))}
+          </div>
+
           <div className="mt-3 flex items-center gap-2">
             <input
               ref={avatarInputRef}
