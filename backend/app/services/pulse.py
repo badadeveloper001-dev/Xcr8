@@ -50,6 +50,7 @@ def detect_feature(route: str | None) -> str:
         ("/api/v1/social/publish", "publishing"),
         ("/api/v1/distribution", "distribution"),
         ("/api/v1/platforms", "platforms"),
+        ("/api/v1/intelligence", "intelligence"),
         ("/api/v1/dashboard", "dashboard"),
         ("/api/v1/admin", "admin"),
         ("/health/db", "database"),

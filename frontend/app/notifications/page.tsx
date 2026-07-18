@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Bell, CheckCheck, RefreshCw, Sparkles } from "lucide-react";
@@ -39,6 +39,7 @@ export default function NotificationsPage() {
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
   const selectedNotificationId = Number(searchParams.get("notification") || 0) || null;
+  const markReadInFlight = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (hasHydrated && !userId) {
@@ -50,7 +51,8 @@ export default function NotificationsPage() {
     queryKey: ["notifications", userId],
     queryFn: () => getIntelligenceFeed(userId as number),
     enabled: Boolean(userId),
-    refetchInterval: 30000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
 
@@ -81,11 +83,19 @@ export default function NotificationsPage() {
     : null;
 
   useEffect(() => {
-    if (!selectedNotificationId || !selectedNotification || selectedNotification.is_read) {
+    if (
+      !selectedNotificationId ||
+      !selectedNotification ||
+      selectedNotification.is_read ||
+      markReadInFlight.current.has(selectedNotificationId)
+    ) {
       return;
     }
 
-    void markReadMutation.mutateAsync(selectedNotificationId);
+    markReadInFlight.current.add(selectedNotificationId);
+    void markReadMutation
+      .mutateAsync(selectedNotificationId)
+      .finally(() => markReadInFlight.current.delete(selectedNotificationId));
   }, [markReadMutation, selectedNotification, selectedNotificationId]);
 
   const handleRefresh = async () => {

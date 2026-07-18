@@ -1,20 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { getIntelligenceFeed } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 export function NotificationBellButton() {
+  const pathname = usePathname();
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
 
   const { data } = useQuery({
-    queryKey: ["notifications-badge", userId],
+    queryKey: ["notifications", userId],
     queryFn: () => getIntelligenceFeed(userId as number, { limit: 12 }),
-    enabled: Boolean(hasHydrated && userId),
-    refetchInterval: 60_000,
+    enabled: Boolean(hasHydrated && userId && pathname !== "/notifications"),
+    staleTime: 60_000,
+    refetchInterval: 180_000,
     refetchOnWindowFocus: true,
   });
 
