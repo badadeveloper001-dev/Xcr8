@@ -31,6 +31,7 @@ from app.schemas.mvp import (
 from app.services.auth import (
     SupabaseAuthError,
     stable_fallback_user_id,
+    supabase_mark_onboarding_complete,
     supabase_request_password_reset,
     supabase_admin_confirm_email,
     supabase_get_user,
@@ -816,6 +817,10 @@ def onboarding(payload: OnboardingRequest, db: Session = Depends(get_db)) -> Aut
 
     db.commit()
     db.refresh(user)
+
+    # Best-effort: write onboarding_complete to Supabase user_metadata so
+    # admin analytics stay accurate even when the local DB is ephemeral.
+    supabase_mark_onboarding_complete(user.email)
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)

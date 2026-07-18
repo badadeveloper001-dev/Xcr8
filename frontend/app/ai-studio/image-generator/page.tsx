@@ -767,6 +767,7 @@ export default function ImageGeneratorPage() {
               </label>
 
               {sourceImagePreview ? (
+                // eslint-disable-next-line @next/next/no-img-element -- src is a local blob URL
                 <img
                   src={sourceImagePreview}
                   alt="Uploaded source preview"
@@ -942,6 +943,7 @@ export default function ImageGeneratorPage() {
                   {image.title}
                 </div>
 
+                {/* eslint-disable-next-line @next/next/no-img-element -- src is a blob URL created from an AI-generated image */}
                 <img
                   src={image.src}
                   alt={image.title}

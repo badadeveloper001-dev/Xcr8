@@ -5,6 +5,8 @@
  * controls the display width and preserves the SVG aspect ratio.
  */
 
+import Image from "next/image";
+
 type LogoSize = "sm" | "md";
 
 const sizes: Record<LogoSize, number> = {
@@ -24,19 +26,25 @@ export function Logo({ size = "md", className = "" }: { size?: LogoSize; classNa
       aria-label="XCR8"
       role="img"
     >
-      <img
+      <Image
         className="block dark:hidden"
         src="/Xcr8_black-removebg-preview.png"
         alt="XCR8"
+        width={width}
+        height={width}
         style={{ width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
         draggable={false}
+        priority
       />
-      <img
+      <Image
         className="hidden dark:block"
         src="/5d03bb27-9df6-417f-b28f-5984e329bdc0-removebg-preview.png"
         alt="XCR8"
+        width={width}
+        height={width}
         style={{ width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
         draggable={false}
+        priority
       />
     </div>
   );

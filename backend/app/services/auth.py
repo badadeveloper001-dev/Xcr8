@@ -27,6 +27,62 @@ def stable_fallback_user_id(email: str) -> str:
     return f"fallback-{digest[:16]}"
 
 
+def supabase_mark_onboarding_complete(email: str) -> None:
+    """Best-effort: write onboarding_complete=true to Supabase user_metadata.
+
+    Silently does nothing if Supabase is not configured or the user cannot be found.
+    This keeps admin counts accurate even when the local SQLite DB is ephemeral.
+    """
+    url = str(settings.supabase_url or "").strip().rstrip("/")
+    key = str(settings.supabase_service_role_key or "").strip()
+    if not url or not key:
+        return
+
+    normalized = str(email or "").strip().lower()
+    if not normalized:
+        return
+
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            # Look up the Supabase user UUID by email.
+            resp = client.get(
+                f"{url}/auth/v1/admin/users",
+                headers=headers,
+                params={"page": 1, "per_page": 200},
+            )
+            if resp.status_code >= 400:
+                return
+
+            payload = resp.json()
+            users = payload.get("users") if isinstance(payload, dict) else []
+            if not isinstance(users, list):
+                return
+
+            user_id = None
+            for user in users:
+                if str(user.get("email") or "").strip().lower() == normalized:
+                    user_id = user.get("id")
+                    break
+
+            if not user_id:
+                return
+
+            # Merge onboarding_complete into existing user_metadata (Supabase merges, not replaces).
+            client.put(
+                f"{url}/auth/v1/admin/users/{user_id}",
+                headers=headers,
+                json={"user_metadata": {"onboarding_complete": True}},
+            )
+    except Exception:  # noqa: BLE001 – network/parse failures must not break onboarding
+        pass
+
+
 def get_supabase_admin_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 

@@ -127,6 +127,7 @@ export default function ImageHistoryPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {history.map((item) => (
               <article key={item.id} className="surface-soft rounded-xl p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element -- src is a data URL generated client-side */}
                 <img
                   src={item.src}
                   alt={item.title}

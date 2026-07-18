@@ -311,11 +311,14 @@ export default function ComposePage() {
                 {mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
                   <video src={mediaUrl} controls className="max-h-72 w-full" />
                 ) : (
-                  <img
-                    src={mediaUrl}
-                    alt="upload preview"
-                    className="max-h-72 w-full object-cover"
-                  />
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- src is a user-supplied upload URL */}
+                    <img
+                      src={mediaUrl}
+                      alt="upload preview"
+                      className="max-h-72 w-full object-cover"
+                    />
+                  </>
                 )}
               </div>
             ) : (
