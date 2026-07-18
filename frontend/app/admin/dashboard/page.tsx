@@ -291,6 +291,11 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
+          <p className="mb-3 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700">
+            Pulse now auto-closes low/medium incidents after a stable recovery window. Critical and
+            repeated failures still stay open until manually resolved.
+          </p>
+
           {error ? (
             <p className="mb-3 text-sm text-rose-300">
               Admin data failed to load from the live API. Retry after sign-in or refresh.

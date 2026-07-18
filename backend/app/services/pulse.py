@@ -18,6 +18,14 @@ FOUNDER_NOTIFY_COOLDOWN_MINUTES = 30
 AUTO_RESOLVE_MINUTES = 3
 AUTO_RESOLVE_MAX_EVENTS = 5
 
+BENIGN_SLOW_ROUTE_PREFIXES = (
+    "/api/v1/intelligence/feed",
+    "/api/v1/dashboard/overview",
+    "/api/v1/platforms/",
+    "/api/v1/social/oauth/providers",
+    "/api/v1/auth/session/",
+)
+
 
 class PulseInput(dict):
     pass
@@ -84,12 +92,32 @@ def detect_provider(detail: str, route: str | None = None) -> str | None:
     return None
 
 
-def classify_error(http_status: int | None, detail: str, route: str | None, event_type: str = "error") -> tuple[str, str]:
+def is_benign_slow_route(route: str | None, method: str | None = None) -> bool:
+    path = _clean_text(route, "").lower()
+    request_method = _clean_text(method, "GET").upper()
+    if not path.startswith("/api/v1"):
+        return False
+    if path.startswith("/api/v1/admin"):
+        return True
+    if request_method != "GET":
+        return False
+    return any(path.startswith(prefix) for prefix in BENIGN_SLOW_ROUTE_PREFIXES)
+
+
+def classify_error(
+    http_status: int | None,
+    detail: str,
+    route: str | None,
+    event_type: str = "error",
+    method: str | None = None,
+) -> tuple[str, str]:
     status = int(http_status or 0)
     lowered = _clean_text(detail).lower()
     provider = detect_provider(detail, route)
 
     if event_type == "slow_response":
+        if status < 400 and is_benign_slow_route(route, method):
+            return "user_error", "low"
         return "system_error", "medium"
     if provider and provider not in {"Database"} and status in {0, 500, 502, 503, 504}:
         return "third_party_error", "high"
@@ -307,11 +335,12 @@ def notify_affected_users_resolved(db: Session, incident: PulseIncident) -> None
 def record_pulse_event(db: Session, payload: dict) -> PulseEvent:
     event_type = _clean_text(payload.get("event_type"), "error")
     route = _clean_text(payload.get("route")) or None
+    request_method = _clean_text(payload.get("method")) or None
     feature = _clean_text(payload.get("feature")) or detect_feature(route)
     detail = _clean_text(payload.get("detail"), "Unexpected error")
     provider = _clean_text(payload.get("provider")) or detect_provider(detail, route)
     http_status = int(payload.get("http_status") or 0) or None
-    error_type, severity = classify_error(http_status, detail, route, event_type)
+    error_type, severity = classify_error(http_status, detail, route, event_type, request_method)
     title = build_title(feature, event_type, http_status, detail)
     fingerprint = build_fingerprint(feature, error_type, provider, http_status, detail)
     now = datetime.now(tz=UTC)
@@ -363,7 +392,7 @@ def record_pulse_event(db: Session, payload: dict) -> PulseEvent:
         title=title,
         detail=detail,
         route=route,
-        method=_clean_text(payload.get("method")) or None,
+        method=request_method,
         http_status=http_status,
         request_id=_clean_text(payload.get("request_id")) or None,
         fingerprint=fingerprint,

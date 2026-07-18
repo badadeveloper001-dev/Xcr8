@@ -12,7 +12,7 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.db import models
 from app.db.session import SessionLocal, engine
-from app.services.pulse import auto_resolve_stable_incidents, record_pulse_event
+from app.services.pulse import auto_resolve_stable_incidents, is_benign_slow_route, record_pulse_event
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,11 @@ async def pulse_request_middleware(request: Request, call_next):
         finally:
             db.close()
 
-    if elapsed_ms >= max(1, int(settings.pulse_slow_request_ms or 6000)) and request.url.path.startswith("/api/v1"):
+    if (
+        elapsed_ms >= max(1, int(settings.pulse_slow_request_ms or 6000))
+        and request.url.path.startswith("/api/v1")
+        and not (response.status_code < 400 and is_benign_slow_route(request.url.path, request.method))
+    ):
         user_id, email = _extract_identity(request)
         db = SessionLocal()
         try:
