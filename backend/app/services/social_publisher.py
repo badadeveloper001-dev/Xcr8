@@ -108,8 +108,8 @@ def _platform_creds(platform: str) -> tuple[str, str]:
     cfg = _PLATFORM_OAUTH.get(platform, {})
     client_id_key, secret_key = cfg.get("cred_keys", ("", ""))
     return (
-        getattr(settings, client_id_key, "") or "",
-        getattr(settings, secret_key, "") or "",
+        str(getattr(settings, client_id_key, "") or "").strip(),
+        str(getattr(settings, secret_key, "") or "").strip(),
     )
 
 
