@@ -85,6 +85,8 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
         "token_url": "https://open.tiktokapis.com/v2/oauth/token/",
         "scopes": "user.info.basic,video.publish",
         "cred_keys": ("tiktok_client_key", "tiktok_client_secret"),
+        "client_id_param": "client_key",
+        "client_secret_param": "client_secret",
     },
     "youtube_shorts": {
         "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
@@ -141,8 +143,10 @@ def get_oauth_authorize_url(platform: str, user_id: int, redirect_uri: str) -> s
 
     state = build_oauth_state(user_id, platform, code_verifier)
 
+    client_id_param = str(cfg.get("client_id_param") or "client_id")
+
     params: dict[str, str] = {
-        "client_id": client_id,
+        client_id_param: client_id,
         "redirect_uri": redirect_uri,
         "scope": cfg["scopes"],
         "response_type": "code",
@@ -183,9 +187,12 @@ def exchange_code_for_token(
 
     code_verifier = state_payload.get("cv")
 
+    client_id_param = str(cfg.get("client_id_param") or "client_id")
+    client_secret_param = str(cfg.get("client_secret_param") or "client_secret")
+
     data: dict[str, str] = {
-        "client_id": client_id,
-        "client_secret": client_secret,
+        client_id_param: client_id,
+        client_secret_param: client_secret,
         "code": code,
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",
