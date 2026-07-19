@@ -105,9 +105,16 @@ def oauth_start(platform: str, user_id: int, db: Session = Depends(get_db)) -> d
         raise HTTPException(status_code=404, detail="User not found")
 
     if not is_platform_configured(platform):
-        hint = "META_APP_ID, META_APP_SECRET"
-        if platform == "threads":
-            hint = "THREADS_APP_ID, THREADS_APP_SECRET"
+        hints_by_platform = {
+            "facebook": "META_APP_ID, META_APP_SECRET",
+            "instagram": "META_APP_ID, META_APP_SECRET",
+            "threads": "THREADS_APP_ID, THREADS_APP_SECRET",
+            "x": "TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET",
+            "linkedin": "LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET",
+            "tiktok": "TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET",
+            "youtube_shorts": "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET",
+        }
+        hint = hints_by_platform.get(platform, "META_APP_ID, META_APP_SECRET")
         raise HTTPException(
             status_code=501,
             detail=(
