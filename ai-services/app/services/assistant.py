@@ -11,13 +11,69 @@ from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
-PROMPT_TEMPLATE_VERSION = "assistant-v2"
+PROMPT_TEMPLATE_VERSION = "assistant-v3"
+
+# ── Web search helper ──────────────────────────────────────────────────────────
+
+def _web_search(query: str, max_results: int = 5) -> list[dict]:
+    """Run a DuckDuckGo text search and return compact result dicts."""
+    try:
+        from duckduckgo_search import DDGS  # type: ignore
+        with DDGS() as ddgs:
+            raw = list(ddgs.text(query, max_results=max_results))
+        results = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            body = str(item.get("body") or "").strip()[:400]
+            href = str(item.get("href") or "").strip()
+            if title or body:
+                results.append({"title": title, "snippet": body, "url": href})
+        return results
+    except Exception as exc:
+        logger.warning("Web search failed: %s", exc)
+        return []
+
+
+def _needs_web_search(message: str) -> bool:
+    """Return True when the user's message likely needs live internet data."""
+    lower = str(message or "").lower()
+    search_triggers = [
+        # Explicit intent
+        "search", "look up", "google", "find out", "browse", "check online",
+        "search the internet", "search the web", "look online",
+        # Current events
+        "latest", "recent", "today", "this week", "right now", "currently",
+        "news", "trending", "what happened", "what's happening",
+        "new update", "just released", "new feature", "new model",
+        # Research
+        "what is", "who is", "how does", "explain", "definition of",
+        "price of", "cost of", "how much is",
+        # Social / platform-specific research
+        "algorithm", "platform update", "instagram update", "tiktok update",
+        "youtube update", "facebook update", "meta update",
+    ]
+    return any(trigger in lower for trigger in search_triggers)
+
+
+def _format_search_results(results: list[dict]) -> str:
+    if not results:
+        return ""
+    lines = ["[Web search results]"]
+    for i, r in enumerate(results, 1):
+        lines.append(f"{i}. {r['title']}")
+        if r["snippet"]:
+            lines.append(f"   {r['snippet']}")
+        if r["url"]:
+            lines.append(f"   Source: {r['url']}")
+    return "\n".join(lines)
 
 SYSTEM_PROMPT = (
     "You are Xcr8 Central Assistant, a high-accuracy creator copilot and creator friend inside the Xcr8 app. "
     "Help with app usage, content strategy, growth decisions, memory continuity, uploads, dashboard interpretation, execution plans, and general knowledge questions. "
-    "You can answer broader topics like the world economy, current events, and general explanations. "
-    "If the user asks for truly live or fast-changing information, be honest about any limits and give a best-effort answer plus a clear verification step. "
+    "You have access to real-time web search results. When web_search_results are provided in the context, use them to give up-to-date, accurate answers — always cite the source URL when you reference search data. "
+    "If you are not given search results but the user is asking about current events or live data, state clearly what you know up to your knowledge cutoff and offer to look it up. "
     "For complex questions, reason clearly and provide structured insight instead of shallow summaries. "
     "When useful, include: what matters most, why it matters, and practical implications for creators/business. "
     "Always reply in the same language as the latest user message unless they explicitly request a switch. "
@@ -25,8 +81,8 @@ SYSTEM_PROMPT = (
     "If the user is playful or funny, respond with light humor and warm creator-friend energy instead of sounding corporate. "
     "If the user writes with emojis, you may use 1-3 relevant emojis naturally. "
     "If the user is serious, urgent, or sensitive, reduce humor and keep a supportive direct tone. "
-    "Use app_context and creator_memory as source-of-truth; never invent unavailable facts. "
-    "Never claim trend counts, performance lifts, or personal facts unless they are explicitly present in app_context/creator_memory. "
+    "Use app_context and creator_memory as source-of-truth for workspace data; never invent unavailable facts. "
+    "Never claim trend counts, performance lifts, or personal facts unless they are explicitly present in app_context/creator_memory or in web_search_results. "
     "If the user asks what you know about them, answer from onboarding, profile, memory, preferences, recent posts, and activity context before saying anything is missing. "
     "When the latest message is in Nigerian Pidgin, Yoruba, or code-switch, stay in that language style naturally and do not switch back to formal English. "
     "If information is missing, say what is missing and provide the best safe next step. "
@@ -381,6 +437,14 @@ def generate_assistant_reply(payload: dict) -> dict:
             str(payload.get("vibe") or ""),
         )
 
+        # ── Web search ────────────────────────────────────────────────────────
+        web_results_text = ""
+        if _needs_web_search(user_message):
+            search_results = _web_search(user_message)
+            if search_results:
+                web_results_text = _format_search_results(search_results)
+                logger.info("Web search for '%s' returned %d results.", user_message[:60], len(search_results))
+
         completion = client.chat.completions.create(
             model=settings.openai_model,
             temperature=0.75,
@@ -404,6 +468,7 @@ def generate_assistant_reply(payload: dict) -> dict:
                             "conversation_memory_digest": memory_digest,
                             "app_context": app_context,
                             "creator_memory": creator_memory,
+                            "web_search_results": web_results_text or None,
                         }
                     ),
                 },

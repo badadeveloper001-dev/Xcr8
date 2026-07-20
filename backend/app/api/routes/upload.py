@@ -5,9 +5,12 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
+
+from app.core.config import settings
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -22,7 +25,74 @@ _ALLOWED_TYPES = {
     "video/quicktime",
     "video/webm",
 }
-_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+_MAX_BYTES = 150 * 1024 * 1024  # 150 MB
+
+
+def _supabase_storage_headers(content_type: str) -> dict[str, str] | None:
+    url = str(settings.supabase_url or "").strip()
+    key = str(settings.supabase_service_role_key or "").strip()
+    if not url or not key:
+        return None
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": content_type,
+        "x-upsert": "false",
+    }
+
+
+def _ensure_supabase_bucket() -> bool:
+    admin_headers = _supabase_storage_headers("application/json")
+    base_url = str(settings.supabase_url or "").rstrip("/")
+    bucket = str(settings.storage_bucket or "xcr8-assets").strip() or "xcr8-assets"
+    if not admin_headers or not base_url:
+        return False
+
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            check = client.get(f"{base_url}/storage/v1/bucket", headers=admin_headers)
+            if check.status_code < 400:
+                buckets = check.json() if isinstance(check.json(), list) else []
+                if any(isinstance(item, dict) and item.get("id") == bucket for item in buckets):
+                    return True
+
+            create = client.post(
+                f"{base_url}/storage/v1/bucket",
+                headers=admin_headers,
+                json={"name": bucket, "public": True},
+            )
+            return create.status_code < 400
+    except Exception:
+        return False
+
+
+def _upload_to_supabase_storage(content: bytes, filename: str, content_type: str) -> str | None:
+    headers = _supabase_storage_headers(content_type)
+    base_url = str(settings.supabase_url or "").rstrip("/")
+    bucket = str(settings.storage_bucket or "xcr8-assets").strip() or "xcr8-assets"
+    if not headers or not base_url:
+        return None
+
+    object_path = f"uploads/{filename}"
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                f"{base_url}/storage/v1/object/{bucket}/{object_path}",
+                headers=headers,
+                content=content,
+            )
+        if response.status_code == 400 and "Bucket not found" in response.text and _ensure_supabase_bucket():
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    f"{base_url}/storage/v1/object/{bucket}/{object_path}",
+                    headers=headers,
+                    content=content,
+                )
+        if response.status_code >= 400:
+            return None
+        return f"{base_url}/storage/v1/object/public/{bucket}/{object_path}"
+    except Exception:
+        return None
 
 
 @router.post("")
@@ -44,6 +114,12 @@ async def upload_media(request: Request, file: UploadFile) -> JSONResponse:
 
     ext = Path(file.filename or "upload").suffix or ".bin"
     filename = f"{uuid.uuid4().hex}{ext}"
+
+    # Prefer durable object storage in production.
+    durable_url = _upload_to_supabase_storage(content, filename, file.content_type or "application/octet-stream")
+    if durable_url:
+        return JSONResponse({"url": durable_url, "file_name": filename})
+
     dest = _UPLOAD_DIR / filename
 
     try:

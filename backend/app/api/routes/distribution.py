@@ -46,6 +46,8 @@ def create_distribution_draft(
             "target_languages": [detected_language],
             "detected_language": detected_language,
             "language_detection": language_detection,
+            "media_urls": payload.media_urls or [payload.media_url],
+            "media_types": payload.media_types or [payload.media_type],
         },
     )
     db.add(post)

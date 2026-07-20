@@ -148,6 +148,8 @@ export type DistributionDraftPayload = {
   user_id: number;
   title: string;
   media_url: string;
+  media_urls?: string[];
+  media_types?: string[];
   media_type: string;
   master_caption: string;
   primary_language: string;

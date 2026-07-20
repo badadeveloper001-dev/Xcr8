@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from secrets import token_hex
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+import httpx
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,6 +30,53 @@ router = APIRouter(prefix="/social", tags=["social"])
 # In-memory tracker for deletion callbacks. Good enough for callback verification
 # and lightweight status checks in stateless deployments.
 _META_DELETION_REQUESTS: dict[str, dict[str, str]] = {}
+
+
+def _refresh_google_token(refresh_token: str) -> dict | None:
+    if not refresh_token:
+        return None
+    client_id = str(settings.google_client_id or "").strip()
+    client_secret = str(settings.google_client_secret or "").strip()
+    if not client_id or not client_secret:
+        return None
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.post(
+                "https://oauth2.googleapis.com/token",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                },
+            )
+        if response.status_code >= 400:
+            return None
+        payload = response.json()
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
+def _refresh_threads_token(access_token: str) -> dict | None:
+    if not access_token:
+        return None
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.get(
+                "https://graph.threads.net/refresh_access_token",
+                params={
+                    "grant_type": "th_refresh_token",
+                    "access_token": access_token,
+                },
+            )
+        if response.status_code >= 400:
+            return None
+        payload = response.json()
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +223,16 @@ def oauth_callback(
             ),
         )
 
+    token_exchange_error = str(token_data.get("_token_exchange_error") or "").strip()
+    if token_exchange_error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"{platform} token exchange failed: {token_exchange_error}. "
+                "Verify OAuth client credentials and redirect URI configuration."
+            ),
+        )
+
     access_token = str(token_data.get("access_token") or "")
     if not access_token:
         raise HTTPException(status_code=502, detail="Platform did not return an access token.")
@@ -217,11 +275,54 @@ def oauth_callback(
     if platform == "instagram":
         ig_info = fetch_instagram_business_connection(source_user_access_token)
         if not ig_info:
+            token_diag = {
+                "keys": sorted([str(k) for k in token_data.keys()]),
+                "user_id": token_data.get("user_id"),
+                "profile_id": token_data.get("profile_id"),
+                "granular_scopes": token_data.get("granular_scopes"),
+                "granted_scopes": token_data.get("granted_scopes"),
+                "scope": token_data.get("scope"),
+            }
+            print(f"instagram_oauth_token_diag={token_diag}")
+
+            # Business Login can return selected IG asset IDs in granular_scopes
+            # even when /me/accounts does not include linked IG account objects.
+            granular_scopes = token_data.get("granular_scopes")
+            target_ig_id = ""
+            if isinstance(granular_scopes, list):
+                for scope_entry in granular_scopes:
+                    if not isinstance(scope_entry, dict):
+                        continue
+                    scope_name = str(scope_entry.get("scope") or "").strip()
+                    if not scope_name.startswith("instagram_"):
+                        continue
+                    target_ids = scope_entry.get("target_ids")
+                    if not isinstance(target_ids, list):
+                        continue
+                    for target_id in target_ids:
+                        candidate = str(target_id or "").strip()
+                        if candidate:
+                            target_ig_id = candidate
+                            break
+                    if target_ig_id:
+                        break
+
+            if target_ig_id:
+                ig_info = {
+                    "ig_user_id": target_ig_id,
+                    "ig_username": "",
+                    "page_id": "",
+                    "page_name": "",
+                    "page_access_token": "",
+                }
+
+        if not ig_info:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Instagram connected, but no Instagram business account was found on linked Facebook Pages. "
-                    "Link your Instagram professional account to a Facebook Page and try again."
+                    "Instagram connected, but no publishable Instagram professional account was resolved. "
+                    "Ensure the account is Professional (Business or Creator), linked to the app, "
+                    "and if using Facebook Login, connected to a Facebook Page."
                 ),
             )
 
@@ -375,6 +476,12 @@ def publish_post(
         if variant.hashtags:
             caption_with_hashtags = f"{caption_with_hashtags}\n{' '.join(variant.hashtags)}"
 
+        content_meta = post.content_meta if isinstance(post.content_meta, dict) else {}
+        media_urls = content_meta.get("media_urls") if isinstance(content_meta.get("media_urls"), list) else []
+        media_types = content_meta.get("media_types") if isinstance(content_meta.get("media_types"), list) else []
+        primary_media_url = str((media_urls[0] if media_urls else post.media_url) or "").strip() or None
+        primary_media_type = str((media_types[0] if media_types else post.media_type) or "image").strip()
+
         connection = connected.get(platform_name)
         if not connection:
             results[platform_name] = {
@@ -391,6 +498,27 @@ def publish_post(
         platform_user_id = str(auth_meta.get("platform_user_id") or "")
         connection_method = str(auth_meta.get("connection_method") or "manual")
 
+        # Refresh platform tokens just-in-time for publish operations.
+        if platform_name == "youtube_shorts":
+            refreshed = _refresh_google_token(str(auth_meta.get("refresh_token") or ""))
+            if refreshed and refreshed.get("access_token"):
+                access_token = str(refreshed.get("access_token") or "").strip()
+                auth_meta["access_token"] = access_token
+                expires_in = int(refreshed.get("expires_in") or 3600)
+                auth_meta["token_expires_at"] = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
+                connection.auth_meta = auth_meta
+                db.commit()
+        elif platform_name == "threads":
+            refreshed = _refresh_threads_token(access_token)
+            if refreshed and refreshed.get("access_token"):
+                access_token = str(refreshed.get("access_token") or "").strip()
+                auth_meta["access_token"] = access_token
+                expires_in = int(refreshed.get("expires_in") or 0)
+                if expires_in > 0:
+                    auth_meta["token_expires_at"] = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
+                connection.auth_meta = auth_meta
+                db.commit()
+
         if connection_method == "manual" or not access_token:
             results[platform_name] = {
                 "success": False,
@@ -405,8 +533,9 @@ def publish_post(
             platform=platform_name,
             access_token=access_token,
             caption=caption_with_hashtags,
-            media_url=post.media_url or None,
+            media_url=primary_media_url,
             platform_user_id=platform_user_id or None,
+            media_type=primary_media_type,
         )
         results[platform_name] = result
         if result.get("success"):

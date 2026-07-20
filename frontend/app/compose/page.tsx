@@ -42,6 +42,17 @@ function getUploadUrl(payload: unknown): string {
   return typeof candidate === "string" ? candidate : "";
 }
 
+function guessMediaType(file: File): string {
+  if (file.type.startsWith("video/")) return "video";
+  return "image";
+}
+
+type UploadedMediaItem = {
+  url: string;
+  mediaType: string;
+  name: string;
+};
+
 export default function ComposePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -51,7 +62,7 @@ export default function ComposePage() {
   const distributionDraft = useCreatorStore((s) => s.distributionDraft);
 
   const [title, setTitle] = useState("New Creator Post");
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaItems, setMediaItems] = useState<UploadedMediaItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["instagram", "x"]);
@@ -90,7 +101,7 @@ export default function ComposePage() {
       setError("Please add a caption before generating.");
       return;
     }
-    if (!mediaUrl.trim()) {
+    if (!mediaItems.length) {
       setError("Add media before generating.");
       return;
     }
@@ -107,8 +118,10 @@ export default function ComposePage() {
       const draft = await createDistributionDraft({
         user_id: userId,
         title,
-        media_url: mediaUrl,
-        media_type: "image",
+        media_url: mediaItems[0]?.url ?? "",
+        media_urls: mediaItems.map((item) => item.url),
+        media_types: mediaItems.map((item) => item.mediaType),
+        media_type: mediaItems[0]?.mediaType ?? "image",
         master_caption: caption,
         primary_language: "english",
         selected_platforms: selectedPlatforms,
@@ -232,29 +245,56 @@ export default function ComposePage() {
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
 
     void (async () => {
       setUploading(true);
       setError(null);
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const response = await fetch("/api/v1/upload", {
-          method: "POST",
-          body: formData,
-        });
-        const data: unknown = await response.json();
-        if (!response.ok) {
-          const uploadError =
-            getUploadUrl(data) ||
-            (typeof data === "object" && data && "detail" in data && typeof data.detail === "string"
-              ? data.detail
-              : "Upload failed. Please try again.");
-          throw new Error(uploadError);
+        const uploaded: UploadedMediaItem[] = [];
+        for (const file of files) {
+          const formData = new FormData();
+          formData.append("file", file);
+          // Prefer direct backend service route to avoid Next.js API body-size limits
+          // for larger video files on Vercel. Fall back to proxied route.
+          let response: Response | null = null;
+          const uploadTargets = ["/_/backend/api/v1/upload", "/api/v1/upload"];
+          for (const target of uploadTargets) {
+            const attempt = await fetch(target, {
+              method: "POST",
+              body: formData,
+            });
+            if (attempt.ok || attempt.status !== 404) {
+              response = attempt;
+              break;
+            }
+          }
+          if (!response) {
+            throw new Error("Upload route is unavailable right now.");
+          }
+          const data: unknown = await response.json();
+          if (!response.ok) {
+            const uploadError =
+              getUploadUrl(data) ||
+              (typeof data === "object" &&
+              data &&
+              "detail" in data &&
+              typeof data.detail === "string"
+                ? data.detail
+                : "Upload failed. Please try again.");
+            throw new Error(uploadError);
+          }
+          const url = getUploadUrl(data);
+          if (url) {
+            uploaded.push({
+              url,
+              mediaType: guessMediaType(file),
+              name: file.name,
+            });
+          }
         }
-        setMediaUrl(getUploadUrl(data));
+        setMediaItems((current) => [...current, ...uploaded]);
       } catch (err) {
         if (err instanceof Error && err.message.trim().length > 0) {
           setError(err.message);
@@ -292,6 +332,7 @@ export default function ComposePage() {
               <input
                 type="file"
                 accept="image/*,video/*"
+                multiple
                 className="xcr8-input"
                 disabled={uploading}
                 onChange={handleFileChange}
@@ -299,27 +340,45 @@ export default function ComposePage() {
               <p className="mt-1 text-xs text-slate-500">
                 {uploading
                   ? "Uploading..."
-                  : mediaUrl
-                    ? "Media added."
-                    : "Add one file to continue."}
+                  : mediaItems.length
+                    ? `${mediaItems.length} media item${mediaItems.length === 1 ? "" : "s"} added.`
+                    : "Add one or more images/videos to continue."}
               </p>
             </div>
           </div>
           <div>
-            {mediaUrl ? (
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                {mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
-                  <video src={mediaUrl} controls className="max-h-72 w-full" />
-                ) : (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- src is a user-supplied upload URL */}
-                    <img
-                      src={mediaUrl}
-                      alt="upload preview"
-                      className="max-h-72 w-full object-cover"
-                    />
-                  </>
-                )}
+            {mediaItems.length ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {mediaItems.map((item) => (
+                  <div
+                    key={item.url}
+                    className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                  >
+                    {item.mediaType === "video" ? (
+                      <video src={item.url} controls className="max-h-72 w-full" />
+                    ) : (
+                      <img
+                        src={item.url}
+                        alt={item.name}
+                        className="max-h-72 w-full object-cover"
+                      />
+                    )}
+                    <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-400">
+                      <span className="truncate">{item.name}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMediaItems((current) =>
+                            current.filter((entry) => entry.url !== item.url),
+                          )
+                        }
+                        className="text-rose-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="surface-soft grid h-full min-h-[180px] place-items-center rounded-2xl px-4 py-5 text-sm text-slate-500">

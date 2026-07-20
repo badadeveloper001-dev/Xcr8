@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, Download, Sparkles } from "lucide-react";
+import { ArrowRight, BarChart3, Download, RefreshCw, Sparkles, Wifi } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import { apiClient } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -32,10 +32,30 @@ type AnalyticsOverview = {
   };
 };
 
+type LivePlatformResult = {
+  platform: string;
+  handle: string;
+  status: string;
+  message?: string;
+  fetched_at?: string;
+  data: Record<string, unknown>;
+};
+
+type LiveAnalytics = {
+  user_id: number;
+  fetched_at: string;
+  platforms: LivePlatformResult[];
+};
+
 async function fetchAnalytics(userId: number, window: string) {
   const { data } = await apiClient.get<AnalyticsOverview>(`/api/v1/analytics/overview/${userId}`, {
     params: { window },
   });
+  return data;
+}
+
+async function fetchLiveAnalytics(userId: number) {
+  const { data } = await apiClient.get<LiveAnalytics>(`/api/v1/analytics/live/${userId}`);
   return data;
 }
 
@@ -53,6 +73,7 @@ export default function AnalyticsPage() {
 
   const [analyticsWindow, setAnalyticsWindow] = useState<"7d" | "30d" | "90d">("30d");
   const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
+  const [liveRefreshKey, setLiveRefreshKey] = useState(0);
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -62,6 +83,17 @@ export default function AnalyticsPage() {
     queryKey: ["analytics", userId, analyticsWindow],
     queryFn: () => fetchAnalytics(userId as number, analyticsWindow),
     enabled: Boolean(userId),
+  });
+
+  const {
+    data: liveData,
+    isFetching: liveLoading,
+    refetch: refetchLive,
+  } = useQuery({
+    queryKey: ["analytics-live", userId, liveRefreshKey],
+    queryFn: () => fetchLiveAnalytics(userId as number),
+    enabled: Boolean(userId),
+    staleTime: 5 * 60 * 1000, // 5 min cache
   });
 
   if (!hasHydrated || !userId) return null;
@@ -178,7 +210,184 @@ export default function AnalyticsPage() {
           </motion.section>
         )}
 
-        {/* No data — connect platform CTA */}
+        {/* Live Platform Data */}
+        {liveData && liveData.platforms.length > 0 && (
+          <motion.section {...fadeUp(0.04)} className="xcr8-panel rounded-2xl p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="xcr8-title-lg flex items-center gap-2 text-white light:text-slate-900">
+                <Wifi size={15} className="text-emerald-400" />
+                Live Platform Data
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setLiveRefreshKey((k) => k + 1);
+                  refetchLive();
+                }}
+                disabled={liveLoading}
+                className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={liveLoading ? "animate-spin" : ""} />
+                {liveLoading ? "Fetching…" : "Refresh"}
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {liveData.platforms.map((p) => (
+                <article key={p.platform} className="surface-soft rounded-xl p-3">
+                  <div className="mb-1.5 flex items-center justify-between gap-1">
+                    <p className="text-xs font-semibold capitalize text-white light:text-slate-900">
+                      {p.platform.replace(/_/g, " ")}
+                    </p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        p.status === "ok"
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : p.status === "manual"
+                            ? "bg-yellow-500/15 text-yellow-400"
+                            : "bg-red-500/15 text-red-400"
+                      }`}
+                    >
+                      {p.status === "ok" ? "live" : p.status}
+                    </span>
+                  </div>
+                  <p className="mb-2 text-[11px] text-slate-400">{p.handle}</p>
+                  {p.status === "ok" && (
+                    <div className="grid grid-cols-2 gap-1.5 text-xs">
+                      {/* Facebook */}
+                      {p.platform === "facebook" && (
+                        <>
+                          {typeof p.data.page_fans === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Followers</p>
+                              <p className="font-semibold text-white">
+                                {(p.data.page_fans as number).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.page_impressions_unique === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Reach (day)</p>
+                              <p className="font-semibold text-white">
+                                {(p.data.page_impressions_unique as number).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.page_engaged_users === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Engaged</p>
+                              <p className="font-semibold text-white">
+                                {(p.data.page_engaged_users as number).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.recent_posts_count === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Posts (recent)</p>
+                              <p className="font-semibold text-white">
+                                {(p.data.recent_posts_count as number).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {/* Instagram */}
+                      {p.platform === "instagram" && (
+                        <>
+                          {typeof p.data.followers_count === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Followers</p>
+                              <p className="font-semibold text-white">
+                                {(p.data.followers_count as number).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.media_count === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Posts</p>
+                              <p className="font-semibold text-white">
+                                {p.data.media_count as number}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.avg_likes === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Avg Likes</p>
+                              <p className="font-semibold text-white">
+                                {p.data.avg_likes as number}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.avg_comments === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Avg Comments</p>
+                              <p className="font-semibold text-white">
+                                {p.data.avg_comments as number}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {/* YouTube */}
+                      {p.platform === "youtube_shorts" && (
+                        <>
+                          {typeof p.data.subscriber_count === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Subscribers</p>
+                              <p className="font-semibold text-white">
+                                {(p.data.subscriber_count as number).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.view_count === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Total Views</p>
+                              <p className="font-semibold text-white">
+                                {(p.data.view_count as number).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          {typeof p.data.video_count === "number" && (
+                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
+                              <p className="text-slate-500">Videos</p>
+                              <p className="font-semibold text-white">
+                                {p.data.video_count as number}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {(p.status === "manual" || p.status === "unsupported") && (
+                    <p className="text-[11px] text-slate-500">{p.message}</p>
+                  )}
+                  {p.status === "error" && (
+                    <p className="text-[11px] text-red-400">
+                      {(p.data?.error as string) ?? "Error fetching data"}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+            <p className="mt-2 text-right text-[10px] text-slate-600">
+              Last synced:{" "}
+              {liveData.fetched_at ? new Date(liveData.fetched_at).toLocaleTimeString() : "—"}
+            </p>
+          </motion.section>
+        )}
+
+        {/* No live platforms */}
+        {liveData && liveData.platforms.length === 0 && (
+          <motion.section
+            {...fadeUp(0.04)}
+            className="xcr8-panel rounded-2xl border border-dashed border-white/10 p-5 text-center"
+          >
+            <Wifi size={26} className="mx-auto mb-2 text-slate-600" />
+            <p className="text-sm text-slate-400">
+              No OAuth-connected platforms yet. Connect in Settings to see live stats.
+            </p>
+          </motion.section>
+        )}
         {data && engagement.length === 0 && (
           <motion.section
             {...fadeUp(0.03)}
@@ -213,10 +422,7 @@ export default function AnalyticsPage() {
         {/* Live data */}
         {data && engagement.length > 0 && (
           <>
-            <motion.section
-              {...fadeUp(0.05)}
-              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-            >
+            <motion.section {...fadeUp(0.05)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { label: "Total Reach", value: totalReach.toLocaleString() },
                 { label: "Audience Growth", value: `+${audienceGrowth}` },

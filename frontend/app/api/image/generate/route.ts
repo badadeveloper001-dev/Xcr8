@@ -66,19 +66,117 @@ function enrichPrompt(rawPrompt: string): string {
   const compact = rawPrompt.trim().replace(/\s+/g, " ");
   const lower = compact.toLowerCase();
 
+  // ── Intent analysis ──────────────────────────────────────────────────────
+  const isSports = [
+    "football",
+    "soccer",
+    "basketball",
+    "athlete",
+    "striker",
+    "goalkeeper",
+    "stadium",
+    "match",
+    "sport",
+    "tennis",
+    "rugby",
+    "cricket",
+  ].some((k) => lower.includes(k));
+  const isPortrait = [
+    "portrait",
+    "person",
+    "face",
+    "selfie",
+    "headshot",
+    "woman",
+    "man",
+    "girl",
+    "boy",
+    "model",
+    "human",
+  ].some((k) => lower.includes(k));
+  const isProduct = [
+    "product",
+    "package",
+    "bottle",
+    "jar",
+    "box",
+    "gadget",
+    "device",
+    "shoe",
+    "bag",
+    "watch",
+    "perfume",
+  ].some((k) => lower.includes(k));
+  const isFood = [
+    "food",
+    "meal",
+    "dish",
+    "recipe",
+    "restaurant",
+    "coffee",
+    "pizza",
+    "burger",
+    "drink",
+    "smoothie",
+    "cake",
+  ].some((k) => lower.includes(k));
+  const isFashion = [
+    "fashion",
+    "outfit",
+    "clothing",
+    "dress",
+    "streetwear",
+    "style",
+    "lookbook",
+    "wardrobe",
+  ].some((k) => lower.includes(k));
+  const isLandscape = [
+    "landscape",
+    "nature",
+    "cityscape",
+    "aerial",
+    "mountain",
+    "ocean",
+    "forest",
+    "sky",
+    "sunset",
+    "architecture",
+  ].some((k) => lower.includes(k));
+
+  // ── Base quality always applied ──────────────────────────────────────────
   const baseQuality =
-    "high-end professional photography, tack-sharp focus, natural skin texture, physically plausible lighting, accurate anatomy";
+    "high-end professional photography, tack-sharp focus, natural lighting, physically plausible lighting";
 
-  const sportsKeywords = ["football", "soccer", "striker", "goalkeeper", "stadium", "match"];
-  const isSportsPrompt = sportsKeywords.some((keyword) => lower.includes(keyword));
-
-  const sportsQuality =
-    "single athlete in motion, full body visible, clear limbs and fingers, exactly one football visible, only one ball in frame, no duplicate footballs, realistic single-ball contact, dynamic grass spray, freeze-frame sports action";
+  // ── Domain-specific quality modifiers ───────────────────────────────────
+  const domainQuality: string[] = [];
+  if (isSports)
+    domainQuality.push(
+      "single athlete in motion, full body visible, clear limbs and fingers, exactly one ball visible, dynamic sports freeze-frame, crisp action shot, no duplicate subjects",
+    );
+  if (isPortrait)
+    domainQuality.push(
+      "accurate facial anatomy, natural skin texture, realistic eyes, expressive but not distorted, even skin tone, correct hand anatomy",
+    );
+  if (isProduct)
+    domainQuality.push(
+      "hero product centred, clean background, precise material rendering, accurate reflections, no duplicate items",
+    );
+  if (isFood)
+    domainQuality.push(
+      "food styling, appetising plating, natural steam or texture, rich colour, macro detail",
+    );
+  if (isFashion)
+    domainQuality.push(
+      "fashion editorial look, well-fitted clothing, natural fabric drape, clean composition",
+    );
+  if (isLandscape)
+    domainQuality.push("wide dynamic range, natural colours, sharp horizon, atmospheric depth");
+  if (domainQuality.length === 0) domainQuality.push("clean composition, realistic proportions");
 
   const withScaffold = [
     compact,
     baseQuality,
-    isSportsPrompt ? sportsQuality : "clean composition, realistic proportions",
+    ...domainQuality,
     "no text overlay",
     GLOBAL_QUALITY_NEGATIVE,
   ]
@@ -122,9 +220,8 @@ export async function GET(request: NextRequest) {
   if (!prompt) {
     return Response.json({ detail: "Missing prompt" }, { status: 400 });
   }
-  if (prompt.length > 1400) {
-    return Response.json({ detail: "Prompt is too long" }, { status: 400 });
-  }
+  // Truncate silently — never reject because of length.
+  const safePrompt = prompt.length > 4000 ? prompt.slice(0, 4000) : prompt;
 
   const width = clamp(
     parsePositiveInt(request.nextUrl.searchParams.get("width"), 1024),
@@ -136,7 +233,7 @@ export async function GET(request: NextRequest) {
     MIN_DIMENSION,
     MAX_DIMENSION,
   );
-  const enrichedPrompt = enrichPrompt(prompt);
+  const enrichedPrompt = enrichPrompt(safePrompt);
 
   const aiServiceBody = await fetchAiServiceImage(
     request.nextUrl.origin,

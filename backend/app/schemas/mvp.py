@@ -204,6 +204,8 @@ class DistributionCreateRequest(BaseModel):
     user_id: int
     title: str = "Untitled Post"
     media_url: str
+    media_urls: list[str] | None = None
+    media_types: list[str] | None = None
     media_type: str = "image"
     master_caption: str
     primary_language: str = "english"
