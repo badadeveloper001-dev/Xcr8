@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import mimetypes
 import tempfile
 import uuid
 from pathlib import Path
@@ -16,16 +17,27 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 
 # Use /tmp in serverless environments because application directories are read-only.
 _UPLOAD_DIR = Path(tempfile.gettempdir()) / "xcr8-uploads"
-_ALLOWED_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "video/mp4",
-    "video/quicktime",
-    "video/webm",
+_VIDEO_EXTENSIONS = {
+    ".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".mpeg", ".mpg", ".3gp", ".m2ts", ".ts",
 }
-_MAX_BYTES = 150 * 1024 * 1024  # 150 MB
+_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".svg", ".heic", ".heif", ".avif"}
+_MAX_BYTES = 1024 * 1024 * 1024  # 1 GB
+_STREAM_CHUNK_BYTES = 8 * 1024 * 1024
+
+
+def _is_allowed_media_type(content_type: str | None, filename: str | None) -> bool:
+    mime = str(content_type or "").strip().lower()
+    suffix = Path(filename or "").suffix.lower()
+
+    if mime.startswith("image/") or mime.startswith("video/"):
+        return True
+
+    if suffix in _IMAGE_EXTENSIONS or suffix in _VIDEO_EXTENSIONS:
+        guessed_mime, _ = mimetypes.guess_type(filename or "")
+        guessed_mime = str(guessed_mime or "").lower()
+        return guessed_mime.startswith("image/") or guessed_mime.startswith("video/")
+
+    return False
 
 
 def _supabase_storage_headers(content_type: str) -> dict[str, str] | None:
@@ -66,7 +78,7 @@ def _ensure_supabase_bucket() -> bool:
         return False
 
 
-def _upload_to_supabase_storage(content: bytes, filename: str, content_type: str) -> str | None:
+def _upload_to_supabase_storage(source_path: Path, filename: str, content_type: str) -> str | None:
     headers = _supabase_storage_headers(content_type)
     base_url = str(settings.supabase_url or "").rstrip("/")
     bucket = str(settings.storage_bucket or "xcr8-assets").strip() or "xcr8-assets"
@@ -75,19 +87,22 @@ def _upload_to_supabase_storage(content: bytes, filename: str, content_type: str
 
     object_path = f"uploads/{filename}"
     try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(
-                f"{base_url}/storage/v1/object/{bucket}/{object_path}",
-                headers=headers,
-                content=content,
-            )
-        if response.status_code == 400 and "Bucket not found" in response.text and _ensure_supabase_bucket():
-            with httpx.Client(timeout=30.0) as client:
+        timeout = httpx.Timeout(connect=20.0, read=120.0, write=600.0, pool=30.0)
+        with httpx.Client(timeout=timeout) as client:
+            with source_path.open("rb") as file_stream:
                 response = client.post(
                     f"{base_url}/storage/v1/object/{bucket}/{object_path}",
                     headers=headers,
-                    content=content,
+                    content=file_stream,
                 )
+        if response.status_code == 400 and "Bucket not found" in response.text and _ensure_supabase_bucket():
+            with httpx.Client(timeout=timeout) as client:
+                with source_path.open("rb") as file_stream:
+                    response = client.post(
+                        f"{base_url}/storage/v1/object/{bucket}/{object_path}",
+                        headers=headers,
+                        content=file_stream,
+                    )
         if response.status_code >= 400:
             return None
         return f"{base_url}/storage/v1/object/public/{bucket}/{object_path}"
@@ -97,15 +112,11 @@ def _upload_to_supabase_storage(content: bytes, filename: str, content_type: str
 
 @router.post("")
 async def upload_media(request: Request, file: UploadFile) -> JSONResponse:
-    if file.content_type not in _ALLOWED_TYPES:
+    if not _is_allowed_media_type(file.content_type, file.filename):
         raise HTTPException(
             status_code=415,
-            detail=f"Unsupported media type: {file.content_type}. Allowed: image or video.",
+            detail="Unsupported media type. Please upload an image or video file.",
         )
-
-    content = await file.read()
-    if len(content) > _MAX_BYTES:
-        raise HTTPException(status_code=413, detail="File exceeds the 50 MB limit.")
 
     try:
         _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -115,17 +126,42 @@ async def upload_media(request: Request, file: UploadFile) -> JSONResponse:
     ext = Path(file.filename or "upload").suffix or ".bin"
     filename = f"{uuid.uuid4().hex}{ext}"
 
+    staged_path = Path(tempfile.gettempdir()) / f"xcr8-stage-{filename}"
+    total_bytes = 0
+    try:
+        with staged_path.open("wb") as destination:
+            while True:
+                chunk = await file.read(_STREAM_CHUNK_BYTES)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > _MAX_BYTES:
+                    raise HTTPException(status_code=413, detail="File exceeds the 1 GB upload limit.")
+                destination.write(chunk)
+    finally:
+        await file.close()
+
     # Prefer durable object storage in production.
-    durable_url = _upload_to_supabase_storage(content, filename, file.content_type or "application/octet-stream")
+    detected_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
+    durable_url = _upload_to_supabase_storage(staged_path, filename, detected_type)
     if durable_url:
+        try:
+            staged_path.unlink(missing_ok=True)
+        except OSError:
+            pass
         return JSONResponse({"url": durable_url, "file_name": filename})
 
     dest = _UPLOAD_DIR / filename
 
     try:
-        dest.write_bytes(content)
+        staged_path.replace(dest)
     except OSError as exc:
         raise HTTPException(status_code=500, detail="Unable to save uploaded file.") from exc
+    finally:
+        try:
+            staged_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     public_url = str(request.url_for("get_uploaded_media", filename=filename))
     return JSONResponse({"url": public_url, "file_name": filename})

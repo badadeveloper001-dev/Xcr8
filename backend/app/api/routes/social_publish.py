@@ -32,6 +32,16 @@ router = APIRouter(prefix="/social", tags=["social"])
 _META_DELETION_REQUESTS: dict[str, dict[str, str]] = {}
 
 
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def _refresh_google_token(refresh_token: str) -> dict | None:
     if not refresh_token:
         return None
@@ -68,6 +78,30 @@ def _refresh_threads_token(access_token: str) -> dict | None:
                 "https://graph.threads.net/refresh_access_token",
                 params={
                     "grant_type": "th_refresh_token",
+                    "access_token": access_token,
+                },
+            )
+        if response.status_code >= 400:
+            return None
+        payload = response.json()
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
+def _exchange_threads_long_lived_token(access_token: str) -> dict | None:
+    if not access_token:
+        return None
+    client_secret = str(settings.threads_app_secret or "").strip()
+    if not client_secret:
+        return None
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.get(
+                "https://graph.threads.net/access_token",
+                params={
+                    "grant_type": "th_exchange_token",
+                    "client_secret": client_secret,
                     "access_token": access_token,
                 },
             )
@@ -344,6 +378,14 @@ def oauth_callback(
         elif ig_info.get("page_name"):
             handle = str(ig_info.get("page_name"))
 
+    if platform == "threads":
+        long_lived = _exchange_threads_long_lived_token(access_token)
+        if long_lived and str(long_lived.get("access_token") or "").strip():
+            access_token = str(long_lived.get("access_token") or "").strip()
+            expires_in = int(long_lived.get("expires_in") or 0)
+            if expires_in > 0:
+                token_expires_at = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
+
     try:
         platform_enum = Platform(platform)
     except ValueError:
@@ -509,15 +551,23 @@ def publish_post(
                 connection.auth_meta = auth_meta
                 db.commit()
         elif platform_name == "threads":
-            refreshed = _refresh_threads_token(access_token)
-            if refreshed and refreshed.get("access_token"):
-                access_token = str(refreshed.get("access_token") or "").strip()
-                auth_meta["access_token"] = access_token
-                expires_in = int(refreshed.get("expires_in") or 0)
-                if expires_in > 0:
-                    auth_meta["token_expires_at"] = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
-                connection.auth_meta = auth_meta
-                db.commit()
+            expires_at = _parse_iso_datetime(str(auth_meta.get("token_expires_at") or ""))
+            should_refresh = False
+            if expires_at is None:
+                should_refresh = True
+            else:
+                should_refresh = expires_at <= (datetime.now(tz=UTC) + timedelta(days=14))
+
+            if should_refresh:
+                refreshed = _refresh_threads_token(access_token)
+                if refreshed and refreshed.get("access_token"):
+                    access_token = str(refreshed.get("access_token") or "").strip()
+                    auth_meta["access_token"] = access_token
+                    expires_in = int(refreshed.get("expires_in") or 0)
+                    if expires_in > 0:
+                        auth_meta["token_expires_at"] = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
+                    connection.auth_meta = auth_meta
+                    db.commit()
 
         if connection_method == "manual" or not access_token:
             results[platform_name] = {
