@@ -256,36 +256,52 @@ export default function ComposePage() {
         for (const file of files) {
           // Step 1: ask backend for a Supabase signed upload URL.
           // This is a tiny JSON request — no Vercel payload limit applies.
-          const presignResp = await fetch("/_/backend/api/v1/upload/presign", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: file.name, content_type: file.type }),
-          });
+          let presignResp: Response | null = null;
+          try {
+            presignResp = await fetch("/_/backend/api/v1/upload/presign", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                filename: file.name,
+                content_type: file.type || "application/octet-stream",
+              }),
+            });
+          } catch (e) {
+            throw new Error(
+              `Failed to connect to presign service: ${e instanceof Error ? e.message : "network error"}`,
+            );
+          }
 
           if (presignResp.ok) {
-            const presignData = (await presignResp.json()) as {
-              signed_url?: string;
-              public_url?: string;
-            };
-            const signedUrl = presignData.signed_url;
-            const publicUrl = presignData.public_url;
+            try {
+              const presignData = (await presignResp.json()) as {
+                signed_url?: string;
+                public_url?: string;
+              };
+              const signedUrl = presignData.signed_url;
+              const publicUrl = presignData.public_url;
 
-            if (signedUrl && publicUrl) {
-              // Step 2: PUT the file directly from the browser to Supabase —
-              // completely bypasses Vercel's serverless payload size limit.
-              const uploadResp = await fetch(signedUrl, {
-                method: "PUT",
-                headers: { "Content-Type": file.type },
-                body: file,
-              });
-              if (!uploadResp.ok) {
-                const txt = await uploadResp.text().catch(() => "");
-                throw new Error(
-                  `Storage upload failed (${uploadResp.status})${txt ? ": " + txt.slice(0, 120) : "."}`,
-                );
+              if (signedUrl && publicUrl) {
+                // Step 2: PUT the file directly from the browser to Supabase —
+                // completely bypasses Vercel's serverless payload size limit.
+                const uploadResp = await fetch(signedUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type || "application/octet-stream" },
+                  body: file,
+                });
+                if (!uploadResp.ok) {
+                  const txt = await uploadResp.text().catch(() => "");
+                  throw new Error(
+                    `Storage upload failed (${uploadResp.status})${txt ? ": " + txt.slice(0, 120) : "."}`,
+                  );
+                }
+                uploaded.push({ url: publicUrl, mediaType: guessMediaType(file), name: file.name });
+                continue;
               }
-              uploaded.push({ url: publicUrl, mediaType: guessMediaType(file), name: file.name });
-              continue;
+            } catch (e) {
+              throw new Error(
+                `Direct upload failed: ${e instanceof Error ? e.message : "unknown error"}`,
+              );
             }
           }
 
@@ -293,11 +309,25 @@ export default function ComposePage() {
           // rejects payloads larger than ~4.5 MB through serverless functions).
           const formData = new FormData();
           formData.append("file", file);
-          const fallbackResp = await fetch("/_/backend/api/v1/upload", {
-            method: "POST",
-            body: formData,
-          });
-          const fallbackData: unknown = await fallbackResp.json();
+          let fallbackResp: Response | null = null;
+          try {
+            fallbackResp = await fetch("/_/backend/api/v1/upload", {
+              method: "POST",
+              body: formData,
+            });
+          } catch (e) {
+            throw new Error(
+              `Fallback upload endpoint unreachable: ${e instanceof Error ? e.message : "network error"}`,
+            );
+          }
+
+          let fallbackData: unknown;
+          try {
+            fallbackData = await fallbackResp.json();
+          } catch {
+            throw new Error(`Fallback upload returned invalid JSON (${fallbackResp.status})`);
+          }
+
           if (!fallbackResp.ok) {
             const errMsg =
               typeof fallbackData === "object" && fallbackData && "detail" in fallbackData
@@ -308,6 +338,8 @@ export default function ComposePage() {
           const url = getUploadUrl(fallbackData);
           if (url) {
             uploaded.push({ url, mediaType: guessMediaType(file), name: file.name });
+          } else {
+            throw new Error("Upload succeeded but no URL was returned");
           }
         }
         setMediaItems((current) => [...current, ...uploaded]);
