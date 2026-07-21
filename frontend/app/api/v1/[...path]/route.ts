@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
 
+// Allow this route up to 60 s on Vercel Pro (uploads, long AI calls, etc.).
+export const maxDuration = 60;
+
 const BACKEND_API_URL =
   process.env.BACKEND_API_URL ?? process.env.BACKEND_INTERNAL_URL ?? process.env.BACKEND_URL;
 
@@ -61,9 +64,14 @@ async function proxy(request: NextRequest, path: string[]) {
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    const rawBody = await request.arrayBuffer();
-    if (rawBody.byteLength > 0) {
-      init.body = rawBody;
+    // Stream the body directly to avoid buffering large uploads in memory and
+    // hitting the Vercel 4.5 MB serverless request-body limit.
+    // When a ReadableStream body is set, the fetch will pipe it to the target
+    // without buffering the whole payload in the Node.js process.
+    if (request.body) {
+      init.body = request.body;
+      // @ts-expect-error – Node 18+ fetch supports duplex streaming
+      (init as Record<string, unknown>).duplex = "half";
     }
   }
 

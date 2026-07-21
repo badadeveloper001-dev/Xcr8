@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import secrets
-from time import time
+from time import sleep, time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -802,13 +802,17 @@ def _post_threads(
     if not user_id:
         return {"success": False, "post_id": None, "post_url": None, "error": "Threads user ID missing — please reconnect your account."}
 
+    is_video = bool(media_url) and (
+        media_type.startswith("video")
+        or media_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv", ".flv", ".wmv"))
+    )
+
     container_params: dict[str, str] = {
         "text": text,
         "access_token": access_token,
         "media_type": "TEXT",
     }
     if media_url:
-        is_video = media_type.startswith("video") or media_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
         if is_video:
             container_params["media_type"] = "VIDEO"
             container_params["video_url"] = media_url
@@ -816,7 +820,10 @@ def _post_threads(
             container_params["media_type"] = "IMAGE"
             container_params["image_url"] = media_url
 
-    with httpx.Client(timeout=30.0) as client:
+    # Use an extended timeout — video container creation can be slow.
+    client_timeout = httpx.Timeout(connect=20.0, read=60.0, write=60.0, pool=10.0)
+
+    with httpx.Client(timeout=client_timeout) as client:
         container_resp = client.post(
             f"https://graph.threads.net/v1.0/{user_id}/threads",
             params=container_params,
@@ -828,6 +835,26 @@ def _post_threads(
         creation_id = container_resp.json().get("id")
         if not creation_id:
             return {"success": False, "post_id": None, "post_url": None, "error": "Threads did not return a container ID."}
+
+        # Threads requires the container to reach FINISHED status before publishing.
+        # For images this is near-instant; for videos it can take up to a few minutes.
+        # Poll up to 12 times (≈60 s) before attempting to publish.
+        if media_url:
+            for _ in range(12):
+                status_resp = client.get(
+                    f"https://graph.threads.net/v1.0/{creation_id}",
+                    params={"fields": "status,error_message", "access_token": access_token},
+                )
+                if status_resp.status_code >= 400:
+                    break  # Try to publish anyway and let Threads return the real error.
+                status_data = status_resp.json()
+                container_status = str(status_data.get("status") or "").upper()
+                if container_status == "FINISHED":
+                    break
+                if container_status == "ERROR":
+                    err_msg = str(status_data.get("error_message") or "Container processing failed.")
+                    return {"success": False, "post_id": None, "post_url": None, "error": f"Threads container error: {err_msg}"}
+                sleep(5)
 
         publish_resp = client.post(
             f"https://graph.threads.net/v1.0/{user_id}/threads_publish",
