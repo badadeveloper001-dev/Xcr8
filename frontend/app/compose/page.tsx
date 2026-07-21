@@ -254,44 +254,60 @@ export default function ComposePage() {
       try {
         const uploaded: UploadedMediaItem[] = [];
         for (const file of files) {
-          const formData = new FormData();
-          formData.append("file", file);
-          // Prefer direct backend service route to avoid Next.js API body-size limits
-          // for larger video files on Vercel. Fall back to proxied route.
-          let response: Response | null = null;
-          const uploadTargets = ["/_/backend/api/v1/upload", "/api/v1/upload"];
-          for (const target of uploadTargets) {
-            const attempt = await fetch(target, {
-              method: "POST",
-              body: formData,
-            });
-            if (attempt.ok || attempt.status !== 404) {
-              response = attempt;
-              break;
+          // Step 1: ask backend for a Supabase signed upload URL.
+          // This is a tiny JSON request — no Vercel payload limit applies.
+          const presignResp = await fetch("/_/backend/api/v1/upload/presign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: file.name, content_type: file.type }),
+          });
+
+          if (presignResp.ok) {
+            const presignData = (await presignResp.json()) as {
+              signed_url?: string;
+              public_url?: string;
+            };
+            const signedUrl = presignData.signed_url;
+            const publicUrl = presignData.public_url;
+
+            if (signedUrl && publicUrl) {
+              // Step 2: PUT the file directly from the browser to Supabase —
+              // completely bypasses Vercel's serverless payload size limit.
+              const uploadResp = await fetch(signedUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+              });
+              if (!uploadResp.ok) {
+                const txt = await uploadResp.text().catch(() => "");
+                throw new Error(
+                  `Storage upload failed (${uploadResp.status})${txt ? ": " + txt.slice(0, 120) : "."}`,
+                );
+              }
+              uploaded.push({ url: publicUrl, mediaType: guessMediaType(file), name: file.name });
+              continue;
             }
           }
-          if (!response) {
-            throw new Error("Upload route is unavailable right now.");
+
+          // Fallback: POST through the backend proxy (small files only — Vercel
+          // rejects payloads larger than ~4.5 MB through serverless functions).
+          const formData = new FormData();
+          formData.append("file", file);
+          const fallbackResp = await fetch("/_/backend/api/v1/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const fallbackData: unknown = await fallbackResp.json();
+          if (!fallbackResp.ok) {
+            const errMsg =
+              typeof fallbackData === "object" && fallbackData && "detail" in fallbackData
+                ? String((fallbackData as Record<string, unknown>).detail)
+                : "Upload failed. Please try again.";
+            throw new Error(errMsg);
           }
-          const data: unknown = await response.json();
-          if (!response.ok) {
-            const uploadError =
-              getUploadUrl(data) ||
-              (typeof data === "object" &&
-              data &&
-              "detail" in data &&
-              typeof data.detail === "string"
-                ? data.detail
-                : "Upload failed. Please try again.");
-            throw new Error(uploadError);
-          }
-          const url = getUploadUrl(data);
+          const url = getUploadUrl(fallbackData);
           if (url) {
-            uploaded.push({
-              url,
-              mediaType: guessMediaType(file),
-              name: file.name,
-            });
+            uploaded.push({ url, mediaType: guessMediaType(file), name: file.name });
           }
         }
         setMediaItems((current) => [...current, ...uploaded]);

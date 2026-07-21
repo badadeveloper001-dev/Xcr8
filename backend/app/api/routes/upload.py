@@ -10,6 +10,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.core.config import settings
 
@@ -108,6 +109,60 @@ def _upload_to_supabase_storage(source_path: Path, filename: str, content_type: 
         return f"{base_url}/storage/v1/object/public/{bucket}/{object_path}"
     except Exception:
         return None
+
+
+class PresignRequest(BaseModel):
+    filename: str
+    content_type: str
+
+
+@router.post("/presign")
+def create_presigned_upload_url(body: PresignRequest) -> JSONResponse:
+    """Return a Supabase signed upload URL so the browser can upload directly,
+    bypassing any Vercel payload size limits."""
+    base_url = str(settings.supabase_url or "").rstrip("/")
+    key = str(settings.supabase_service_role_key or "").strip()
+    bucket = str(settings.storage_bucket or "xcr8-assets").strip() or "xcr8-assets"
+
+    if not base_url or not key:
+        raise HTTPException(status_code=503, detail="Storage is not configured on this deployment.")
+
+    if not _is_allowed_media_type(body.content_type, body.filename):
+        raise HTTPException(status_code=415, detail="Unsupported media type.")
+
+    ext = Path(body.filename).suffix or ".bin"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    object_path = f"uploads/{filename}"
+
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+    _ensure_supabase_bucket()
+
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            resp = client.post(
+                f"{base_url}/storage/v1/object/upload/sign/{bucket}/{object_path}",
+                headers=headers,
+                json={"upsert": False},
+            )
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"Could not create signed URL: {resp.text[:200]}")
+        data = resp.json()
+        signed_path = str(data.get("url") or "").strip()
+        if not signed_path:
+            raise HTTPException(status_code=502, detail="Supabase did not return a signed URL.")
+        # signed_path is a relative path like /storage/v1/object/upload/sign/...?token=...
+        signed_url = f"{base_url}{signed_path}" if signed_path.startswith("/") else signed_path
+        public_url = f"{base_url}/storage/v1/object/public/{bucket}/{object_path}"
+        return JSONResponse({"signed_url": signed_url, "public_url": public_url, "file_name": filename})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Failed to generate upload URL.") from exc
 
 
 @router.post("")

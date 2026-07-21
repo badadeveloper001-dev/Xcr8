@@ -64,13 +64,9 @@ async function proxy(request: NextRequest, path: string[]) {
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    // Stream the body directly to avoid buffering large uploads in memory and
-    // hitting the Vercel 4.5 MB serverless request-body limit.
-    // When a ReadableStream body is set, the fetch will pipe it to the target
-    // without buffering the whole payload in the Node.js process.
-    if (request.body) {
-      init.body = request.body;
-      (init as Record<string, unknown>).duplex = "half";
+    const rawBody = await request.arrayBuffer();
+    if (rawBody.byteLength > 0) {
+      init.body = rawBody;
     }
   }
 
