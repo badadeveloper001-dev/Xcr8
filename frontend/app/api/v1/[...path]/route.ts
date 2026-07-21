@@ -70,7 +70,6 @@ async function proxy(request: NextRequest, path: string[]) {
     // without buffering the whole payload in the Node.js process.
     if (request.body) {
       init.body = request.body;
-      // @ts-expect-error – Node 18+ fetch supports duplex streaming
       (init as Record<string, unknown>).duplex = "half";
     }
   }
