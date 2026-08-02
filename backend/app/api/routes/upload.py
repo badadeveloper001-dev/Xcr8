@@ -54,6 +54,21 @@ def _supabase_storage_headers(content_type: str) -> dict[str, str] | None:
     }
 
 
+def _normalize_signed_upload_url(base_url: str, signed_path: str) -> str:
+    normalized = str(signed_path or "").strip()
+    if not normalized:
+        return ""
+    if normalized.startswith("http://") or normalized.startswith("https://"):
+        return normalized
+
+    base = str(base_url or "").rstrip("/")
+    if normalized.startswith("/storage/v1/object/upload/sign/"):
+        return f"{base}{normalized}"
+    if normalized.startswith("/object/upload/sign/"):
+        return f"{base}/storage/v1{normalized}"
+    return f"{base}{normalized}" if normalized.startswith("/") else normalized
+
+
 def _ensure_supabase_bucket() -> bool:
     admin_headers = _supabase_storage_headers("application/json")
     base_url = str(settings.supabase_url or "").rstrip("/")
@@ -155,8 +170,7 @@ def create_presigned_upload_url(body: PresignRequest) -> JSONResponse:
         signed_path = str(data.get("url") or "").strip()
         if not signed_path:
             raise HTTPException(status_code=502, detail="Supabase did not return a signed URL.")
-        # signed_path is a relative path like /storage/v1/object/upload/sign/...?token=...
-        signed_url = f"{base_url}{signed_path}" if signed_path.startswith("/") else signed_path
+        signed_url = _normalize_signed_upload_url(base_url, signed_path)
         public_url = f"{base_url}/storage/v1/object/public/{bucket}/{object_path}"
         return JSONResponse({"signed_url": signed_url, "public_url": public_url, "file_name": filename})
     except HTTPException:

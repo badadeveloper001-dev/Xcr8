@@ -47,6 +47,16 @@ function guessMediaType(file: File): string {
   return "image";
 }
 
+function isValidSignedUploadUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim();
+  if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) return false;
+  return (
+    normalized.includes("/storage/v1/object/upload/sign/") ||
+    normalized.includes("/object/upload/sign/")
+  );
+}
+
 type UploadedMediaItem = {
   url: string;
   mediaType: string;
@@ -281,22 +291,32 @@ export default function ComposePage() {
               const signedUrl = presignData.signed_url;
               const publicUrl = presignData.public_url;
 
-              if (signedUrl && publicUrl) {
-                // Step 2: PUT the file directly from the browser to Supabase —
-                // completely bypasses Vercel's serverless payload size limit.
-                const uploadResp = await fetch(signedUrl, {
-                  method: "PUT",
-                  headers: { "Content-Type": file.type || "application/octet-stream" },
-                  body: file,
-                });
-                if (!uploadResp.ok) {
-                  const txt = await uploadResp.text().catch(() => "");
-                  throw new Error(
-                    `Storage upload failed (${uploadResp.status})${txt ? ": " + txt.slice(0, 120) : "."}`,
+              if (signedUrl && publicUrl && isValidSignedUploadUrl(signedUrl)) {
+                // Step 2: PUT the file directly from the browser to Supabase when the URL looks valid.
+                try {
+                  const uploadResp = await fetch(signedUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type || "application/octet-stream" },
+                    body: file,
+                  });
+                  if (!uploadResp.ok) {
+                    const txt = await uploadResp.text().catch(() => "");
+                    throw new Error(
+                      `Storage upload failed (${uploadResp.status})${txt ? ": " + txt.slice(0, 120) : "."}`,
+                    );
+                  }
+                  uploaded.push({
+                    url: publicUrl,
+                    mediaType: guessMediaType(file),
+                    name: file.name,
+                  });
+                  continue;
+                } catch (directUploadError) {
+                  console.warn(
+                    "Direct upload failed; falling back to backend upload.",
+                    directUploadError,
                   );
                 }
-                uploaded.push({ url: publicUrl, mediaType: guessMediaType(file), name: file.name });
-                continue;
               }
             } catch (e) {
               throw new Error(
