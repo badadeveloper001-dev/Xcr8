@@ -43,13 +43,14 @@ export default function WelcomePage() {
           className="surface-card rounded-[28px] border border-slate-200/70 bg-white/90 p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/72 md:p-10"
         >
           <p className="mb-3 inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-700 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-200">
-            Creator workspace
+            AI creator workspace
           </p>
           <h1 className="max-w-2xl text-3xl font-semibold leading-[1.08] tracking-tight text-slate-950 dark:text-white md:text-5xl">
-            One place to plan, create, and publish.
+            XCR8 helps creators plan, create, and publish faster.
           </h1>
-          <p className="mt-4 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-300 md:text-lg">
-            XCR8 keeps your tools, ideas, and publishing flow in one clean workspace.
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300 md:text-lg">
+            Built for creators and marketing teams, XCR8 brings content planning, AI-assisted creative
+            production, social publishing, and performance tracking into one streamlined workspace.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
