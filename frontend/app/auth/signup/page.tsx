@@ -332,7 +332,14 @@ export default function SignupPage() {
                     onChange={(e) => setAgreeTerms(e.target.checked)}
                     className="mt-0.5"
                   />
-                  I agree to the Terms of Service and Privacy Policy.
+                  I agree to the{" "}
+                  <Link href="/terms" className="underline underline-offset-2 hover:text-slate-700">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="underline underline-offset-2 hover:text-slate-700">
+                    Privacy Policy
+                  </Link>.
                 </label>
               </>
             ) : (

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { DM_Sans, Poppins } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
@@ -42,7 +43,21 @@ export default function RootLayout({
         />
       </head>
       <body className={`${dmSans.variable} ${poppins.variable} ${dmSans.className}`}>
-        <Providers>{children}</Providers>
+        <Providers>
+          <div className="flex min-h-screen flex-col">
+            <div className="flex-1">{children}</div>
+            <footer className="border-t border-slate-200 bg-white/80 py-5 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/70">
+              <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-5 px-6 text-xs text-slate-600 dark:text-slate-400">
+                <Link href="/terms" className="transition hover:text-slate-900 dark:hover:text-slate-200">
+                  Terms of Service
+                </Link>
+                <Link href="/privacy" className="transition hover:text-slate-900 dark:hover:text-slate-200">
+                  Privacy Policy
+                </Link>
+              </div>
+            </footer>
+          </div>
+        </Providers>
       </body>
     </html>
   );
