@@ -14,6 +14,8 @@ from app.api.routes.pulse import router as pulse_router
 from app.api.routes.scheduling import router as scheduling_router
 from app.api.routes.social_publish import router as social_router
 from app.api.routes.upload import router as upload_router
+from app.api.routes.workspaces import router as workspaces_router
+from app.api.routes.plans import router as plans_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -30,4 +32,6 @@ api_router.include_router(intelligence_router)
 api_router.include_router(platforms_router)
 api_router.include_router(social_router)
 api_router.include_router(upload_router)
+api_router.include_router(workspaces_router)
+api_router.include_router(plans_router)
 

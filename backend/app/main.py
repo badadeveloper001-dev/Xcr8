@@ -68,6 +68,10 @@ async def lifespan(_: FastAPI):
     try:
         models.Base.metadata.create_all(bind=engine)
         logger.info("Database schema initialized successfully.")
+        try:
+            logger.info("Using database URL: %s", settings.database_url)
+        except Exception:
+            logger.warning("Could not read settings.database_url")
     except Exception as exc:
         logger.warning("Database schema creation failed (will retry on first request): %s", exc)
     yield
@@ -235,3 +239,8 @@ app.include_router(api_router, prefix="/api/v1")
 @app.get("/")
 def root() -> dict[str, str]:
     return {"service": "backend", "environment": settings.environment}
+
+
+@app.get("/api/v1/debug/db-url")
+def debug_db_url() -> dict:
+    return {"database_url": str(settings.database_url)}

@@ -151,9 +151,10 @@ class Settings(BaseSettings):
             self.database_url = self._inject_ipv4_hostaddr_if_possible(self.database_url)
             return self
 
-        # In serverless runtimes (e.g. Vercel), writeable storage is limited to /tmp.
-        # Use a temp-backed SQLite fallback when managed DB credentials are not configured.
-        fallback_db_path = os.path.join(tempfile.gettempdir(), "xcr8.dev.db")
+        # Use a repo-local SQLite fallback when managed DB credentials are not configured.
+        # Prefer the backend folder so the running backend process has a deterministic DB path.
+        backend_dir = Path(__file__).resolve().parents[2]
+        fallback_db_path = backend_dir / "xcr8.dev.db"
         self.database_url = f"sqlite:///{fallback_db_path}"
         return self
 

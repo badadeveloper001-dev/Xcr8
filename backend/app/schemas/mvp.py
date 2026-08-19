@@ -165,6 +165,14 @@ class PulseStatusUpdateRequest(BaseModel):
     status: str = Field(pattern=r"^(investigating|fixed)$")
     resolution_summary: str | None = Field(default=None, max_length=1000)
 
+class PlanUpgradeRequest(BaseModel):
+    plan: str = Field(pattern=r"^(free|plus|pro|agency)$")
+
+class PlanResponse(BaseModel):
+    user_id: int
+    plan: str
+    started_at: str | None = None
+    expires_at: str | None = None
 
 class PulseEventIngestRequest(BaseModel):
     event_type: str = Field(default="error", max_length=32)

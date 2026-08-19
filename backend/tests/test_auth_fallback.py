@@ -20,7 +20,8 @@ def test_signup_request_code_falls_back_when_supabase_is_unavailable(monkeypatch
     def boom(*args, **kwargs):
         raise SupabaseAuthError("temporary outage", 503)
 
-    monkeypatch.setattr("app.api.routes.auth.supabase_sign_up", boom)
+    # Patch the actual email-sending helper used by the signup route so it simulates outage
+    monkeypatch.setattr("app.api.routes.auth.send_signup_email_code", boom)
 
     response = client.post(
         "/api/v1/auth/signup/request-code",

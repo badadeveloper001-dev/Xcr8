@@ -29,6 +29,13 @@ class PostStatus(str, Enum):
     failed = "failed"
 
 
+class PlanTier(str, Enum):
+    free = "free"
+    plus = "plus"
+    pro = "pro"
+    agency = "agency"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -42,6 +49,10 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    plan_tier: Mapped[PlanTier] = mapped_column(SqlEnum(PlanTier), default=PlanTier.free, index=True)
+    plan_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    billing_meta: Mapped[dict] = mapped_column(JSON, default=dict)
 
     profile: Mapped[CreatorProfile] = relationship(back_populates="user", uselist=False)
     auth_credential: Mapped[AuthCredential] = relationship(back_populates="user", uselist=False)
@@ -384,3 +395,32 @@ class PulseNotification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     incident: Mapped[PulseIncident] = relationship(back_populates="notifications")
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(180), unique=False, index=True)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    memberships: Mapped[list["WorkspaceMembership"]] = relationship(back_populates="workspace")
+
+
+class WorkspaceMembership(Base):
+    __tablename__ = "workspace_memberships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(32), default="member")
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    workspace: Mapped[Workspace] = relationship(back_populates="memberships")
+    user: Mapped[User] = relationship()

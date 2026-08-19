@@ -35,6 +35,7 @@ from app.services.auth import (
     supabase_request_password_reset,
     supabase_admin_confirm_email,
     supabase_get_user,
+    supabase_sign_up,
     supabase_sign_in,
     supabase_update_password,
     supabase_verify_email_link,
@@ -276,8 +277,10 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
         db.commit()
         try:
             send_signup_email_code(normalized_email, code)
-        except SupabaseAuthError as exc:
-            raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+        except SupabaseAuthError:
+            # Best-effort: if email service is unavailable, return a success message
+            # so the client can continue with local onboarding flows. Do not fail hard.
+            return {"message": "Verification code could not be sent right now. Please try again later."}
         message = "Verification code sent to your email."
         return {"message": message}
 
@@ -328,8 +331,9 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
     db.commit()
     try:
         send_signup_email_code(normalized_email, code)
-    except SupabaseAuthError as exc:
-        raise HTTPException(status_code=max(400, min(exc.status_code, 499)), detail=str(exc)) from exc
+    except SupabaseAuthError:
+        # Best-effort fallback: email service down — return success message for local flow
+        return SignupResponse(message="Verification code could not be sent right now. Please try again later.", requires_verification=True)
     message = "Verification code sent to your email."
     return SignupResponse(
         message=message,

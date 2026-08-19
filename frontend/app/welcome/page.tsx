@@ -49,8 +49,9 @@ export default function WelcomePage() {
             XCR8 helps creators plan, create, and publish faster.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300 md:text-lg">
-            Built for creators and marketing teams, XCR8 brings content planning, AI-assisted creative
-            production, social publishing, and performance tracking into one streamlined workspace.
+            Built for creators and marketing teams, XCR8 brings content planning, AI-assisted
+            creative production, social publishing, and performance tracking into one streamlined
+            workspace.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
