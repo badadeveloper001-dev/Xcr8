@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Logo } from "@/components/logo";
-import { getSession } from "@/lib/api";
+import { getSession, loginWithGoogle } from "@/lib/api";
+import { supabaseClient } from "@/lib/supabase";
 import { useCreatorStore } from "@/lib/store";
 
 export default function SplashPage() {
@@ -13,8 +14,9 @@ export default function SplashPage() {
   useEffect(() => {
     const boot = async () => {
       const { userId, setSession, clearSession } = useCreatorStore.getState();
-      if (userId) {
-        try {
+
+      try {
+        if (userId) {
           const session = await getSession(userId);
           setSession({
             userId: session.user_id,
@@ -27,10 +29,31 @@ export default function SplashPage() {
           });
           router.replace(session.onboarding_complete ? "/dashboard" : "/onboarding");
           return;
-        } catch {
-          clearSession();
         }
+
+        if (supabaseClient) {
+          const { data, error } = await supabaseClient.auth.getSession();
+          if (!error && data.session?.access_token) {
+            const backendSession = await loginWithGoogle({
+              access_token: data.session.access_token,
+            });
+            setSession({
+              userId: backendSession.user_id,
+              email: backendSession.email,
+              displayName: backendSession.display_name,
+              fullName: backendSession.full_name,
+              username: backendSession.username,
+              avatarUrl: backendSession.avatar_url ?? null,
+              onboardingComplete: backendSession.onboarding_complete,
+            });
+            router.replace(backendSession.onboarding_complete ? "/dashboard" : "/onboarding");
+            return;
+          }
+        }
+      } catch {
+        clearSession();
       }
+
       router.replace("/welcome");
     };
 
