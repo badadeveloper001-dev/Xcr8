@@ -29,22 +29,23 @@ export default function GoogleCallbackPage() {
           throw new Error("Google auth is not configured yet.");
         }
 
-        // Use the full redirect URL when exchanging the code — this preserves
-        // any state params and matches supabase-js examples for reliable exchange.
         const code = searchParams.get("code");
+        const oauthError = searchParams.get("error");
+        if (oauthError) {
+          throw new Error(
+            searchParams.get("error_description") || oauthError || "Google sign-in was denied.",
+          );
+        }
+
         if (code) {
-          const exchange = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
+          const exchange = await supabaseClient.auth.exchangeCodeForSession(code);
           if (exchange.error) {
             throw new Error(exchange.error.message || "Could not complete Google sign-in.");
           }
         }
 
-        // Try to read the session from the client. If that fails, look for
-        // common fallback tokens in the URL (some flows return provider tokens).
         const { data, error } = await supabaseClient.auth.getSession();
         if (error) {
-          // If getSession fails, attempt to read fallback access tokens.
-          // We'll continue so we can try extracting tokens from the URL.
           console.warn("supabase getSession error:", error);
         }
 
