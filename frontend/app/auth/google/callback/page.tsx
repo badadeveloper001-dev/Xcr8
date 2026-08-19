@@ -48,12 +48,15 @@ export default function GoogleCallbackPage() {
           console.warn("supabase getSession error:", error);
         }
 
-        let accessToken = data?.session?.access_token;
-        if (!accessToken) {
-          accessToken =
-            searchParams.get("access_token") ||
-            searchParams.get("provider_token") ||
-            searchParams.get("provider_access_token");
+        let accessToken: string | undefined = data?.session?.access_token ?? undefined;
+        const fallbackToken =
+          searchParams.get("access_token") ??
+          searchParams.get("provider_token") ??
+          searchParams.get("provider_access_token") ??
+          undefined;
+
+        if (!accessToken && fallbackToken) {
+          accessToken = fallbackToken;
         }
 
         if (!accessToken) {
