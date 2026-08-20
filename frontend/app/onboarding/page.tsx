@@ -91,7 +91,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [creatorType, setCreatorType] = useState<string[]>(["influencer"]);
-  const [platformsUsed, setPlatformsUsed] = useState<string[]>(["instagram", "tiktok"]);
+  const [platformsUsed, setPlatformsUsed] = useState<string[]>(["instagram", "youtube_shorts"]);
   const [contentNiche, setContentNiche] = useState<string[]>(["entertainment"]);
   const [audienceLocation, setAudienceLocation] = useState<string[]>(["Nigeria"]);
   const [contentGoals, setContentGoals] = useState<string[]>(["grow audience"]);
