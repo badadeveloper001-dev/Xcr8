@@ -76,7 +76,7 @@ export default function IntelligenceEnginePage() {
   const topSignal = feed?.signals[0];
 
   const platformOptions = useMemo(
-    () => ["all", "instagram", "tiktok", "x", "linkedin", "youtube_shorts", "threads"],
+    () => ["all", "instagram", "facebook", "youtube_shorts", "threads"],
     [],
   );
 
