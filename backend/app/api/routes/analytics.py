@@ -184,6 +184,43 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
 
     platform_deltas.sort(key=lambda item: item["current_engagement_rate"], reverse=True)
 
+    platform_playbooks: list[dict] = []
+    for platform, snapshots_for_platform in platform_snapshot_map.items():
+        ordered = sorted(snapshots_for_platform, key=lambda item: item.created_at, reverse=True)
+        current = ordered[0]
+        reasons: list[str] = []
+        if current.engagement_rate >= avg_engagement and current.engagement_rate > 0:
+            reasons.append("Engagement is at or above your current cross-platform average.")
+        if current.caption_effectiveness >= avg_caption_effectiveness and current.caption_effectiveness > 0:
+            reasons.append("Your caption quality signal is outperforming your usual baseline.")
+        if current.followers_delta > 0:
+            reasons.append("This platform is contributing positive audience growth.")
+        best_hour = getattr(current, "best_posting_hour", None)
+        if best_hour is not None:
+            reasons.append(f"Your strongest observed posting window is around {int(best_hour):02d}:00.")
+        if not reasons:
+            reasons.append("More snapshots are needed before a reliable performance pattern can be identified.")
+
+        platform_playbooks.append(
+            {
+                "platform": platform,
+                "best_posting_hour": best_hour,
+                "engagement_rate": current.engagement_rate,
+                "followers_delta": current.followers_delta,
+                "caption_effectiveness": current.caption_effectiveness,
+                "snapshot_count": len(ordered),
+                "confidence": "high" if len(ordered) >= 3 else "directional",
+                "why_it_is_working": reasons,
+                "recommended_test": (
+                    "Repeat the winning structure in the next posting window and compare engagement."
+                    if len(ordered) >= 2
+                    else "Publish a few more comparable posts to establish a dependable baseline."
+                ),
+            }
+        )
+
+    platform_playbooks.sort(key=lambda item: item["engagement_rate"], reverse=True)
+
     brain_insights = [
         (
             f"Your strongest platform right now is {(top_platform or {}).get('platform', '').replace('_', ' ')} with {((top_platform or {}).get('engagement_rate', 0) * 100):.1f}% engagement."
@@ -267,6 +304,11 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
         "active_window": window,
         "trend_series": trend_series,
         "platform_deltas": platform_deltas,
+        "platform_playbooks": platform_playbooks,
+        "data_quality": {
+            "post_level_metrics_available": False,
+            "message": "These insights use platform snapshots. Connect post-level reach, shares, saves, and watch-time metrics to explain exactly why an individual post went viral.",
+        },
         "brain_insights": brain_insights,
         "audience": {
             "top_regions": top_regions,
