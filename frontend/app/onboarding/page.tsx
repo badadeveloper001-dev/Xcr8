@@ -20,7 +20,7 @@ const creatorTypes = [
   "other",
 ];
 
-const platforms = ["instagram", "tiktok", "x", "linkedin", "youtube", "facebook", "threads"];
+const platforms = ["instagram", "facebook", "youtube_shorts", "threads"];
 
 const niches = [
   "entertainment",
