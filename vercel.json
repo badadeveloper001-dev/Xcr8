@@ -1,8 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "projectSettings": {
-    "framework": "services"
-  },
   "experimentalServices": {
     "frontend": {
       "entrypoint": "frontend",
