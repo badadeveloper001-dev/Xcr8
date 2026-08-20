@@ -20,9 +20,10 @@ type ChatItem = {
 };
 
 const starterPrompts = [
-  "Help me plan my next content move based on my current workspace.",
-  "Give me a quick summary of my app activity and what to improve.",
-  "What is the best next action for my growth this week?",
+  "Brainstorm 5 original post ideas for my niche.",
+  "Turn one of my ideas into a platform-ready post.",
+  "Review my analytics and tell me what to repeat next.",
+  "Build a 7-day content plan around my strongest platform.",
 ];
 
 const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_switch"];
@@ -73,8 +74,8 @@ function buildWelcomeMessage(displayName: string | null): ChatItem {
   return {
     role: "assistant",
     content: displayName
-      ? `I’m Cr8or AI, ${displayName}. Ask me anything about the app, your content, or your next move.`
-      : "I’m Cr8or AI. Ask me anything about the app, your content, or your next move.",
+      ? `I’m Cr8or AI, ${displayName}. I can brainstorm ideas, compose platform-ready posts, and help you turn your analytics into your next best move.`
+      : "I’m Cr8or AI. I can brainstorm ideas, compose platform-ready posts, and help you turn your analytics into your next best move.",
   };
 }
 
@@ -504,7 +505,7 @@ export default function AssistantPage() {
   return (
     <StudioShell
       title="AI Studio"
-      subtitle="Cr8or AI chat."
+      subtitle="Brainstorm, compose, and grow with Cr8or AI."
       activeToolId="assistant"
       showToolShelf={false}
     >
@@ -512,7 +513,7 @@ export default function AssistantPage() {
         <section className="ai-stage p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="xcr8-title-lg text-white light:text-slate-900">Cr8or Workspace</h2>
+              <h2 className="xcr8-title-lg text-white light:text-slate-900">Cr8or AI Workspace</h2>
             </div>
             <div className="flex items-center gap-2">
               <Link
