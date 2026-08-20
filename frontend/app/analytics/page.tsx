@@ -82,6 +82,8 @@ const fadeUp = (delay = 0) => ({
   transition: { duration: 0.32, delay },
 });
 
+const activePlatformIds = ["instagram", "facebook", "youtube_shorts", "threads"];
+
 export default function AnalyticsPage() {
   const router = useRouter();
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
@@ -115,7 +117,7 @@ export default function AnalyticsPage() {
 
   if (!hasHydrated || !userId) return null;
 
-  const engagement = data?.engagement ?? [];
+  const engagement = (data?.engagement ?? []).filter((item) => activePlatformIds.includes(item.platform));
   const platformOptions = Array.from(new Set(engagement.map((item) => item.platform)));
   const filtered =
     selectedPlatform === "all"
@@ -127,7 +129,8 @@ export default function AnalyticsPage() {
   const avgEngagement = (data?.summary?.average_engagement_rate ?? 0) * 100;
   const avgCaptionFit = (data?.summary?.average_caption_effectiveness ?? 0) * 100;
 
-  const platformPlaybooks = data?.platform_playbooks ?? [];
+  const platformPlaybooks = (data?.platform_playbooks ?? []).filter((item) => activePlatformIds.includes(item.platform));
+  const livePlatforms = (liveData?.platforms ?? []).filter((item) => activePlatformIds.includes(item.platform));
 
   const topRecommendations = [
     data?.insights?.trend ?? "No live trend signal yet.",
@@ -230,7 +233,7 @@ export default function AnalyticsPage() {
         )}
 
         {/* Live Platform Data */}
-        {liveData && liveData.platforms.length > 0 && (
+        {liveData && livePlatforms.length > 0 && (
           <motion.section {...fadeUp(0.04)} className="xcr8-panel rounded-2xl p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="xcr8-title-lg flex items-center gap-2 text-white light:text-slate-900">
@@ -251,7 +254,7 @@ export default function AnalyticsPage() {
               </button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {liveData.platforms.map((p) => (
+              {livePlatforms.map((p) => (
                 <article key={p.platform} className="surface-soft rounded-xl p-3">
                   <div className="mb-1.5 flex items-center justify-between gap-1">
                     <p className="text-xs font-semibold capitalize text-white light:text-slate-900">
@@ -396,7 +399,7 @@ export default function AnalyticsPage() {
         )}
 
         {/* No live platforms */}
-        {liveData && liveData.platforms.length === 0 && (
+        {liveData && livePlatforms.length === 0 && (
           <motion.section
             {...fadeUp(0.04)}
             className="xcr8-panel rounded-2xl border border-dashed border-white/10 p-5 text-center"
