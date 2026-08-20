@@ -72,7 +72,7 @@ export default function ComposePage() {
   const [mediaItems, setMediaItems] = useState<UploadedMediaItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["instagram", "x"]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["instagram", "facebook"]);
   const [scheduleAt, setScheduleAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
