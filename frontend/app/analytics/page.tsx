@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, Download, RefreshCw, Sparkles, Wifi } from "lucide-react";
+import { ArrowRight, BarChart3, Clock3, Download, RefreshCw, Sparkles, Target, Wifi } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import { apiClient } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -14,6 +14,18 @@ type EngagementItem = {
   engagement_rate: number;
   followers_delta: number;
   caption_effectiveness: number;
+};
+
+type PlatformPlaybook = {
+  platform: string;
+  best_posting_hour: number | null;
+  engagement_rate: number;
+  followers_delta: number;
+  caption_effectiveness: number;
+  snapshot_count: number;
+  confidence: "high" | "directional";
+  why_it_is_working: string[];
+  recommended_test: string;
 };
 
 type AnalyticsOverview = {
@@ -29,6 +41,11 @@ type AnalyticsOverview = {
     best_caption_length: number;
     best_posting_times: string[];
     trend: string;
+  };
+  platform_playbooks?: PlatformPlaybook[];
+  data_quality?: {
+    post_level_metrics_available: boolean;
+    message: string;
   };
 };
 
@@ -109,6 +126,8 @@ export default function AnalyticsPage() {
   const audienceGrowth = data?.summary?.audience_growth ?? 0;
   const avgEngagement = (data?.summary?.average_engagement_rate ?? 0) * 100;
   const avgCaptionFit = (data?.summary?.average_caption_effectiveness ?? 0) * 100;
+
+  const platformPlaybooks = data?.platform_playbooks ?? [];
 
   const topRecommendations = [
     data?.insights?.trend ?? "No live trend signal yet.",
@@ -439,6 +458,54 @@ export default function AnalyticsPage() {
                 </article>
               ))}
             </motion.section>
+
+            {platformPlaybooks.length > 0 && (
+              <motion.section {...fadeUp(0.08)} className="xcr8-panel rounded-2xl p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="xcr8-title-lg flex items-center gap-2 text-white light:text-slate-900">
+                      <Target size={16} className="text-cyan-300" />
+                      Why this is working
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
+                      Platform-level signals, not a claim about one individual viral post.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200">
+                    <Clock3 size={12} />
+                    Best times included
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {platformPlaybooks.map((playbook) => (
+                    <article key={playbook.platform} className="surface-soft rounded-xl p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold capitalize text-white light:text-slate-900">
+                          {playbook.platform.replaceAll("_", " ")}
+                        </h3>
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                          {playbook.confidence} confidence
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-cyan-200">
+                        Best time: {playbook.best_posting_hour === null ? "Still learning" : `${String(playbook.best_posting_hour).padStart(2, "0")}:00`}
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs text-slate-300 light:text-slate-700">
+                        {playbook.why_it_is_working.slice(0, 3).map((reason) => (
+                          <li key={reason}>• {reason}</li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-xs text-violet-200 light:text-violet-700">
+                        Next test: {playbook.recommended_test}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+                {data?.data_quality?.message && (
+                  <p className="mt-3 text-[11px] text-slate-500">{data.data_quality.message}</p>
+                )}
+              </motion.section>
+            )}
 
             <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
               <motion.section {...fadeUp(0.1)} className="xcr8-panel rounded-2xl p-4">
