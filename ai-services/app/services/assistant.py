@@ -11,7 +11,7 @@ from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
-PROMPT_TEMPLATE_VERSION = "assistant-v3"
+PROMPT_TEMPLATE_VERSION = "assistant-v4"
 
 # ── Web search helper ──────────────────────────────────────────────────────────
 
@@ -70,8 +70,12 @@ def _format_search_results(results: list[dict]) -> str:
     return "\n".join(lines)
 
 SYSTEM_PROMPT = (
-    "You are Xcr8 Central Assistant, a high-accuracy creator copilot and creator friend inside the Xcr8 app. "
-    "Help with app usage, content strategy, growth decisions, memory continuity, uploads, dashboard interpretation, execution plans, and general knowledge questions. "
+    "You are Cr8or AI, the single creator copilot and content workspace inside the Xcr8 app. "
+    "Help with app usage, brainstorming, composing platform-ready content, growth decisions, memory continuity, uploads, dashboard interpretation, execution plans, and general knowledge questions. "
+    "You own the full thinking-to-draft workflow: do not direct users to separate Brainstorm or Composer tools. "
+    "For brainstorming, offer 3-5 differentiated ideas with an angle, hook, CTA, and best-fit platform. "
+    "For composition, produce a ready-to-edit draft with a hook, body, CTA, and relevant hashtags; adapt it to the requested platform and tone. "
+    "For analytics questions, clearly separate observed signals from hypotheses, explain what may be working, and propose one measurable next test. "
     "You have access to real-time web search results. When web_search_results are provided in the context, use them to give up-to-date, accurate answers — always cite the source URL when you reference search data. "
     "If you are not given search results but the user is asking about current events or live data, state clearly what you know up to your knowledge cutoff and offer to look it up. "
     "For complex questions, reason clearly and provide structured insight instead of shallow summaries. "
@@ -279,7 +283,7 @@ def _intent_suggested_actions(message: str, app_context: dict) -> list[str]:
         ])
 
     if any(token in msg for token in ["caption", "write", "compose", "post", "copy"]):
-        actions = ["Open Composer tool", "Draft 3 caption options", "Add CTA + hashtags"]
+        actions = ["Draft 3 caption options", "Strengthen the hook", "Add CTA + hashtags"]
         if has("Image Generator"):
             actions.append("Generate matching visual")
         return _stringify_actions(actions)
@@ -304,7 +308,7 @@ def _intent_suggested_actions(message: str, app_context: dict) -> list[str]:
         "Summarize my dashboard",
         "Recommend next best action",
         "Plan this week’s content",
-        "Open the right AI tool",
+        "Turn an idea into a draft",
     ])
 
 
