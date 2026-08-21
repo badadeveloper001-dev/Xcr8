@@ -105,6 +105,11 @@ def dispatch_due_posts(
             post = db.get(ContentPost, schedule.post_id)
             if published and post:
                 post.status = PostStatus.published
+                meta = dict(post.content_meta or {})
+                meta.pop("schedule_retry_count", None)
+                meta.pop("last_schedule_failure", None)
+                post.content_meta = meta
+                db.add(post)
 
             db.commit()
             processed.append(
