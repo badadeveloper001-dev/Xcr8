@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
+import { getApiErrorMessage, verifyAdminAccess } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const ADMIN_SESSION_KEY = "xcr8-admin-access";
@@ -20,15 +21,20 @@ export default function AdminLoginPage() {
     }
   }, [router]);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const code = accessCode.trim();
     if (!code) {
       setError("Enter access code.");
       return;
     }
-    sessionStorage.setItem(ADMIN_SESSION_KEY, code);
-    router.push("/admin/dashboard");
+    try {
+      await verifyAdminAccess(code);
+      sessionStorage.setItem(ADMIN_SESSION_KEY, code);
+      router.push("/admin/dashboard");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not verify admin access."));
+    }
   };
 
   return (
