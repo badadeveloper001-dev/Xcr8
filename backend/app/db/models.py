@@ -424,3 +424,16 @@ class WorkspaceMembership(Base):
 
     workspace: Mapped[Workspace] = relationship(back_populates="memberships")
     user: Mapped[User] = relationship()
+
+
+class AIFeedback(Base):
+    __tablename__ = "ai_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    chat_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    rating: Mapped[str] = mapped_column(String(24), index=True)
+    response_excerpt: Mapped[str] = mapped_column(Text, default="")
+    model_name: Mapped[str] = mapped_column(String(120), default="unknown", index=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
