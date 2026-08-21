@@ -44,13 +44,15 @@
 - `PULSE_DISCORD_WEBHOOK_URL`: optional Discord webhook for founder alerts
 - `PULSE_INTERNAL_TOKEN`: shared secret for internal Pulse event ingestion from workers/services
 - `PULSE_SLOW_REQUEST_MS`: threshold for slow-response incident capture (default `6000`)
+- `THREADS_APP_ID` / `THREADS_APP_SECRET`: Threads OAuth credentials. The Meta app must allow the production callback URL at `https://your-domain/auth/platform-callback`.
 
 ## AI Services
 
 - `AI_SERVICE_HOST`: AI service bind host
 - `AI_SERVICE_PORT`: AI service bind port
 - `OPENAI_API_KEY`: OpenAI key for caption and memory intelligence
-- `OPENAI_MODEL`: model id to use
+- `OPENAI_MODEL`: everyday Cr8or AI model (recommended: `gpt-5.4-mini`)
+- `OPENAI_HIGH_REASONING_MODEL`: automatic high-quality model for deep research and strategy (recommended: `gpt-5.4`)
 - `PINECONE_API_KEY`: Pinecone API key
 - `PINECONE_ENVIRONMENT`: Pinecone region/env
 

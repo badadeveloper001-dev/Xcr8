@@ -127,6 +127,10 @@ def _platform_creds(platform: str) -> tuple[str, str]:
                 ["FB_APP_ID", "FACEBOOK_APP_ID", "META_CLIENT_ID"],
                 ["FB_APP_SECRET", "FACEBOOK_APP_SECRET", "META_CLIENT_SECRET"],
             ),
+            "threads": (
+                ["THREADS_CLIENT_ID", "META_THREADS_APP_ID"],
+                ["THREADS_CLIENT_SECRET", "META_THREADS_APP_SECRET"],
+            ),
         }
         id_keys, secret_keys = fallback_env_keys.get(platform, ([], []))
         if not client_id:
@@ -248,12 +252,9 @@ def exchange_code_for_token(
                 # Facebook/Instagram token exchange accepts query params.
                 response = client.get(cfg["token_url"], params=data)
             elif platform == "threads":
-                # Threads OAuth token exchange expects form-encoded POST.
-                response = client.post(
-                    cfg["token_url"],
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                    data=data,
-                )
+                # Meta's Threads OAuth reference specifies a POST with the code
+                # exchange values in the query string, including the same redirect URI.
+                response = client.post(cfg["token_url"], params=data)
             else:
                 response = client.post(
                     cfg["token_url"],
