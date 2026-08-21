@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from xml.etree import ElementTree
+
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
@@ -146,45 +149,106 @@ def _materialize_signal(db: Session, user_id: int, topic: str, platform: str, mo
     return signal
 
 
-def _refresh_local_signals(db: Session, user: User, interests: list[str], platform: str) -> int:
-    snapshots = list(
-        db.scalars(
-            select(AnalyticsSnapshot)
-            .where(AnalyticsSnapshot.user_id == user.id)
-            .order_by(desc(AnalyticsSnapshot.created_at))
-            .limit(60)
-        )
-    )
-    posts = list(
-        db.scalars(
-            select(ContentPost)
-            .where(ContentPost.user_id == user.id)
-            .order_by(desc(ContentPost.created_at))
-            .limit(60)
-        )
-    )
+def _fetch_live_google_trends() -> list[dict[str, str]]:
+    """Read Google's public trending-searches RSS feed; never manufacture a trend on failure."""
+    try:
+        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+            response = client.get("https://trends.google.com/trending/rss?geo=NG")
+        if response.status_code >= 400:
+            return []
+        root = ElementTree.fromstring(response.content)
+        entries: list[dict[str, str]] = []
+        for item in root.findall(".//item")[:30]:
+            title = str(item.findtext("title") or "").strip()
+            published = str(item.findtext("pubDate") or "").strip()
+            traffic = ""
+            for child in list(item):
+                if child.tag.endswith("approx_traffic"):
+                    traffic = str(child.text or "").strip()
+                    break
+            if title:
+                entries.append({"topic": title, "published_at": published, "traffic": traffic})
+        return entries
+    except Exception:
+        return []
 
-    momentum_boost = 0.0
-    if snapshots:
-        avg_engagement = sum(item.engagement_rate for item in snapshots[:20]) / max(1, len(snapshots[:20]))
-        momentum_boost += min(0.3, max(0.0, avg_engagement))
-    if posts:
-        momentum_boost += min(0.15, len(posts) / 220)
+
+def _refresh_live_signals(db: Session, user: User, interests: list[str], platform: str) -> int:
+    live_trends = _fetch_live_google_trends()
+    if not live_trends:
+        return 0
+
+    interest_terms = " ".join(interests).lower()
+    ranked = sorted(
+        live_trends,
+        key=lambda item: (
+            0 if any(token and token in item["topic"].lower() for token in interest_terms.split()) else 1,
+            item["topic"].lower(),
+        ),
+    )[:8]
+
+    existing_topics = {
+        item.topic.lower()
+        for item in db.scalars(
+            select(TrendSignalEvent)
+            .where(TrendSignalEvent.user_id == user.id)
+            .order_by(desc(TrendSignalEvent.created_at))
+            .limit(80)
+        )
+    }
 
     created = 0
-    for topic in interests[:5]:
-        signal = _materialize_signal(db, user.id, topic, platform, momentum_boost)
-        if signal:
-            created += 1
-
-    if created == 0 and not interests:
-        signal = _materialize_signal(db, user.id, "creator growth", platform, momentum_boost)
-        if signal:
-            created += 1
+    for item in ranked:
+        topic = item["topic"]
+        if topic.lower() in existing_topics:
+            continue
+        signal = TrendSignalEvent(
+            user_id=user.id,
+            topic=topic,
+            platform=platform,
+            title=f"{topic} is trending now",
+            summary=(
+                f"Live Google Trends signal{f' with {item["traffic"]} searches' if item["traffic"] else ''}. "
+                "Check the source and map only a genuinely relevant angle to your audience."
+            ),
+            source_label="Google Trends (live)",
+            confidence_score=0.72,
+            momentum_score=0.70,
+            relevance_score=0.78 if any(token and token in topic.lower() for token in interest_terms.split()) else 0.45,
+            opportunity_score=0.66,
+            risk_score=0.35,
+            status="new",
+            signal_meta={
+                "mode": "live-google-trends",
+                "source_url": "https://trends.google.com/trending/rss?geo=NG",
+                "source_published_at": item["published_at"],
+                "fetched_at": _as_iso(None),
+            },
+        )
+        db.add(signal)
+        db.flush()
+        db.add(TrendResearchBrief(
+            trend_signal_id=signal.id,
+            what_is_happening=f"{topic} is appearing in Google's current Nigeria trending-search feed.",
+            why_it_matters="It is a real current-interest signal, not a prediction of performance for every creator.",
+            who_is_using_it="Audience interest is broad; evaluate fit against your niche before posting.",
+            why_it_performs="Timely, useful, original context can earn attention when it genuinely serves your audience.",
+            potential_risks="Newsjacking or forcing an unrelated topic can damage audience trust.",
+            opportunities=f"Use a niche-relevant angle on {topic}, cite the source, and publish only if you have a useful point of view.",
+        ))
+        db.add(TrendRecommendation(
+            trend_signal_id=signal.id,
+            recommendation_type="content_angle",
+            content_angle=f"Add your expert perspective to {topic}; do not repeat the headline.",
+            story_framework="Current signal -> your audience context -> useful interpretation -> one practical action",
+            brainstorm_seed=f"Find a niche-relevant, responsible content angle around {topic}.",
+            composer_seed=f"Write a concise, source-aware post about {topic} for {platform}.",
+            score=signal.opportunity_score,
+        ))
+        created += 1
 
     db.commit()
     return created
-
 
 def _serialize_signal(signal: TrendSignalEvent, brief: TrendResearchBrief | None, recs: list[TrendRecommendation]) -> IntelligenceSignal:
     brief_payload = IntelligenceResearchBrief(
@@ -235,7 +299,7 @@ def refresh_intelligence(payload: IntelligenceRefreshRequest, db: Session = Depe
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
     interests = payload.interests or _profile_interests(profile)
-    created = _refresh_local_signals(db, user, interests, _safe_platform(payload.platform))
+    created = _refresh_live_signals(db, user, interests, _safe_platform(payload.platform))
     return {
         "created": created,
         "interests": interests,
@@ -264,7 +328,7 @@ def intelligence_feed(
 
     signals = list(db.scalars(signal_query.order_by(desc(TrendSignalEvent.created_at)).limit(limit)))
     if len(signals) < 3:
-        _refresh_local_signals(db, user, interests, platform_filter)
+        _refresh_live_signals(db, user, interests, platform_filter)
         signals = list(db.scalars(signal_query.order_by(desc(TrendSignalEvent.created_at)).limit(limit)))
 
     signal_ids = [item.id for item in signals]
@@ -321,14 +385,14 @@ def intelligence_feed(
     return IntelligenceFeedResponse(
         user_id=user_id,
         generated_at=_as_iso(None),
-        summary="Cr8or Intelligence is monitoring local trend signals and mapping opportunities to your workflow.",
+        summary="Cr8or Intelligence shows sourced live trend signals when the live source is available. It does not invent trends.",
         interests=interests,
         signals=serialized,
         notifications=notification_items,
         source_stats={
             "signals": len(serialized),
             "notifications": len(notification_items),
-            "mode": 1,
+            "mode": "live-google-trends",
         },
     )
 
