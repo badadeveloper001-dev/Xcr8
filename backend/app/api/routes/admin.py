@@ -655,6 +655,7 @@ def admin_ai_quality(
     """Reliability metrics for product and provider decisions."""
     _require_admin_access(x_admin_code, request)
     rows = list(db.scalars(select(AIGeneration).order_by(desc(AIGeneration.created_at)).limit(300)))
+    feedback_rows = list(db.scalars(select(AIFeedback).order_by(desc(AIFeedback.created_at)).limit(500)))
     model_counts: dict[str, int] = defaultdict(int)
     fallback_count = 0
     total_latency = 0
@@ -674,6 +675,9 @@ def admin_ai_quality(
         "models": dict(sorted(model_counts.items(), key=lambda item: item[1], reverse=True)),
         "fallback_rate": round(fallback_count / len(rows), 3) if rows else 0,
         "average_latency_ms": int(total_latency / latency_count) if latency_count else 0,
+        "feedback_sample_size": len(feedback_rows),
+        "helpful_rate": round(sum(1 for item in feedback_rows if item.rating == "helpful") / len(feedback_rows), 3) if feedback_rows else 0,
+        "not_helpful_count": sum(1 for item in feedback_rows if item.rating == "not_helpful"),
     }
 
 
