@@ -81,6 +81,9 @@ export type AdminAiQualityPayload = {
   models: Record<string, number>;
   fallback_rate: number;
   average_latency_ms: number;
+  feedback_sample_size: number;
+  helpful_rate: number;
+  not_helpful_count: number;
 };
 
 export type AdminTopCreatorItem = {
