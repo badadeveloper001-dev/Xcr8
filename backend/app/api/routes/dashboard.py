@@ -16,7 +16,7 @@ from app.db.models import (
     TrendSignalEvent,
     User,
 )
-from app.api.routes.intelligence import _profile_interests, _refresh_local_signals
+from app.api.routes.intelligence import _profile_interests, _refresh_live_signals
 from app.schemas.mvp import Cr8orAIAlert, DashboardOverview, PlatformConnection
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -220,7 +220,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     )
     if should_refresh_trends:
         interests = _profile_interests(profile)
-        _refresh_local_signals(db, user, interests, "all")
+        _refresh_live_signals(db, user, interests, "all")
         trend_signal_rows = list(
             db.scalars(
                 select(TrendSignalEvent)
