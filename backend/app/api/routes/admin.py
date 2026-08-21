@@ -212,12 +212,24 @@ def _require_admin_access(x_admin_code: str | None, request: Request) -> None:
     client_id = _resolve_client_id(request)
     _ensure_not_locked(client_id)
 
-    expected = str(settings.admin_access_code or "XCR800").strip()
+    expected = str(settings.admin_access_code or "").strip()
+    if not expected or expected == "XCR800":
+        raise HTTPException(status_code=503, detail="Admin access is not configured. Set a strong ADMIN_ACCESS_CODE.")
     supplied = str(x_admin_code or "").strip()
     if not supplied or supplied != expected:
         _record_failed_attempt(client_id)
         raise HTTPException(status_code=401, detail="Invalid admin access code")
     _clear_attempts(client_id)
+
+
+@router.post("/session")
+def verify_admin_session(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+) -> dict:
+    """Validate access before the browser stores a short-lived admin session marker."""
+    _require_admin_access(x_admin_code, request)
+    return {"authorized": True, "expires_in_seconds": 3600}
 
 
 def _daily_series(values: list[datetime], now: datetime) -> list[AdminSeriesPoint]:
