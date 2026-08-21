@@ -250,6 +250,7 @@ type CalendarResponse = {
     scheduled_for: string;
     timezone: string;
     status: string;
+    failure_reason?: string | null;
   }>;
 };
 
