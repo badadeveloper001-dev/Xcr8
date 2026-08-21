@@ -455,6 +455,41 @@ def _persist_assistant_chat_memory(
         logger.warning("Unable to persist assistant chat memory for user %s: %s", user_id, exc)
 
 
+def _persist_durable_assistant_facts(db: Session, user_id: int, user_message: str) -> None:
+    """Save only explicit creator-profile facts for future chats, never every chat line."""
+    compact = _compact_text(user_message, 600)
+    normalized = compact.lower()
+    durable_cues = (
+        "remember", "my niche", "my audience", "my goal", "my brand", "i prefer",
+        "i create", "i post", "call me", "my content is", "my tone is",
+    )
+    if not compact or "?" in compact or not any(cue in normalized for cue in durable_cues):
+        return
+
+    memory_key = f"assistant_fact:{uuid.uuid5(uuid.NAMESPACE_URL, f'{user_id}:{normalized}').hex[:20]}"
+    existing = db.scalar(
+        select(CreatorMemory).where(
+            CreatorMemory.user_id == user_id,
+            CreatorMemory.memory_key == memory_key,
+        )
+    )
+    target = existing or CreatorMemory(
+        user_id=user_id,
+        memory_type="assistant_fact",
+        memory_key=memory_key,
+        memory_value=compact,
+    )
+    target.memory_value = compact
+    target.confidence_score = 0.9
+    target.last_used_at = datetime.now(tz=UTC)
+    try:
+        db.add(target)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Unable to persist durable assistant memory for user %s: %s", user_id, exc)
+
+
 def _resolve_assistant_user(db: Session, payload: AIAssistantRequest) -> User | None:
     email_user = _get_or_create_user_by_email(db, payload.email)
     if email_user:
@@ -597,7 +632,7 @@ def _build_creator_memory(
         "tones": tones,
         "known_user_profile": known_user_profile,
         "onboarding_summary": onboarding_summary,
-        "memory_facts": enriched_memory_facts[:10],
+        "memory_facts": enriched_memory_facts[:18],
     }
 
 
@@ -1131,7 +1166,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
                 desc(CreatorMemory.last_used_at),
                 desc(CreatorMemory.created_at),
             )
-            .limit(12)
+            .limit(24)
         )
     )
 
@@ -1194,6 +1229,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
                 parsed_response.follow_up_question,
             ),
         )
+        _persist_durable_assistant_facts(db, user.id, payload.message)
         parsed_response.chat_id = chat_id
         return parsed_response
     except Exception:
