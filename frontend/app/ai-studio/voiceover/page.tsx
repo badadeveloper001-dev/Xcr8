@@ -6,7 +6,7 @@ import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { generateAiVoiceoverAudio, getApiErrorMessage } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
-const platformOptions = ["instagram", "tiktok", "youtube_shorts", "threads", "linkedin", "x"];
+const platformOptions = ["instagram", "facebook", "youtube_shorts", "threads"];
 const languageOptions = ["english", "nigerian_pidgin", "yoruba", "code_switch"];
 const toneOptions = ["conversational", "bold", "educational", "cinematic", "warm", "persuasive"];
 const paceOptions = ["steady", "fast", "slow", "punchy"];

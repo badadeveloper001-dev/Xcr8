@@ -24,12 +24,9 @@ import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-p
 
 const platforms = [
   { id: "instagram", label: "Instagram", cls: "badge-ig" },
-  { id: "tiktok", label: "TikTok", cls: "badge-tk" },
-  { id: "x", label: "X / Twitter", cls: "badge-x" },
   { id: "facebook", label: "Facebook", cls: "badge-fb" },
-  { id: "linkedin", label: "LinkedIn", cls: "badge-li" },
-  { id: "youtube_shorts", label: "YouTube Shorts", cls: "badge-fb" },
-  { id: "threads", label: "Threads", cls: "badge-x" },
+  { id: "youtube_shorts", label: "YouTube Shorts", cls: "badge-yt" },
+  { id: "threads", label: "Threads", cls: "badge-th" },
 ];
 
 export default function SettingsPage() {

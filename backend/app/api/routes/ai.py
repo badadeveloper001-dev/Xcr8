@@ -67,22 +67,12 @@ APP_FEATURE_CATALOG = [
     {
         "name": "AI Studio",
         "route": "/ai-studio",
-        "description": "Workspace for AI tools like Cr8or AI, Composer, Brainstorm, and more.",
+        "description": "Workspace for Cr8or AI and specialist creator tools.",
     },
     {
         "name": "Cr8or AI",
         "route": "/ai-studio/assistant",
-        "description": "Long-running conversational assistant for app guidance and strategy.",
-    },
-    {
-        "name": "Composer",
-        "route": "/ai-studio/composer",
-        "description": "Chat-based post drafting and idea-to-caption creation.",
-    },
-    {
-        "name": "Brainstorm",
-        "route": "/ai-studio/brainstorm",
-        "description": "Generates batches of hooks, angles, and content ideas.",
+        "description": "Unified workspace for brainstorming, composing platform-ready posts, app guidance, analytics context, and strategy.",
     },
     {
         "name": "Voiceover",

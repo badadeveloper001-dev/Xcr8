@@ -11,9 +11,6 @@ import { useCreatorStore } from "@/lib/store";
 const platformOptions = [
   { id: "all", label: "All platforms" },
   { id: "instagram", label: "Instagram" },
-  { id: "tiktok", label: "TikTok" },
-  { id: "x", label: "X / Twitter" },
-  { id: "linkedin", label: "LinkedIn" },
   { id: "facebook", label: "Facebook" },
   { id: "youtube_shorts", label: "YouTube Shorts" },
   { id: "threads", label: "Threads" },

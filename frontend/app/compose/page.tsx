@@ -19,9 +19,6 @@ import { useCreatorStore } from "@/lib/store";
 
 const platformOptions = [
   { id: "instagram", label: "Instagram", cls: "badge-ig" },
-  { id: "tiktok", label: "TikTok", cls: "badge-tk" },
-  { id: "x", label: "X / Twitter", cls: "badge-x" },
-  { id: "linkedin", label: "LinkedIn", cls: "badge-li" },
   { id: "facebook", label: "Facebook", cls: "badge-fb" },
   { id: "youtube_shorts", label: "YouTube Shorts", cls: "badge-yt" },
   { id: "threads", label: "Threads", cls: "badge-th" },
@@ -75,7 +72,7 @@ export default function ComposePage() {
   const [mediaItems, setMediaItems] = useState<UploadedMediaItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["instagram", "x"]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["instagram", "facebook"]);
   const [scheduleAt, setScheduleAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);

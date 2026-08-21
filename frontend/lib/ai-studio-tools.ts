@@ -1,10 +1,8 @@
-import { Bot, ImagePlus, Lightbulb, Mic, TrendingUp, Wand2, type LucideIcon } from "lucide-react";
+import { Bot, ImagePlus, Mic, TrendingUp, type LucideIcon } from "lucide-react";
 
 export type StudioToolId =
   | "intelligence"
   | "assistant"
-  | "composer"
-  | "brainstorm"
   | "image-generator"
   | "voiceover"
   | "trend-mapper";
@@ -25,30 +23,12 @@ export const studioTools: StudioTool[] = [
   {
     id: "assistant",
     name: "Cr8or AI",
-    tagline: "Your named AI copilot across every creator screen.",
+    tagline: "Brainstorm, compose, and plan inside one creator workspace.",
     description:
-      "Conversational workspace guide that answers product questions and plans next moves.",
+      "Your AI copilot for content ideas, platform-ready drafts, analytics context, and next best moves.",
     status: "live",
     icon: Bot,
     href: "/ai-studio/assistant",
-  },
-  {
-    id: "composer",
-    name: "Composer",
-    tagline: "Talk your way into a full post concept.",
-    description: "Conversational writing partner for posts, hooks, structure, and CTA.",
-    status: "live",
-    icon: Wand2,
-    href: "/ai-studio/composer",
-  },
-  {
-    id: "brainstorm",
-    name: "Brainstorm",
-    tagline: "Generate batches of angles and hooks fast.",
-    description: "Idea engine for campaigns, content series, and creator brand growth.",
-    status: "live",
-    icon: Lightbulb,
-    href: "/ai-studio/brainstorm",
   },
   {
     id: "image-generator",
