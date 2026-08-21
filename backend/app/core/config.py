@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     pulse_discord_webhook_url: str = ""
     pulse_internal_token: str = ""
     pulse_slow_request_ms: int = 6000
+    cron_secret: str = ""
 
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"
