@@ -254,8 +254,14 @@ export async function GET(request: NextRequest) {
   }
 
   const aiPayload = (await backendResponse.json()) as { image_base64?: string };
-  const aiServiceBody = aiPayload.image_base64
-    ? Buffer.from(aiPayload.image_base64, "base64").buffer
+  const decodedImage = aiPayload.image_base64
+    ? Buffer.from(aiPayload.image_base64, "base64")
+    : null;
+  const aiServiceBody = decodedImage
+    ? decodedImage.buffer.slice(
+        decodedImage.byteOffset,
+        decodedImage.byteOffset + decodedImage.byteLength,
+      )
     : null;
   if (aiServiceBody) {
     try {
