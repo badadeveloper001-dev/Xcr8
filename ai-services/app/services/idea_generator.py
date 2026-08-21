@@ -8,7 +8,7 @@ from time import perf_counter
 
 from openai import OpenAI
 
-from app.core.config import settings
+from app.core.config import create_chat_completion, settings
 
 logger = logging.getLogger(__name__)
 PROMPT_TEMPLATE_VERSION = "idea-v2"
@@ -216,7 +216,7 @@ def generate_content_ideas(payload: dict) -> dict:
     client = OpenAI(api_key=settings.openai_api_key)
     started = perf_counter()
     try:
-        completion = client.chat.completions.create(
+        completion = create_chat_completion(client,
             model=settings.openai_model,
             temperature=0.75,
             response_format={"type": "json_object"},
@@ -361,7 +361,7 @@ def generate_composed_content(payload: dict) -> dict:
     client = OpenAI(api_key=settings.openai_api_key)
     started = perf_counter()
     try:
-        completion = client.chat.completions.create(
+        completion = create_chat_completion(client,
             model=settings.openai_model,
             temperature=0.8,
             response_format={"type": "json_object"},
