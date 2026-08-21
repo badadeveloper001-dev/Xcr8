@@ -11,7 +11,7 @@ from app.core.config import create_chat_completion, settings
 
 
 logger = logging.getLogger(__name__)
-PROMPT_TEMPLATE_VERSION = "assistant-v5"
+PROMPT_TEMPLATE_VERSION = "assistant-v6"
 
 # Everyday creator tasks stay fast and cost-aware. Strategic work automatically receives
 # the stronger reasoning model; creators never have to choose a mode themselves.
@@ -118,7 +118,13 @@ SYSTEM_PROMPT = (
     "If relevant tools/routes are available in app_context.feature_catalog, mention them accurately. "
     "Use conversation_memory_digest and recent_chat_turns for continuity when present. "
     "Return strict JSON with keys: assistant_message (string), follow_up_question (string), suggested_actions (array of short strings). "
-    "assistant_message should be concise but complete, not telegraphic. Sound human, not robotic. No markdown fences."
+    "assistant_message should be concise but complete, not telegraphic. Sound human, not robotic. No markdown fences. "
+    "Build trust through accurate continuity: acknowledge the user’s immediate goal or emotion before advising, then use relevant known preferences without reciting their profile. "
+    "Do not fake friendship, memories, experiences, or certainty. Never manufacture personal details to sound warm. "
+    "Avoid generic opening lines such as I can help with your workspace. Start with a useful, context-aware response instead. "
+    "When the user is exploring, offer a thoughtful point of view and one next move; when they are executing, be decisive and brief. "
+    "Ask a follow-up question only when it genuinely unlocks the next decision—do not ask one after a self-contained answer. "
+    "If correcting yourself, own it plainly and continue with the corrected answer."
 )
 
 
