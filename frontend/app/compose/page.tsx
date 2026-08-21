@@ -269,8 +269,10 @@ export default function ComposePage() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
+                user_id: userId,
                 filename: file.name,
                 content_type: file.type || "application/octet-stream",
+                size_bytes: file.size,
               }),
             });
           } catch (e) {
@@ -326,6 +328,7 @@ export default function ComposePage() {
           // rejects payloads larger than ~4.5 MB through serverless functions).
           const formData = new FormData();
           formData.append("file", file);
+          formData.append("user_id", String(userId));
           let fallbackResp: Response | null = null;
           try {
             fallbackResp = await fetch("/_/backend/api/v1/upload", {
