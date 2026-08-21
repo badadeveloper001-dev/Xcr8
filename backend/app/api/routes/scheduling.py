@@ -182,6 +182,11 @@ def calendar(user_id: int, db: Session = Depends(get_db)) -> dict:
                 "scheduled_for": item.scheduled_for.isoformat(),
                 "timezone": item.timezone,
                 "status": item.queue_status,
+                "failure_reason": (
+                    str((db.get(ContentPost, item.post_id).content_meta or {}).get("last_schedule_failure", {}).get("reason") or "")
+                    if item.queue_status == "failed" and db.get(ContentPost, item.post_id)
+                    else None
+                ),
             }
             for item in schedules
         ]
