@@ -284,7 +284,6 @@ def _oauth_callback_impl(
     expires_in = token_data.get("expires_in")
     token_expires_at = None
     if expires_in:
-        from datetime import timedelta
         token_expires_at = (datetime.now(tz=UTC) + timedelta(seconds=_duration_seconds(expires_in))).isoformat()
 
     user_info = fetch_platform_user_info(platform, access_token)
