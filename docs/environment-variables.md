@@ -44,6 +44,7 @@
 - `PULSE_DISCORD_WEBHOOK_URL`: optional Discord webhook for founder alerts
 - `PULSE_INTERNAL_TOKEN`: shared secret for internal Pulse event ingestion from workers/services
 - `PULSE_SLOW_REQUEST_MS`: threshold for slow-response incident capture (default `6000`)
+- `CRON_SECRET`: random secret used by Vercel Cron to securely invoke the due-post dispatcher.
 - `THREADS_APP_ID` / `THREADS_APP_SECRET`: Threads OAuth credentials. The Meta app must allow the production callback URL at `https://your-domain/auth/platform-callback`.
 
 ## AI Services
