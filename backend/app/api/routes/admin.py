@@ -675,3 +675,31 @@ def admin_ai_quality(
         "fallback_rate": round(fallback_count / len(rows), 3) if rows else 0,
         "average_latency_ms": int(total_latency / latency_count) if latency_count else 0,
     }
+
+
+
+@router.post("/schedules/{schedule_id}/retry")
+def retry_failed_schedule(
+    schedule_id: int,
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return one failed schedule to the dispatch queue for an immediate safe retry."""
+    _require_admin_access(x_admin_code, request)
+    schedule = db.get(ScheduledPost, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Scheduled post not found")
+    if schedule.queue_status not in {"failed", "processing"}:
+        raise HTTPException(status_code=400, detail="Only failed or stale processing schedules can be retried")
+    schedule.queue_status = "queued"
+    schedule.scheduled_for = datetime.now(tz=UTC)
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+    return {
+        "schedule_id": schedule.id,
+        "queue_status": schedule.queue_status,
+        "scheduled_for": schedule.scheduled_for.isoformat(),
+        "message": "Schedule queued for the next secure dispatcher run.",
+    }
