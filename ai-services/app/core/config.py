@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     pinecone_api_key: str = ""
     pinecone_environment: str = "us-east-1-aws"
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/xcr8"
+    ai_internal_token: str = ""
+    oauth_state_secret: str = ""
+    cron_secret: str = ""
 
     model_config = SettingsConfigDict(
         env_file=("ai-services/.env", "ai-services/.env.local", ".env", ".env.local"),
