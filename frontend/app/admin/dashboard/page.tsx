@@ -11,6 +11,7 @@ import {
   getAdminHealth,
   getAdminIncidents,
   getAdminOverview,
+  retryAdminSchedule,
   getApiErrorMessage,
   triggerAdminTestIncident,
   updateAdminIncident,
@@ -171,6 +172,14 @@ export default function AdminDashboardPage() {
     },
   });
 
+  const retryScheduleMutation = useMutation({
+    mutationFn: (scheduleId: number) => retryAdminSchedule(accessCode, scheduleId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-content"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-health"] });
+    },
+  });
+
   const triggerTestIncidentMutation = useMutation({
     mutationFn: () => triggerAdminTestIncident(accessCode),
     onSuccess: () => {
@@ -302,9 +311,10 @@ export default function AdminDashboardPage() {
           <article className="xcr8-panel rounded-2xl p-4">
             <h2 className="xcr8-title-lg mb-3 text-white light:text-slate-900">Content Recovery Queue</h2>
             <div className="max-h-72 space-y-2 overflow-auto pr-1">
-              {(contentOps?.items ?? []).filter((post) => post.status === "failed" || post.schedules.some((schedule) => schedule.queue_status === "failed")).slice(0, 12).map((post) => (
-                <div key={post.post_id} className="surface-soft rounded-xl px-3 py-3"><p className="text-sm font-semibold text-white light:text-slate-900">{post.title}</p><p className="mt-1 text-xs text-rose-300">{post.schedules.filter((schedule) => schedule.queue_status === "failed").length} failed schedule(s)</p></div>
-              ))}
+              {(contentOps?.items ?? []).filter((post) => post.status === "failed" || post.schedules.some((schedule) => schedule.queue_status === "failed")).slice(0, 12).map((post) => {
+                const failedSchedules = post.schedules.filter((schedule) => schedule.queue_status === "failed");
+                return <div key={post.post_id} className="surface-soft rounded-xl px-3 py-3"><p className="text-sm font-semibold text-white light:text-slate-900">{post.title}</p><div className="mt-2 flex flex-wrap items-center gap-2"><p className="text-xs text-rose-300">{failedSchedules.length} failed schedule(s)</p>{failedSchedules.map((schedule) => <button key={schedule.schedule_id} type="button" onClick={() => retryScheduleMutation.mutate(schedule.schedule_id)} disabled={retryScheduleMutation.isPending} className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300 disabled:opacity-60">Retry {schedule.platform}</button>)}</div></div>;
+              })}
               {!contentOps?.items?.some((post) => post.status === "failed" || post.schedules.some((schedule) => schedule.queue_status === "failed")) ? <p className="text-sm text-emerald-300">No failed posts or schedules to recover.</p> : null}
             </div>
           </article>
