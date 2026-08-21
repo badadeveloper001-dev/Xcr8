@@ -121,6 +121,12 @@ def dispatch_due_posts(
             schedule = db.get(ScheduledPost, schedule.id)
             if schedule:
                 schedule.queue_status = "failed"
+                post = db.get(ContentPost, schedule.post_id)
+                if post:
+                    meta = dict(post.content_meta or {})
+                    meta["last_schedule_failure"] = {"schedule_id": schedule.id, "platform": schedule.platform.value, "reason": str(exc.detail)[:300], "occurred_at": datetime.now(tz=UTC).isoformat()}
+                    post.content_meta = meta
+                    db.add(post)
                 db.commit()
             processed.append(
                 {
@@ -135,6 +141,12 @@ def dispatch_due_posts(
             schedule = db.get(ScheduledPost, schedule.id)
             if schedule:
                 schedule.queue_status = "failed"
+                post = db.get(ContentPost, schedule.post_id)
+                if post:
+                    meta = dict(post.content_meta or {})
+                    meta["last_schedule_failure"] = {"schedule_id": schedule.id, "platform": schedule.platform.value, "reason": str(exc)[:300], "occurred_at": datetime.now(tz=UTC).isoformat()}
+                    post.content_meta = meta
+                    db.add(post)
                 db.commit()
             processed.append(
                 {
