@@ -7,6 +7,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -63,10 +64,23 @@ def _should_capture_http_exception(request: Request, status_code: int) -> bool:
         return False
     return status_code >= 400
 
+def _ensure_platform_enum_values() -> None:
+    """Keep existing PostgreSQL installations compatible with newly supported platforms."""
+    if not str(settings.database_url or "").startswith("postgresql"):
+        return
+
+    try:
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+            connection.execute(text("ALTER TYPE platform ADD VALUE IF NOT EXISTS 'threads'"))
+    except Exception as exc:
+        logger.warning("Could not ensure PostgreSQL platform enum values: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     try:
         models.Base.metadata.create_all(bind=engine)
+        _ensure_platform_enum_values()
         logger.info("Database schema initialized successfully.")
         try:
             logger.info("Using database URL: %s", settings.database_url)
