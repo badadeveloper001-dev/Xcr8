@@ -1094,3 +1094,12 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+
+export async function acknowledgeAdminIncident(accessCode: string, incidentId: number, owner = "Admin"): Promise<void> {
+  await apiClient.post("/admin/data/incidents/" + incidentId + "/acknowledge", { owner }, { headers: { "x-admin-code": accessCode } });
+}
+
+export async function addAdminIncidentNote(accessCode: string, incidentId: number, note: string, author = "Admin"): Promise<void> {
+  await apiClient.post("/admin/data/incidents/" + incidentId + "/notes", { note, author }, { headers: { "x-admin-code": accessCode } });
+}
