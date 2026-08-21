@@ -124,9 +124,14 @@ def dispatch_due_posts(
                 post = db.get(ContentPost, schedule.post_id)
                 if post:
                     meta = dict(post.content_meta or {})
-                    meta["last_schedule_failure"] = {"schedule_id": schedule.id, "platform": schedule.platform.value, "reason": str(exc.detail)[:300], "occurred_at": datetime.now(tz=UTC).isoformat()}
+                    failures = int(meta.get("schedule_retry_count") or 0) + 1
+                    meta["schedule_retry_count"] = failures
+                    meta["last_schedule_failure"] = {"schedule_id": schedule.id, "platform": schedule.platform.value, "reason": str(exc.detail)[:300], "occurred_at": datetime.now(tz=UTC).isoformat(), "retry_count": failures}
                     post.content_meta = meta
                     db.add(post)
+                    if failures < 3:
+                        schedule.queue_status = "queued"
+                        schedule.scheduled_for = datetime.now(tz=UTC) + timedelta(minutes=2 ** failures)
                 db.commit()
             processed.append(
                 {
@@ -144,9 +149,14 @@ def dispatch_due_posts(
                 post = db.get(ContentPost, schedule.post_id)
                 if post:
                     meta = dict(post.content_meta or {})
-                    meta["last_schedule_failure"] = {"schedule_id": schedule.id, "platform": schedule.platform.value, "reason": str(exc)[:300], "occurred_at": datetime.now(tz=UTC).isoformat()}
+                    failures = int(meta.get("schedule_retry_count") or 0) + 1
+                    meta["schedule_retry_count"] = failures
+                    meta["last_schedule_failure"] = {"schedule_id": schedule.id, "platform": schedule.platform.value, "reason": str(exc)[:300], "occurred_at": datetime.now(tz=UTC).isoformat(), "retry_count": failures}
                     post.content_meta = meta
                     db.add(post)
+                    if failures < 3:
+                        schedule.queue_status = "queued"
+                        schedule.scheduled_for = datetime.now(tz=UTC) + timedelta(minutes=2 ** failures)
                 db.commit()
             processed.append(
                 {
