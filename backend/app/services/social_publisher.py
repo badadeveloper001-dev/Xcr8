@@ -564,12 +564,22 @@ def publish_to_platform(
     media_url: str | None,
     platform_user_id: str | None,
     media_type: str = "image",
+    media_urls: list[str] | None = None,
+    media_types: list[str] | None = None,
 ) -> PostResult:
     try:
         if platform == "x":
             return _post_twitter(access_token, caption, media_url)
         elif platform == "instagram":
-            return _post_instagram(access_token, caption, media_url, platform_user_id, media_type)
+            return _post_instagram(
+                access_token,
+                caption,
+                media_url,
+                platform_user_id,
+                media_type,
+                media_urls=media_urls,
+                media_types=media_types,
+            )
         elif platform == "facebook":
             return _post_facebook(access_token, caption, media_url, platform_user_id, media_type)
         elif platform == "linkedin":
@@ -593,7 +603,6 @@ def publish_to_platform(
     except Exception as exc:
         logger.error("Posting to %s failed: %s", platform, exc)
         return {"success": False, "post_id": None, "post_url": None, "error": str(exc)}
-
 
 def _post_twitter(access_token: str, text: str, media_url: str | None) -> PostResult:
     tweet_text = text
@@ -621,14 +630,90 @@ def _post_twitter(access_token: str, text: str, media_url: str | None) -> PostRe
 
 
 def _post_instagram(
-    access_token: str, caption: str, image_url: str | None, ig_user_id: str | None, media_type: str
+    access_token: str,
+    caption: str,
+    image_url: str | None,
+    ig_user_id: str | None,
+    media_type: str,
+    media_urls: list[str] | None = None,
+    media_types: list[str] | None = None,
 ) -> PostResult:
     if not ig_user_id:
         return {"success": False, "post_id": None, "post_url": None, "error": "Instagram user ID missing — please reconnect your account."}
-    if not image_url:
+
+    urls = [str(url).strip() for url in (media_urls or []) if str(url).strip()]
+    if not urls and image_url:
+        urls = [image_url]
+    types = [str(kind or "image").strip().lower() for kind in (media_types or [])]
+    if not urls:
         return {"success": False, "post_id": None, "post_url": None, "error": "Instagram requires an image or video URL."}
 
-    is_video = media_type.startswith("video") or image_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
+    if len(urls) > 10:
+        return {"success": False, "post_id": None, "post_url": None, "error": "Instagram carousels support a maximum of 10 media items."}
+
+    if len(urls) > 1:
+        if any(
+            (types[index] if index < len(types) else media_type).startswith("video")
+            or url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
+            for index, url in enumerate(urls)
+        ):
+            return {
+                "success": False,
+                "post_id": None,
+                "post_url": None,
+                "error": "Xcr8 currently supports Instagram carousels with images only. Publish video as a Reel.",
+            }
+
+        with httpx.Client(timeout=45.0) as client:
+            children: list[str] = []
+            for url in urls:
+                child_resp = client.post(
+                    f"https://graph.facebook.com/v19.0/{ig_user_id}/media",
+                    params={"image_url": url, "is_carousel_item": "true", "access_token": access_token},
+                )
+                if child_resp.status_code >= 400:
+                    err = (child_resp.json().get("error") or {}).get("message", child_resp.text[:200])
+                    return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram carousel item error: {err}"}
+                child_id = str(child_resp.json().get("id") or "").strip()
+                if not child_id:
+                    return {"success": False, "post_id": None, "post_url": None, "error": "Instagram did not return a carousel item ID."}
+                children.append(child_id)
+
+            container_resp = client.post(
+                f"https://graph.facebook.com/v19.0/{ig_user_id}/media",
+                params={
+                    "media_type": "CAROUSEL",
+                    "children": ",".join(children),
+                    "caption": caption,
+                    "access_token": access_token,
+                },
+            )
+            if container_resp.status_code >= 400:
+                err = (container_resp.json().get("error") or {}).get("message", container_resp.text[:200])
+                return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram carousel error: {err}"}
+            creation_id = str(container_resp.json().get("id") or "").strip()
+            if not creation_id:
+                return {"success": False, "post_id": None, "post_url": None, "error": "Instagram did not return a carousel container ID."}
+
+            publish_resp = client.post(
+                f"https://graph.facebook.com/v19.0/{ig_user_id}/media_publish",
+                params={"creation_id": creation_id, "access_token": access_token},
+            )
+            if publish_resp.status_code >= 400:
+                err = (publish_resp.json().get("error") or {}).get("message", publish_resp.text[:200])
+                return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram carousel publish error: {err}"}
+
+        post_id = str(publish_resp.json().get("id") or "")
+        return {
+            "success": True,
+            "post_id": post_id,
+            "post_url": f"https://www.instagram.com/p/{post_id}/" if post_id else None,
+            "error": None,
+        }
+
+    image_url = urls[0]
+    selected_type = types[0] if types else media_type
+    is_video = selected_type.startswith("video") or image_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
 
     with httpx.Client(timeout=30.0) as client:
         container_params = {"caption": caption, "access_token": access_token}
@@ -664,7 +749,6 @@ def _post_instagram(
         "post_url": f"https://www.instagram.com/p/{post_id}/" if post_id else None,
         "error": None,
     }
-
 
 def _post_facebook(
     access_token: str, message: str, media_url: str | None, page_id: str | None, media_type: str
