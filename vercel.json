@@ -16,5 +16,11 @@
       "framework": "fastapi",
       "routePrefix": "/_/ai-services"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/_/backend/api/v1/scheduling/dispatch-due",
+      "schedule": "* * * * *"
+    }
+  ]
 }
