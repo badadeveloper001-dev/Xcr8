@@ -9,44 +9,34 @@ const FETCH_TIMEOUT_MS = 120_000;
 const GLOBAL_QUALITY_NEGATIVE =
   "blurry, low resolution, noisy image, cgi look, deformed anatomy, extra limbs, extra fingers, duplicate body parts, duplicated objects, multiple balls, duplicate football, distorted face, watermark, logo, text overlay";
 
-async function fetchAiServiceImage(
+async function fetchBackendImage(
   origin: string,
+  userId: number,
   prompt: string,
   width: number,
   height: number,
-): Promise<ArrayBuffer | null> {
+  quality: "standard" | "high",
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${origin}/_/ai-services/image/generate`, {
+    return await fetch(`${origin}/_/backend/api/v1/ai/image/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
       },
       body: JSON.stringify({
+        user_id: userId,
         prompt,
         width,
         height,
-        quality: "high",
+        quality,
       }),
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!response.ok) {
-      return null;
-    }
-    const payload = (await response.json()) as {
-      image_base64?: string;
-      mime_type?: string;
-    };
-    if (!payload.image_base64) {
-      return null;
-    }
-    const bytes = Buffer.from(payload.image_base64, "base64");
-    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  } catch {
-    return null;
   } finally {
     clearTimeout(timer);
   }
@@ -217,6 +207,10 @@ async function polishCandidateImage(
 
 export async function GET(request: NextRequest) {
   const prompt = request.nextUrl.searchParams.get("prompt")?.trim() ?? "";
+  const userId = parsePositiveInt(request.nextUrl.searchParams.get("user_id"), 0);
+  if (!userId) {
+    return Response.json({ detail: "Sign in before generating an image." }, { status: 401 });
+  }
   if (!prompt) {
     return Response.json({ detail: "Missing prompt" }, { status: 400 });
   }
@@ -235,12 +229,34 @@ export async function GET(request: NextRequest) {
   );
   const enrichedPrompt = enrichPrompt(safePrompt);
 
-  const aiServiceBody = await fetchAiServiceImage(
-    request.nextUrl.origin,
-    enrichedPrompt,
-    width,
-    height,
-  );
+  const requestedQuality =
+    request.nextUrl.searchParams.get("quality")?.trim().toLowerCase() === "high"
+      ? "high"
+      : "standard";
+
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetchBackendImage(
+      request.nextUrl.origin,
+      userId,
+      enrichedPrompt,
+      width,
+      height,
+      requestedQuality,
+    );
+  } catch {
+    return Response.json({ detail: "Image generation service is unavailable." }, { status: 502 });
+  }
+
+  if (!backendResponse.ok) {
+    const payload = await backendResponse.json().catch(() => ({ detail: "Image generation failed" }));
+    return Response.json(payload, { status: backendResponse.status });
+  }
+
+  const aiPayload = (await backendResponse.json()) as { image_base64?: string };
+  const aiServiceBody = aiPayload.image_base64
+    ? Buffer.from(aiPayload.image_base64, "base64").buffer
+    : null;
   if (aiServiceBody) {
     try {
       if (!(await appearsToBeImage(aiServiceBody))) {
