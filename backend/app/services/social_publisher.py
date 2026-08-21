@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _state_secret() -> str:
-    return settings.supabase_jwt_secret or settings.supabase_anon_key or "xcr8-oauth-state-secret"
+    return settings.oauth_state_secret or settings.supabase_jwt_secret
 
 
 def build_oauth_state(user_id: int, platform: str, code_verifier: str | None = None) -> str:
