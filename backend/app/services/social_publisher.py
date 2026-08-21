@@ -581,11 +581,11 @@ def publish_to_platform(
                 media_types=media_types,
             )
         elif platform == "facebook":
-            return _post_facebook(access_token, caption, media_url, platform_user_id, media_type)
+            return _post_facebook(access_token, caption, media_url, platform_user_id, media_type, media_urls=media_urls, media_types=media_types)
         elif platform == "linkedin":
             return _post_linkedin(access_token, caption, media_url, platform_user_id)
         elif platform == "threads":
-            return _post_threads(access_token, caption, media_url, platform_user_id, media_type)
+            return _post_threads(access_token, caption, media_url, platform_user_id, media_type, media_urls=media_urls, media_types=media_types)
         elif platform == "tiktok":
             return {
                 "success": False,
@@ -751,90 +751,95 @@ def _post_instagram(
     }
 
 def _post_facebook(
-    access_token: str, message: str, media_url: str | None, page_id: str | None, media_type: str
+    access_token: str,
+    message: str,
+    media_url: str | None,
+    page_id: str | None,
+    media_type: str,
+    media_urls: list[str] | None = None,
+    media_types: list[str] | None = None,
 ) -> PostResult:
     if not page_id:
         return {"success": False, "post_id": None, "post_url": None, "error": "Facebook Page ID missing — please reconnect your account."}
 
-    is_video = bool(media_url) and (
-        media_type.startswith("video") or str(media_url).lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
-    )
+    urls = [str(url).strip() for url in (media_urls or []) if str(url).strip()]
+    if not urls and media_url:
+        urls = [media_url]
+    types = [str(kind or "image").strip().lower() for kind in (media_types or [])]
 
-    if is_video and media_url:
-        video_params = {
-            "description": message,
-            "file_url": media_url,
-            "published": "true",
-            "access_token": access_token,
-        }
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/videos", data=video_params)
+    if len(urls) > 1:
+        if len(urls) > 10:
+            return {"success": False, "post_id": None, "post_url": None, "error": "Facebook multi-photo posts support a maximum of 10 images."}
+        if any(
+            (types[index] if index < len(types) else media_type).startswith("video")
+            or url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
+            for index, url in enumerate(urls)
+        ):
+            return {"success": False, "post_id": None, "post_url": None, "error": "Facebook multi-image posts currently support images only. Publish video separately."}
+
+        with httpx.Client(timeout=45.0) as client:
+            attached_media: list[dict[str, str]] = []
+            for url in urls:
+                upload_resp = client.post(
+                    f"https://graph.facebook.com/v19.0/{page_id}/photos",
+                    data={"url": url, "published": "false", "access_token": access_token},
+                )
+                if upload_resp.status_code >= 400:
+                    err = (upload_resp.json().get("error") or {}).get("message", upload_resp.text[:200])
+                    return {"success": False, "post_id": None, "post_url": None, "error": f"Facebook multi-photo upload error: {err}"}
+                photo_id = str(upload_resp.json().get("id") or "").strip()
+                if not photo_id:
+                    return {"success": False, "post_id": None, "post_url": None, "error": "Facebook did not return a photo ID."}
+                attached_media.append({"media_fbid": photo_id})
+
+            feed_params: dict[str, str] = {"message": message, "access_token": access_token, "published": "true"}
+            for index, item in enumerate(attached_media):
+                feed_params[f"attached_media[{index}]"] = json.dumps(item)
+            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/feed", data=feed_params)
 
         if response.status_code in (200, 201):
+            post_id = str(response.json().get("id") or "")
+            post_url = (
+                f"https://www.facebook.com/permalink.php?story_fbid={post_id.split('_')[1]}&id={page_id}"
+                if "_" in post_id else f"https://www.facebook.com/{page_id}/posts/"
+            )
+            return {"success": True, "post_id": post_id, "post_url": post_url, "error": None}
+        err = (response.json().get("error") or {}).get("message", response.text[:200])
+        return {"success": False, "post_id": None, "post_url": None, "error": f"Facebook multi-photo publish error: {err}"}
+
+    media_url = urls[0] if urls else media_url
+    is_video = bool(media_url) and (media_type.startswith("video") or str(media_url).lower().split("?")[0].endswith((".mp4", ".mov", ".webm")))
+
+    if is_video and media_url:
+        video_params = {"description": message, "file_url": media_url, "published": "true", "access_token": access_token}
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/videos", data=video_params)
+        if response.status_code in (200, 201):
             post_id = response.json().get("id", "")
-            return {
-                "success": True,
-                "post_id": post_id,
-                "post_url": f"https://www.facebook.com/{page_id}/videos/{post_id}" if post_id else f"https://www.facebook.com/{page_id}",
-                "error": None,
-            }
+            return {"success": True, "post_id": post_id, "post_url": f"https://www.facebook.com/{page_id}/videos/{post_id}" if post_id else f"https://www.facebook.com/{page_id}", "error": None}
         err = (response.json().get("error") or {}).get("message", response.text[:200])
         return {"success": False, "post_id": None, "post_url": None, "error": f"Facebook video error: {err}"}
 
     is_image = bool(media_url) and str(media_url).lower().split("?")[0].endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
-
     if is_image and media_url:
-        photo_params = {
-            "caption": message,
-            "url": media_url,
-            "published": "true",
-            "access_token": access_token,
-        }
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/photos", data=photo_params)
-
+            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/photos", data={"caption": message, "url": media_url, "published": "true", "access_token": access_token})
         if response.status_code in (200, 201):
             post_id = response.json().get("post_id") or response.json().get("id", "")
-            page_post_url = (
-                f"https://www.facebook.com/permalink.php?story_fbid={post_id.split('_')[1]}&id={page_id}"
-                if isinstance(post_id, str) and "_" in post_id
-                else f"https://www.facebook.com/{page_id}"
-            )
+            page_post_url = f"https://www.facebook.com/permalink.php?story_fbid={post_id.split('_')[1]}&id={page_id}" if isinstance(post_id, str) and "_" in post_id else f"https://www.facebook.com/{page_id}"
             return {"success": True, "post_id": str(post_id), "post_url": page_post_url, "error": None}
 
-        # Fall through to text/link feed post if photo endpoint fails.
-
-    params: dict[str, str] = {
-        "message": message,
-        "access_token": access_token,
-        # Page token posts are always public by default, but set explicitly.
-        "published": "true",
-    }
-
-    # Only attach an external media URL as a link preview — never attach internal
-    # xcr8 platform URLs (uploads, vercel.app, etc.) since those fail to resolve
-    # and create broken link cards visible to followers.
-    if media_url:
-        is_internal = any(domain in media_url for domain in [
-            "xcr8-creator-os", "vercel.app", "localhost", "127.0.0.1",
-        ])
-        if not is_internal:
-            params["link"] = media_url
-
+    params: dict[str, str] = {"message": message, "access_token": access_token, "published": "true"}
+    if media_url and not any(domain in media_url for domain in ["xcr8-creator-os", "vercel.app", "localhost", "127.0.0.1"]):
+        params["link"] = media_url
     with httpx.Client(timeout=20.0) as client:
         response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/feed", data=params)
-
     if response.status_code in (200, 201):
         post_id = response.json().get("id", "")
-        page_post_url = (
-            f"https://www.facebook.com/permalink.php?story_fbid={post_id.split('_')[1]}&id={page_id}"
-            if "_" in post_id
-            else f"https://www.facebook.com/{page_id}/posts/"
-        )
+        page_post_url = f"https://www.facebook.com/permalink.php?story_fbid={post_id.split('_')[1]}&id={page_id}" if "_" in post_id else f"https://www.facebook.com/{page_id}/posts/"
         return {"success": True, "post_id": post_id, "post_url": page_post_url, "error": None}
     err = (response.json().get("error") or {}).get("message", response.text[:200])
     return {"success": False, "post_id": None, "post_url": None, "error": f"Facebook error: {err}"}
-
 
 def _post_linkedin(
     access_token: str, text: str, media_url: str | None, person_id: str | None
@@ -882,56 +887,68 @@ def _post_linkedin(
 
 
 def _post_threads(
-    access_token: str, text: str, media_url: str | None, user_id: str | None, media_type: str
+    access_token: str,
+    text: str,
+    media_url: str | None,
+    user_id: str | None,
+    media_type: str,
+    media_urls: list[str] | None = None,
+    media_types: list[str] | None = None,
 ) -> PostResult:
     if not user_id:
         return {"success": False, "post_id": None, "post_url": None, "error": "Threads user ID missing — please reconnect your account."}
 
-    is_video = bool(media_url) and (
-        media_type.startswith("video")
-        or media_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv", ".flv", ".wmv"))
-    )
+    urls = [str(url).strip() for url in (media_urls or []) if str(url).strip()]
+    if not urls and media_url:
+        urls = [media_url]
+    types = [str(kind or "image").strip().lower() for kind in (media_types or [])]
+    if len(urls) > 20:
+        return {"success": False, "post_id": None, "post_url": None, "error": "Threads carousels support a maximum of 20 media items."}
 
-    container_params: dict[str, str] = {
-        "text": text,
-        "access_token": access_token,
-        "media_type": "TEXT",
-    }
-    if media_url:
-        if is_video:
-            container_params["media_type"] = "VIDEO"
-            container_params["video_url"] = media_url
-        else:
-            container_params["media_type"] = "IMAGE"
-            container_params["image_url"] = media_url
-
-    # Use an extended timeout — video container creation can be slow.
     client_timeout = httpx.Timeout(connect=20.0, read=60.0, write=60.0, pool=10.0)
-
     with httpx.Client(timeout=client_timeout) as client:
-        container_resp = client.post(
-            f"https://graph.threads.net/v1.0/{user_id}/threads",
-            params=container_params,
-        )
+        if len(urls) > 1:
+            children: list[str] = []
+            for index, url in enumerate(urls):
+                child_type = types[index] if index < len(types) else media_type
+                child_params: dict[str, str] = {"is_carousel_item": "true", "access_token": access_token}
+                is_video = child_type.startswith("video") or url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm", ".m4v"))
+                if is_video:
+                    child_params.update({"media_type": "VIDEO", "video_url": url})
+                else:
+                    child_params.update({"media_type": "IMAGE", "image_url": url})
+                child_resp = client.post(f"https://graph.threads.net/v1.0/{user_id}/threads", params=child_params)
+                if child_resp.status_code >= 400:
+                    err = (child_resp.json().get("error") or {}).get("message", child_resp.text[:200])
+                    return {"success": False, "post_id": None, "post_url": None, "error": f"Threads carousel item error: {err}"}
+                child_id = str(child_resp.json().get("id") or "").strip()
+                if not child_id:
+                    return {"success": False, "post_id": None, "post_url": None, "error": "Threads did not return a carousel item ID."}
+                children.append(child_id)
+            container_params: dict[str, str] = {"text": text, "media_type": "CAROUSEL", "children": ",".join(children), "access_token": access_token}
+        else:
+            chosen_url = urls[0] if urls else media_url
+            is_video = bool(chosen_url) and (media_type.startswith("video") or chosen_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv", ".flv", ".wmv")))
+            container_params = {"text": text, "access_token": access_token, "media_type": "TEXT"}
+            if chosen_url:
+                if is_video:
+                    container_params.update({"media_type": "VIDEO", "video_url": chosen_url})
+                else:
+                    container_params.update({"media_type": "IMAGE", "image_url": chosen_url})
+
+        container_resp = client.post(f"https://graph.threads.net/v1.0/{user_id}/threads", params=container_params)
         if container_resp.status_code >= 400:
             err = (container_resp.json().get("error") or {}).get("message", container_resp.text[:200])
             return {"success": False, "post_id": None, "post_url": None, "error": f"Threads error: {err}"}
-
-        creation_id = container_resp.json().get("id")
+        creation_id = str(container_resp.json().get("id") or "").strip()
         if not creation_id:
             return {"success": False, "post_id": None, "post_url": None, "error": "Threads did not return a container ID."}
 
-        # Threads requires the container to reach FINISHED status before publishing.
-        # For images this is near-instant; for videos it can take up to a few minutes.
-        # Poll up to 12 times (≈60 s) before attempting to publish.
-        if media_url:
+        if urls or media_url:
             for _ in range(12):
-                status_resp = client.get(
-                    f"https://graph.threads.net/v1.0/{creation_id}",
-                    params={"fields": "status,error_message", "access_token": access_token},
-                )
+                status_resp = client.get(f"https://graph.threads.net/v1.0/{creation_id}", params={"fields": "status,error_message", "access_token": access_token})
                 if status_resp.status_code >= 400:
-                    break  # Try to publish anyway and let Threads return the real error.
+                    break
                 status_data = status_resp.json()
                 container_status = str(status_data.get("status") or "").upper()
                 if container_status == "FINISHED":
@@ -941,22 +958,13 @@ def _post_threads(
                     return {"success": False, "post_id": None, "post_url": None, "error": f"Threads container error: {err_msg}"}
                 sleep(5)
 
-        publish_resp = client.post(
-            f"https://graph.threads.net/v1.0/{user_id}/threads_publish",
-            params={"creation_id": creation_id, "access_token": access_token},
-        )
+        publish_resp = client.post(f"https://graph.threads.net/v1.0/{user_id}/threads_publish", params={"creation_id": creation_id, "access_token": access_token})
         if publish_resp.status_code >= 400:
             err = (publish_resp.json().get("error") or {}).get("message", publish_resp.text[:200])
             return {"success": False, "post_id": None, "post_url": None, "error": f"Threads publish error: {err}"}
 
     post_id = publish_resp.json().get("id", "")
-    return {
-        "success": True,
-        "post_id": post_id,
-        "post_url": f"https://www.threads.net/t/{post_id}" if post_id else None,
-        "error": None,
-    }
-
+    return {"success": True, "post_id": post_id, "post_url": f"https://www.threads.net/t/{post_id}" if post_id else None, "error": None}
 
 def _post_youtube_shorts(access_token: str, title_or_caption: str, media_url: str | None) -> PostResult:
     if not media_url:
