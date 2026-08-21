@@ -131,6 +131,17 @@ def classify_error(
     return "user_error", "low"
 
 
+def escalate_severity(current: str, events: int, affected_users: int) -> str:
+    """Raise, never lower, the severity of a repeated incident."""
+    rank = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+    proposed = current
+    if events >= 20 or affected_users >= 10:
+        proposed = "critical"
+    elif events >= 5 or affected_users >= 3:
+        proposed = "high"
+    return proposed if rank.get(proposed, 0) > rank.get(current, 0) else current
+
+
 def build_title(feature: str, event_type: str, http_status: int | None, detail: str) -> str:
     if event_type == "slow_response":
         return f"Slow response detected in {feature.replace('_', ' ')}"
@@ -377,6 +388,11 @@ def record_pulse_event(db: Session, payload: dict) -> PulseEvent:
             db.add(incident)
 
         incident.total_events_count += 1
+        incident.severity = escalate_severity(
+            incident.severity,
+            incident.total_events_count,
+            incident.affected_users_count + (1 if user_email else 0),
+        )
         if incident.first_seen_at is None:
             incident.first_seen_at = now
         incident.last_seen_at = now
