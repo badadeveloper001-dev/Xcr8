@@ -1094,3 +1094,9 @@ export async function acknowledgeAdminIncident(accessCode: string, incidentId: n
 export async function addAdminIncidentNote(accessCode: string, incidentId: number, note: string, author = "Admin"): Promise<void> {
   await apiClient.post("/admin/data/incidents/" + incidentId + "/notes", { note, author }, { headers: adminHeaders(accessCode) });
 }
+
+
+export async function submitAiAssistantFeedback(payload: { user_id: number; chat_id?: string | null; rating: "helpful" | "not_helpful"; response_excerpt: string; model?: string; comment?: string }): Promise<{ feedback_id: number; rating: string }> {
+  const { data } = await apiClient.post<{ feedback_id: number; rating: string }>("/api/v1/ai/assistant/feedback", payload);
+  return data;
+}
