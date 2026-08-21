@@ -247,7 +247,8 @@ def consume_usage(
     if quantity <= 0:
         raise ValueError("Usage quantity must be positive.")
 
-    clean_key = str(idempotency_key or "").strip() or None
+    raw_key = str(idempotency_key or "").strip()[:100]
+    clean_key = f"{user_id}:{metric}:{raw_key}" if raw_key else None
     if clean_key:
         existing = db.scalar(select(UsageLedger).where(UsageLedger.idempotency_key == clean_key))
         if existing:
@@ -373,7 +374,8 @@ def reserve_storage(
     if size_bytes <= 0:
         raise HTTPException(status_code=400, detail="A positive file size is required.")
 
-    clean_key = str(idempotency_key or "").strip() or None
+    raw_key = str(idempotency_key or "").strip()[:100]
+    clean_key = f"{user_id}:storage:{raw_key}" if raw_key else None
     if clean_key:
         existing = db.scalar(select(UsageLedger).where(UsageLedger.idempotency_key == clean_key))
         if existing:
