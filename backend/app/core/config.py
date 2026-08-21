@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     pulse_internal_token: str = ""
     pulse_slow_request_ms: int = 6000
     cron_secret: str = ""
+    oauth_state_secret: str = ""
 
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"
@@ -152,8 +153,11 @@ class Settings(BaseSettings):
             self.database_url = self._inject_ipv4_hostaddr_if_possible(self.database_url)
             return self
 
-        # Use a repo-local SQLite fallback when managed DB credentials are not configured.
-        # Prefer the backend folder so the running backend process has a deterministic DB path.
+        if os.getenv("VERCEL") or self.environment.strip().lower() == "production":
+            raise ValueError(
+                "Production database configuration is missing. Set DATABASE_URL or Supabase DB credentials."
+            )
+
         backend_dir = Path(__file__).resolve().parents[2]
         fallback_db_path = backend_dir / "xcr8.dev.db"
         self.database_url = f"sqlite:///{fallback_db_path}"
