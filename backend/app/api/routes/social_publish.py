@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import logging
 from secrets import token_hex
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -25,6 +26,7 @@ from app.services.social_publisher import (
 )
 
 router = APIRouter(prefix="/social", tags=["social"])
+logger = logging.getLogger(__name__)
 
 
 # In-memory tracker for deletion callbacks. Good enough for callback verification
@@ -234,11 +236,10 @@ class OAuthCallbackPayload(BaseModel):
     state: str
 
 
-@router.post("/oauth/{platform}/callback")
-def oauth_callback(
+def _oauth_callback_impl(
     platform: str,
     payload: OAuthCallbackPayload,
-    db: Session = Depends(get_db),
+    db: Session,
 ) -> dict:
     """Exchanges the authorization code for a token and stores it."""
     state_data = verify_oauth_state(payload.state)
@@ -452,6 +453,31 @@ def oauth_callback(
         "success": True,
         "connection_id": row.id,
     }
+
+
+@router.post("/oauth/{platform}/callback")
+def oauth_callback(
+    platform: str,
+    payload: OAuthCallbackPayload,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Complete OAuth without turning provider or database failures into a generic 500."""
+    try:
+        return _oauth_callback_impl(platform, payload, db)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("OAuth callback finalization failed for %s", platform)
+        if platform == "threads":
+            error_type = exc.__class__.__name__
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Threads authorization succeeded, but Xcr8 could not save the connection "
+                    f"({error_type}). Check the Vercel function logs for the matching error."
+                ),
+            ) from exc
+        raise
 
 
 # ─────────────────────────────────────────────────────────────────────────────
