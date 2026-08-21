@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     pulse_slow_request_ms: int = 6000
     cron_secret: str = ""
     oauth_state_secret: str = ""
+    ai_internal_token: str = ""
+    billing_webhook_secret: str = ""
 
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"
