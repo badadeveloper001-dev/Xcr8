@@ -7,12 +7,15 @@ import uuid
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.deps import get_db
+from app.services.entitlements import reserve_storage
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -127,12 +130,18 @@ def _upload_to_supabase_storage(source_path: Path, filename: str, content_type: 
 
 
 class PresignRequest(BaseModel):
+    user_id: int
     filename: str
     content_type: str
+    size_bytes: int = Field(gt=0, le=_MAX_BYTES)
 
 
 @router.post("/presign")
-def create_presigned_upload_url(body: PresignRequest) -> JSONResponse:
+def create_presigned_upload_url(
+    body: PresignRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
     """Return a Supabase signed upload URL so the browser can upload directly,
     bypassing any Vercel payload size limits."""
     base_url = str(settings.supabase_url or "").rstrip("/")
@@ -172,6 +181,13 @@ def create_presigned_upload_url(body: PresignRequest) -> JSONResponse:
             raise HTTPException(status_code=502, detail="Supabase did not return a signed URL.")
         signed_url = _normalize_signed_upload_url(base_url, signed_path)
         public_url = f"{base_url}/storage/v1/object/public/{bucket}/{object_path}"
+        reserve_storage(
+            db,
+            body.user_id,
+            body.size_bytes,
+            idempotency_key=idempotency_key,
+            event_meta={"route": "/upload/presign", "object_path": object_path, "content_type": body.content_type},
+        )
         return JSONResponse({"signed_url": signed_url, "public_url": public_url, "file_name": filename})
     except HTTPException:
         raise
@@ -180,7 +196,13 @@ def create_presigned_upload_url(body: PresignRequest) -> JSONResponse:
 
 
 @router.post("")
-async def upload_media(request: Request, file: UploadFile) -> JSONResponse:
+async def upload_media(
+    request: Request,
+    file: UploadFile,
+    user_id: int = Form(...),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
     if not _is_allowed_media_type(file.content_type, file.filename):
         raise HTTPException(
             status_code=415,
@@ -209,6 +231,14 @@ async def upload_media(request: Request, file: UploadFile) -> JSONResponse:
                 destination.write(chunk)
     finally:
         await file.close()
+
+    reserve_storage(
+        db,
+        user_id,
+        total_bytes,
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/upload", "filename": file.filename, "content_type": file.content_type},
+    )
 
     # Prefer durable object storage in production.
     detected_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
