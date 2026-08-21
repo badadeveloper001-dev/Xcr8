@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import (
     AIGeneration,
+    AIFeedback,
     AnalyticsSnapshot,
     ConnectedPlatform,
     ContentPost,
@@ -1447,3 +1448,24 @@ def get_assistant_chat_history(
         )
 
     return _build_chat_history_response(chat_record, normalized_chat_id)
+
+@router.post("/assistant/feedback")
+def submit_assistant_feedback(payload: dict, db: Session = Depends(get_db)) -> dict:
+    user_id = int(payload.get("user_id") or 0)
+    if not db.get(User, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    rating = str(payload.get("rating") or "").strip().lower()
+    if rating not in {"helpful", "not_helpful"}:
+        raise HTTPException(status_code=422, detail="Rating must be helpful or not_helpful")
+    feedback = AIFeedback(
+        user_id=user_id,
+        chat_id=str(payload.get("chat_id") or "").strip()[:120] or None,
+        rating=rating,
+        response_excerpt=str(payload.get("response_excerpt") or "").strip()[:1000],
+        model_name=str(payload.get("model") or "unknown").strip()[:120],
+        comment=str(payload.get("comment") or "").strip()[:2000] or None,
+    )
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+    return {"feedback_id": feedback.id, "rating": feedback.rating}
