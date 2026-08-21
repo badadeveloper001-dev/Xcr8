@@ -129,7 +129,7 @@ def _compact_text(value: str, limit: int = 280) -> str:
     return text[: max(0, limit - 1)].rstrip() + "…"
 
 
-def _extract_recent_chat_turns(creator_memory: dict, limit: int = 8) -> list[dict]:
+def _extract_recent_chat_turns(creator_memory: dict, limit: int = 16) -> list[dict]:
     raw = creator_memory.get("long_chat_memory")
     if not raw:
         return []
@@ -161,7 +161,7 @@ def _build_memory_digest(creator_memory: dict) -> str:
     cleaned = [_compact_text(str(item), 140) for item in facts if str(item).strip()]
     if not cleaned:
         return ""
-    return " | ".join(cleaned[:5])
+    return " | ".join(cleaned[:10])
 
 
 def _infer_creator_friend_persona(recent_chat_turns: list[dict], explicit_vibe: str) -> str:
