@@ -586,6 +586,8 @@ def publish_post(
             media_url=primary_media_url,
             platform_user_id=platform_user_id or None,
             media_type=primary_media_type,
+            media_urls=[str(url).strip() for url in media_urls if str(url).strip()],
+            media_types=[str(kind).strip() for kind in media_types if str(kind).strip()],
         )
         results[platform_name] = result
         if result.get("success"):
