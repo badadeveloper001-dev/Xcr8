@@ -723,3 +723,25 @@ def add_incident_note(incident_id: int, payload: dict, request: Request, x_admin
     db.add(incident)
     db.commit()
     return {"incident_id": incident.id, "timeline": meta["timeline"]}
+
+
+@router.post("/incidents/{incident_id}/acknowledge")
+def acknowledge_incident(incident_id: int, payload: dict, request: Request, x_admin_code: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+    """Record accountable ownership and acknowledgement for an active incident."""
+    _require_admin_access(x_admin_code, request)
+    incident = db.get(PulseIncident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    owner = str(payload.get("owner") or "Admin").strip()[:80]
+    meta = dict(incident.incident_meta or {})
+    meta["acknowledged_at"] = datetime.now(tz=UTC).isoformat()
+    meta["acknowledged_by"] = owner
+    meta["owner"] = owner
+    timeline = list(meta.get("timeline") or [])
+    timeline.append({"type": "acknowledged", "author": owner, "created_at": meta["acknowledged_at"]})
+    meta["timeline"] = timeline[-40:]
+    incident.status = "investigating"
+    incident.incident_meta = meta
+    db.add(incident)
+    db.commit()
+    return {"incident_id": incident.id, "status": incident.status, "owner": owner, "acknowledged_at": meta["acknowledged_at"]}
