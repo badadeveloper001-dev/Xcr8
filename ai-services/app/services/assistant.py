@@ -11,7 +11,27 @@ from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
-PROMPT_TEMPLATE_VERSION = "assistant-v4"
+PROMPT_TEMPLATE_VERSION = "assistant-v5"
+
+# Everyday creator tasks stay fast and cost-aware. Strategic work automatically receives
+# the stronger reasoning model; creators never have to choose a mode themselves.
+_DEEP_REASONING_CUES = (
+    "campaign", "strategy", "strategic", "go-to-market", "content plan", "content calendar",
+    "seven day", "7-day", "30-day", "roadmap", "deep research", "research report",
+    "competitive", "competitor", "trend research", "viral analysis", "why did", "why did this",
+    "performance analysis", "analytics analysis", "funnel", "positioning", "launch plan",
+)
+
+
+def _requires_deep_reasoning(message: str) -> bool:
+    normalized = re.sub(r"\s+", " ", str(message or "").lower()).strip()
+    return any(cue in normalized for cue in _DEEP_REASONING_CUES)
+
+
+def _select_assistant_model(message: str) -> str:
+    if _requires_deep_reasoning(message):
+        return str(settings.openai_high_reasoning_model or settings.openai_model).strip()
+    return str(settings.openai_model).strip()
 
 # ── Web search helper ──────────────────────────────────────────────────────────
 
@@ -52,7 +72,10 @@ def _needs_web_search(message: str) -> bool:
         "price of", "cost of", "how much is",
         # Social / platform-specific research
         "algorithm", "platform update", "instagram update", "tiktok update",
-        "youtube update", "facebook update", "meta update",
+        "youtube update", "facebook update", "meta update", "threads update",
+        # Creator research and trend work should be current by default.
+        "trend", "research", "competitor", "competitors", "content ideas", "viral",
+        "campaign", "creator economy", "social media update", "policy update",
     ]
     return any(trigger in lower for trigger in search_triggers)
 
@@ -76,8 +99,9 @@ SYSTEM_PROMPT = (
     "For brainstorming, offer 3-5 differentiated ideas with an angle, hook, CTA, and best-fit platform. "
     "For composition, produce a ready-to-edit draft with a hook, body, CTA, and relevant hashtags; adapt it to the requested platform and tone. "
     "For analytics questions, clearly separate observed signals from hypotheses, explain what may be working, and propose one measurable next test. "
-    "You have access to real-time web search results. When web_search_results are provided in the context, use them to give up-to-date, accurate answers — always cite the source URL when you reference search data. "
-    "If you are not given search results but the user is asking about current events or live data, state clearly what you know up to your knowledge cutoff and offer to look it up. "
+    "You have access to real-time web search results. When web_search_results are provided in the context, use them to give up-to-date, accurate answers — cite each factual current claim with the relevant source URL and include the date when material. "
+    "For trend research, distinguish live web evidence, workspace evidence, and informed hypotheses. Never present a hypothesis as a confirmed platform trend. "
+    "If current information is requested and no search results are available, say so plainly instead of relying on stale knowledge. "
     "For complex questions, reason clearly and provide structured insight instead of shallow summaries. "
     "When useful, include: what matters most, why it matters, and practical implications for creators/business. "
     "Always reply in the same language as the latest user message unless they explicitly request a switch. "
@@ -442,15 +466,18 @@ def generate_assistant_reply(payload: dict) -> dict:
         )
 
         # ── Web search ────────────────────────────────────────────────────────
+        selected_model = _select_assistant_model(user_message)
+        is_deep_reasoning = _requires_deep_reasoning(user_message)
+
         web_results_text = ""
         if _needs_web_search(user_message):
-            search_results = _web_search(user_message)
+            search_results = _web_search(user_message, max_results=7 if is_deep_reasoning else 5)
             if search_results:
                 web_results_text = _format_search_results(search_results)
                 logger.info("Web search for '%s' returned %d results.", user_message[:60], len(search_results))
 
         completion = client.chat.completions.create(
-            model=settings.openai_model,
+            model=selected_model,
             temperature=0.75,
             response_format={"type": "json_object"},
             messages=[
