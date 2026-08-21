@@ -49,8 +49,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install backend test dependencies
+        run: pip install -r backend/requirements.txt pytest
+
       - name: Compile check — backend
         run: python -m compileall backend/app
+
+      - name: Critical backend tests
+        run: PYTHONPATH=backend pytest -q backend/tests
 
       - name: Compile check — ai-services
         run: python -m compileall ai-services/app
