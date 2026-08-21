@@ -5,6 +5,10 @@ import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, BarChart3, LogOut, Radar, ShieldAlert, Users } from "lucide-react";
 import {
+  getAdminAiQuality,
+  getAdminContent,
+  getAdminCreators,
+  getAdminHealth,
   getAdminIncidents,
   getAdminOverview,
   getApiErrorMessage,
@@ -99,6 +103,34 @@ export default function AdminDashboardPage() {
     enabled: Boolean(accessCode),
     refetchInterval: 15000,
   });
+  const { data: creators } = useQuery({
+    queryKey: ["admin-creators"],
+    queryFn: () => getAdminCreators(accessCode),
+    enabled: Boolean(accessCode),
+    refetchInterval: 30_000,
+  });
+
+  const { data: contentOps } = useQuery({
+    queryKey: ["admin-content"],
+    queryFn: () => getAdminContent(accessCode),
+    enabled: Boolean(accessCode),
+    refetchInterval: 30_000,
+  });
+
+  const { data: health } = useQuery({
+    queryKey: ["admin-health"],
+    queryFn: () => getAdminHealth(accessCode),
+    enabled: Boolean(accessCode),
+    refetchInterval: 20_000,
+  });
+
+  const { data: aiQuality } = useQuery({
+    queryKey: ["admin-ai-quality"],
+    queryFn: () => getAdminAiQuality(accessCode),
+    enabled: Boolean(accessCode),
+    refetchInterval: 30_000,
+  });
+
   const isTestIncident = (incident: (typeof incidents)[number]) => {
     const meta = incident.incident_meta ?? {};
     return (
@@ -217,6 +249,65 @@ export default function AdminDashboardPage() {
             value={statValue(data?.published_posts)}
             icon={BarChart3}
           />
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <article className="xcr8-panel rounded-2xl p-4">
+            <h2 className="xcr8-title-lg mb-3 text-white light:text-slate-900">System Health</h2>
+            <div className="space-y-2">
+              {Object.entries(health?.services ?? {}).map(([service, details]) => (
+                <div key={service} className="surface-soft flex items-center justify-between rounded-xl px-3 py-2.5">
+                  <span className="capitalize text-sm text-slate-200 light:text-slate-700">{service}</span>
+                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${details.status === "ok" || details.status === "configured" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                    {details.status}
+                  </span>
+                </div>
+              ))}
+              {!health ? <p className="text-sm text-slate-400">Checking services...</p> : null}
+            </div>
+          </article>
+
+          <article className="xcr8-panel rounded-2xl p-4">
+            <h2 className="xcr8-title-lg mb-3 text-white light:text-slate-900">AI Quality</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="surface-soft rounded-xl px-3 py-3"><p className="text-xs text-slate-500">Generations sampled</p><p className="mt-1 text-lg font-semibold text-white light:text-slate-900">{aiQuality?.sample_size ?? 0}</p></div>
+              <div className="surface-soft rounded-xl px-3 py-3"><p className="text-xs text-slate-500">Fallback rate</p><p className="mt-1 text-lg font-semibold text-white light:text-slate-900">{Math.round((aiQuality?.fallback_rate ?? 0) * 100)}%</p></div>
+              <div className="surface-soft col-span-2 rounded-xl px-3 py-3"><p className="text-xs text-slate-500">Average latency</p><p className="mt-1 text-lg font-semibold text-white light:text-slate-900">{aiQuality?.average_latency_ms ?? 0} ms</p></div>
+            </div>
+          </article>
+
+          <article className="xcr8-panel rounded-2xl p-4">
+            <h2 className="xcr8-title-lg mb-3 text-white light:text-slate-900">Scheduling Operations</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="surface-soft rounded-xl px-3 py-3"><p className="text-xs text-slate-500">Queued</p><p className="mt-1 text-lg font-semibold text-white light:text-slate-900">{health?.services.scheduler?.queued ?? 0}</p></div>
+              <div className="surface-soft rounded-xl px-3 py-3"><p className="text-xs text-slate-500">Failed</p><p className="mt-1 text-lg font-semibold text-white light:text-slate-900">{health?.services.scheduler?.failed ?? 0}</p></div>
+            </div>
+          </article>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <article className="xcr8-panel rounded-2xl p-4">
+            <h2 className="xcr8-title-lg mb-3 text-white light:text-slate-900">Creator Support</h2>
+            <div className="max-h-72 space-y-2 overflow-auto pr-1">
+              {(creators?.items ?? []).slice(0, 12).map((creator) => (
+                <div key={creator.user_id} className="surface-soft rounded-xl px-3 py-3">
+                  <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white light:text-slate-900">{creator.display_name}</p><p className="text-xs text-slate-500">{creator.email}</p></div><span className="text-xs text-cyan-300">{creator.posts} posts</span></div>
+                  <p className="mt-1 text-xs text-slate-400">{creator.onboarding_complete ? "Onboarded" : "Needs onboarding"} · {creator.platforms.length ? creator.platforms.join(", ") : "No connected platforms"}</p>
+                </div>
+              ))}
+              {!creators?.items?.length ? <p className="text-sm text-slate-400">No creator records yet.</p> : null}
+            </div>
+          </article>
+
+          <article className="xcr8-panel rounded-2xl p-4">
+            <h2 className="xcr8-title-lg mb-3 text-white light:text-slate-900">Content Recovery Queue</h2>
+            <div className="max-h-72 space-y-2 overflow-auto pr-1">
+              {(contentOps?.items ?? []).filter((post) => post.status === "failed" || post.schedules.some((schedule) => schedule.queue_status === "failed")).slice(0, 12).map((post) => (
+                <div key={post.post_id} className="surface-soft rounded-xl px-3 py-3"><p className="text-sm font-semibold text-white light:text-slate-900">{post.title}</p><p className="mt-1 text-xs text-rose-300">{post.schedules.filter((schedule) => schedule.queue_status === "failed").length} failed schedule(s)</p></div>
+              ))}
+              {!contentOps?.items?.some((post) => post.status === "failed" || post.schedules.some((schedule) => schedule.queue_status === "failed")) ? <p className="text-sm text-emerald-300">No failed posts or schedules to recover.</p> : null}
+            </div>
+          </article>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
