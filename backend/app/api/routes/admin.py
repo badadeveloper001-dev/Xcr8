@@ -4,12 +4,12 @@ from threading import Lock
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 import httpx
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import case, desc, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
-from app.db.models import AIGeneration, ContentPost, CreatorProfile, PostStatus, PulseIncident, TrendSignalEvent, User
+from app.db.models import AIGeneration, ConnectedPlatform, ContentPost, CreatorProfile, PostStatus, PulseIncident, ScheduledPost, TrendSignalEvent, User
 from app.schemas.mvp import (
     AdminOverview,
     AdminSeriesPoint,
@@ -527,3 +527,139 @@ def backfill_onboarding(
         db.commit()
 
     return {"updated": updated, "checked": len(unfinished)}
+
+
+
+@router.get("/creators")
+def admin_creators(
+    request: Request,
+    q: str = "",
+    limit: int = 50,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Creator directory for support and lifecycle operations."""
+    _require_admin_access(x_admin_code, request)
+    normalized = q.strip().lower()
+    users = list(db.scalars(select(User).order_by(desc(User.updated_at)).limit(max(1, min(limit, 100)))))
+    items: list[dict] = []
+    for user in users:
+        if normalized and normalized not in f"{user.display_name} {user.email}".lower():
+            continue
+        connections = list(db.scalars(select(ConnectedPlatform).where(ConnectedPlatform.user_id == user.id, ConnectedPlatform.is_active.is_(True))))
+        posts = list(db.scalars(select(ContentPost).where(ContentPost.user_id == user.id)))
+        items.append({
+            "user_id": user.id,
+            "display_name": user.display_name,
+            "email": user.email,
+            "onboarding_complete": user.onboarding_complete,
+            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+            "platforms": [connection.platform.value for connection in connections],
+            "posts": len(posts),
+            "published": sum(1 for post in posts if post.status == PostStatus.published),
+            "scheduled": sum(1 for post in posts if post.status == PostStatus.scheduled),
+        })
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/content")
+def admin_content_operations(
+    request: Request,
+    status: str | None = None,
+    limit: int = 60,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Recent content and scheduling state, including failures needing intervention."""
+    _require_admin_access(x_admin_code, request)
+    posts = list(db.scalars(select(ContentPost).order_by(desc(ContentPost.updated_at), desc(ContentPost.created_at)).limit(max(1, min(limit, 100)))))
+    if status:
+        posts = [post for post in posts if post.status.value == status]
+    post_ids = [post.id for post in posts]
+    schedules = list(db.scalars(select(ScheduledPost).where(ScheduledPost.post_id.in_(post_ids or [-1])).order_by(desc(ScheduledPost.scheduled_for))))
+    schedules_by_post: dict[int, list[ScheduledPost]] = defaultdict(list)
+    for schedule in schedules:
+        schedules_by_post[schedule.post_id].append(schedule)
+    return {"items": [{
+        "post_id": post.id,
+        "user_id": post.user_id,
+        "title": post.title,
+        "status": post.status.value,
+        "created_at": post.created_at.isoformat() if post.created_at else None,
+        "schedules": [{
+            "schedule_id": schedule.id,
+            "platform": schedule.platform.value,
+            "scheduled_for": schedule.scheduled_for.isoformat(),
+            "queue_status": schedule.queue_status,
+        } for schedule in schedules_by_post.get(post.id, [])],
+    } for post in posts]}
+
+
+@router.get("/health")
+def admin_health(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Safe operational health summary; it never exposes credentials."""
+    _require_admin_access(x_admin_code, request)
+    database = {"status": "ok"}
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        database = {"status": "error", "detail": exc.__class__.__name__}
+
+    ai = {"status": "unknown"}
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{str(settings.ai_service_url).rstrip('/')}/health/provider")
+        ai = {"status": "ok" if response.status_code < 400 else "error"}
+        if response.status_code < 400 and isinstance(response.json(), dict):
+            payload = response.json()
+            ai["provider_configured"] = bool(payload.get("provider_configured"))
+            ai["model"] = str(payload.get("model") or "")
+    except Exception as exc:
+        ai = {"status": "error", "detail": exc.__class__.__name__}
+
+    queued = db.scalar(select(func.count(ScheduledPost.id)).where(ScheduledPost.queue_status == "queued")) or 0
+    failed = db.scalar(select(func.count(ScheduledPost.id)).where(ScheduledPost.queue_status == "failed")) or 0
+    return {
+        "checked_at": datetime.now(tz=UTC).isoformat(),
+        "services": {
+            "database": database,
+            "ai": ai,
+            "scheduler": {"status": "warning" if failed else "ok", "queued": queued, "failed": failed, "cron_configured": bool(str(settings.cron_secret or "").strip())},
+            "threads": {"status": "configured" if bool(str(settings.threads_app_id or "").strip()) else "not_configured"},
+        },
+    }
+
+
+@router.get("/ai-quality")
+def admin_ai_quality(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Reliability metrics for product and provider decisions."""
+    _require_admin_access(x_admin_code, request)
+    rows = list(db.scalars(select(AIGeneration).order_by(desc(AIGeneration.created_at)).limit(300)))
+    model_counts: dict[str, int] = defaultdict(int)
+    fallback_count = 0
+    total_latency = 0
+    latency_count = 0
+    for row in rows:
+        model = str(row.model_name or "unknown")
+        model_counts[model] += 1
+        if "fallback" in model.lower() or "deepseek" in model.lower():
+            fallback_count += 1
+        payload = row.output_payload if isinstance(row.output_payload, dict) else {}
+        latency = payload.get("latency_ms")
+        if isinstance(latency, int) and latency >= 0:
+            total_latency += latency
+            latency_count += 1
+    return {
+        "sample_size": len(rows),
+        "models": dict(sorted(model_counts.items(), key=lambda item: item[1], reverse=True)),
+        "fallback_rate": round(fallback_count / len(rows), 3) if rows else 0,
+        "average_latency_ms": int(total_latency / latency_count) if latency_count else 0,
+    }
