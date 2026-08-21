@@ -543,6 +543,37 @@ def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
         return {"error": str(exc)[:120]}
 
 
+def _fetch_threads_insights(threads_user_id: str, access_token: str) -> dict:
+    """Fetch account-level Threads insights with the OAuth insight permission."""
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.get(
+                f"https://graph.threads.net/v1.0/{threads_user_id}/threads_insights",
+                params={
+                    "metric": "views,likes,replies,reposts,quotes,followers_count",
+                    "access_token": access_token,
+                },
+            )
+        if response.status_code >= 400:
+            detail = (response.json().get("error") or {}).get("message", response.text[:180])
+            return {"error": detail}
+
+        metrics: dict[str, int] = {}
+        for item in response.json().get("data", []):
+            name = str(item.get("name") or "").strip()
+            values = item.get("values") if isinstance(item.get("values"), list) else []
+            latest = values[-1].get("value") if values and isinstance(values[-1], dict) else 0
+            if name:
+                try:
+                    metrics[name] = int(latest or 0)
+                except (TypeError, ValueError):
+                    metrics[name] = 0
+        metrics["total_engagement"] = sum(metrics.get(name, 0) for name in ("likes", "replies", "reposts", "quotes"))
+        return metrics
+    except Exception as exc:
+        return {"error": str(exc)[:120]}
+
+
 @router.get("/live/{user_id}")
 def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict:
     """Fetch real-time analytics from each connected social media platform."""
@@ -580,6 +611,26 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
                 "handle": platform.account_handle,
                 "status": "no_token",
                 "data": {},
+            })
+            continue
+
+        if platform_name == "threads":
+            threads_user_id = str(auth.get("platform_user_id") or "").strip()
+            if threads_user_id:
+                data = _fetch_threads_insights(threads_user_id, access_token)
+            else:
+                data = {"error": "Threads user ID not stored — reconnect Threads."}
+            results.append({
+                "platform": platform_name,
+                "handle": platform.account_handle,
+                "status": "ok" if "error" not in data else "permission_required",
+                "message": (
+                    "Threads insights are live."
+                    if "error" not in data
+                    else "Reconnect Threads to grant the threads_manage_insights permission."
+                ),
+                "fetched_at": fetched_at,
+                "data": data,
             })
             continue
 
