@@ -573,18 +573,15 @@ export async function loginWithGoogle(payload: GoogleSessionPayload): Promise<Se
 }
 
 export async function verifyAdminAccess(accessCode: string): Promise<{ authorized: boolean; expires_in_seconds: number }> {
-  const { data } = await apiClient.get<AdminOverviewPayload>("/admin/data/overview", {
-    headers: { "x-admin-code": accessCode },
-    timeout: 15_000,
-  });
-  return { authorized: true, expires_in_seconds: 3600 };
+  const { data } = await apiClient.post<{ authorized: boolean; expires_in_seconds: number }>("/admin/data/session", { accessCode });
+  return data;
 }
+
+function adminHeaders(accessCode: string) { return accessCode === "authenticated" ? undefined : { "x-admin-code": accessCode }; }
 
 export async function getAdminOverview(accessCode: string): Promise<AdminOverviewPayload> {
   const { data } = await apiClient.get<AdminOverviewPayload>("/admin/data/overview", {
-    headers: {
-      "x-admin-code": accessCode,
-    },
+    headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
   return data;
@@ -593,7 +590,7 @@ export async function getAdminOverview(accessCode: string): Promise<AdminOvervie
 export async function getAdminCreators(accessCode: string, query = ""): Promise<{ items: AdminCreatorItem[]; count: number }> {
   const { data } = await apiClient.get<{ items: AdminCreatorItem[]; count: number }>("/admin/data/creators", {
     params: query ? { q: query } : undefined,
-    headers: { "x-admin-code": accessCode },
+    headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
   return data;
@@ -601,7 +598,7 @@ export async function getAdminCreators(accessCode: string, query = ""): Promise<
 
 export async function getAdminContent(accessCode: string): Promise<{ items: Array<{ post_id: number; user_id: number; title: string; status: string; created_at?: string | null; schedules: Array<{ schedule_id: number; platform: string; scheduled_for: string; queue_status: string }> }> }> {
   const { data } = await apiClient.get("/admin/data/content", {
-    headers: { "x-admin-code": accessCode },
+    headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
   return data;
@@ -609,7 +606,7 @@ export async function getAdminContent(accessCode: string): Promise<{ items: Arra
 
 export async function getAdminHealth(accessCode: string): Promise<AdminHealthPayload> {
   const { data } = await apiClient.get<AdminHealthPayload>("/admin/data/health", {
-    headers: { "x-admin-code": accessCode },
+    headers: adminHeaders(accessCode),
     timeout: 15_000,
   });
   return data;
@@ -617,7 +614,7 @@ export async function getAdminHealth(accessCode: string): Promise<AdminHealthPay
 
 export async function getAdminAiQuality(accessCode: string): Promise<AdminAiQualityPayload> {
   const { data } = await apiClient.get<AdminAiQualityPayload>("/admin/data/ai-quality", {
-    headers: { "x-admin-code": accessCode },
+    headers: adminHeaders(accessCode),
     timeout: 15_000,
   });
   return data;
@@ -625,9 +622,7 @@ export async function getAdminAiQuality(accessCode: string): Promise<AdminAiQual
 
 export async function getAdminIncidents(accessCode: string): Promise<PulseIncidentItem[]> {
   const { data } = await apiClient.get<PulseIncidentItem[]>("/admin/data/incidents", {
-    headers: {
-      "x-admin-code": accessCode,
-    },
+    headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
   return data;
@@ -642,9 +637,7 @@ export async function updateAdminIncident(
     `/admin/data/incidents/${incidentId}`,
     payload,
     {
-      headers: {
-        "x-admin-code": accessCode,
-      },
+      headers: adminHeaders(accessCode),
       timeout: 30_000,
     },
   );
@@ -653,7 +646,7 @@ export async function updateAdminIncident(
 
 export async function retryAdminSchedule(accessCode: string, scheduleId: number): Promise<{ message: string }> {
   const { data } = await apiClient.post<{ message: string }>(`/admin/data/schedules/${scheduleId}/retry`, {}, {
-    headers: { "x-admin-code": accessCode },
+    headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
   return data;
@@ -664,9 +657,7 @@ export async function triggerAdminTestIncident(accessCode: string): Promise<Puls
     "/admin/data/incidents/test",
     {},
     {
-      headers: {
-        "x-admin-code": accessCode,
-      },
+      headers: adminHeaders(accessCode),
       timeout: 30_000,
     },
   );
@@ -1097,9 +1088,9 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
 
 
 export async function acknowledgeAdminIncident(accessCode: string, incidentId: number, owner = "Admin"): Promise<void> {
-  await apiClient.post("/admin/data/incidents/" + incidentId + "/acknowledge", { owner }, { headers: { "x-admin-code": accessCode } });
+  await apiClient.post("/admin/data/incidents/" + incidentId + "/acknowledge", { owner }, { headers: adminHeaders(accessCode) });
 }
 
 export async function addAdminIncidentNote(accessCode: string, incidentId: number, note: string, author = "Admin"): Promise<void> {
-  await apiClient.post("/admin/data/incidents/" + incidentId + "/notes", { note, author }, { headers: { "x-admin-code": accessCode } });
+  await apiClient.post("/admin/data/incidents/" + incidentId + "/notes", { note, author }, { headers: adminHeaders(accessCode) });
 }
