@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, ContentPost, Platform, PostVariant, User
+from app.services.entitlements import ensure_social_account_capacity
 from app.services.social_publisher import (
     configured_platforms,
     exchange_code_for_token,
@@ -196,6 +197,8 @@ def oauth_start(platform: str, user_id: int, db: Session = Depends(get_db)) -> d
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    ensure_social_account_capacity(db, user_id, platform)
+
     if not is_platform_configured(platform):
         hints_by_platform = {
             "facebook": "META_APP_ID, META_APP_SECRET",
@@ -254,6 +257,8 @@ def _oauth_callback_impl(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    ensure_social_account_capacity(db, user_id, platform)
 
     redirect_uri = _redirect_uri()
     token_data = exchange_code_for_token(platform, payload.code, payload.state, redirect_uri)
