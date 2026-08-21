@@ -650,6 +650,14 @@ export async function updateAdminIncident(
   return data;
 }
 
+export async function retryAdminSchedule(accessCode: string, scheduleId: number): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>(`/admin/data/schedules/${scheduleId}/retry`, {}, {
+    headers: { "x-admin-code": accessCode },
+    timeout: 30_000,
+  });
+  return data;
+}
+
 export async function triggerAdminTestIncident(accessCode: string): Promise<PulseIncidentItem> {
   const { data } = await apiClient.post<PulseIncidentItem>(
     "/admin/data/incidents/test",
