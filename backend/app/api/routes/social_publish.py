@@ -32,6 +32,14 @@ router = APIRouter(prefix="/social", tags=["social"])
 _META_DELETION_REQUESTS: dict[str, dict[str, str]] = {}
 
 
+def _duration_seconds(value: object, default: int = 0) -> int:
+    """Accept provider values that may be returned as a numeric string or float."""
+    try:
+        return max(0, int(float(value or default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _parse_iso_datetime(value: str | None) -> datetime | None:
     raw = str(value or "").strip()
     if not raw:
@@ -276,7 +284,7 @@ def oauth_callback(
     token_expires_at = None
     if expires_in:
         from datetime import timedelta
-        token_expires_at = (datetime.now(tz=UTC) + timedelta(seconds=int(expires_in))).isoformat()
+        token_expires_at = (datetime.now(tz=UTC) + timedelta(seconds=_duration_seconds(expires_in))).isoformat()
 
     user_info = fetch_platform_user_info(platform, access_token)
     handle = user_info.get("handle") or platform
@@ -382,7 +390,7 @@ def oauth_callback(
         long_lived = _exchange_threads_long_lived_token(access_token)
         if long_lived and str(long_lived.get("access_token") or "").strip():
             access_token = str(long_lived.get("access_token") or "").strip()
-            expires_in = int(long_lived.get("expires_in") or 0)
+            expires_in = _duration_seconds(long_lived.get("expires_in"))
             if expires_in > 0:
                 token_expires_at = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
 
@@ -546,7 +554,7 @@ def publish_post(
             if refreshed and refreshed.get("access_token"):
                 access_token = str(refreshed.get("access_token") or "").strip()
                 auth_meta["access_token"] = access_token
-                expires_in = int(refreshed.get("expires_in") or 3600)
+                expires_in = _duration_seconds(refreshed.get("expires_in"), 3600)
                 auth_meta["token_expires_at"] = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
                 connection.auth_meta = auth_meta
                 db.commit()
@@ -563,7 +571,7 @@ def publish_post(
                 if refreshed and refreshed.get("access_token"):
                     access_token = str(refreshed.get("access_token") or "").strip()
                     auth_meta["access_token"] = access_token
-                    expires_in = int(refreshed.get("expires_in") or 0)
+                    expires_in = _duration_seconds(refreshed.get("expires_in"))
                     if expires_in > 0:
                         auth_meta["token_expires_at"] = (datetime.now(tz=UTC) + timedelta(seconds=expires_in)).isoformat()
                     connection.auth_meta = auth_meta
@@ -586,6 +594,8 @@ def publish_post(
             media_url=primary_media_url,
             platform_user_id=platform_user_id or None,
             media_type=primary_media_type,
+            media_urls=[str(url).strip() for url in media_urls if str(url).strip()],
+            media_types=[str(kind).strip() for kind in media_types if str(kind).strip()],
         )
         results[platform_name] = result
         if result.get("success"):

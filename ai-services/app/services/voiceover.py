@@ -8,7 +8,7 @@ from time import perf_counter
 import httpx
 from openai import OpenAI
 
-from app.core.config import settings
+from app.core.config import create_chat_completion, settings
 
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,7 @@ def generate_voiceover_script(payload: dict) -> dict:
     started = perf_counter()
 
     try:
-        completion = client.chat.completions.create(
+        completion = create_chat_completion(client,
             model=settings.openai_model,
             temperature=0.75,
             response_format={"type": "json_object"},
