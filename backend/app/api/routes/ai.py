@@ -8,8 +8,9 @@ import uuid
 from collections import Counter, defaultdict
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -44,7 +45,8 @@ from app.schemas.mvp import (
     AITrendMapperResponse,
     AITrendSignal,
 )
-from app.services.ai_adapter import generate_composed_content, generate_content_ideas
+from app.services.ai_adapter import ai_service_headers, generate_composed_content, generate_content_ideas
+from app.services.entitlements import consume_usage, plan_for_user, require_feature
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
@@ -972,10 +974,22 @@ def trend_mapper(payload: AITrendMapperRequest, db: Session = Depends(get_db)) -
 
 
 @router.post("/brainstorm", response_model=AIBrainstormResponse)
-def brainstorm(payload: AIBrainstormRequest, db: Session = Depends(get_db)) -> AIBrainstormResponse:
+def brainstorm(
+    payload: AIBrainstormRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> AIBrainstormResponse:
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    consume_usage(
+        db,
+        payload.user_id,
+        "text_generation",
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/ai/brainstorm"},
+    )
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
     recent_memories = list(
@@ -1009,10 +1023,22 @@ def brainstorm(payload: AIBrainstormRequest, db: Session = Depends(get_db)) -> A
 
 
 @router.post("/compose", response_model=AIComposeResponse)
-def compose(payload: AIComposeRequest, db: Session = Depends(get_db)) -> AIComposeResponse:
+def compose(
+    payload: AIComposeRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> AIComposeResponse:
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    consume_usage(
+        db,
+        payload.user_id,
+        "text_generation",
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/ai/compose"},
+    )
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
     recent_memories = list(
@@ -1046,11 +1072,87 @@ def compose(payload: AIComposeRequest, db: Session = Depends(get_db)) -> AICompo
     return AIComposeResponse(**result)
 
 
-@router.post("/voiceover", response_model=AIVoiceoverResponse)
-def voiceover(payload: AIVoiceoverRequest, db: Session = Depends(get_db)) -> AIVoiceoverResponse:
+class AIImageGenerateRequest(BaseModel):
+    user_id: int
+    prompt: str = Field(min_length=1, max_length=8_000)
+    width: int = Field(default=1024, ge=256, le=2048)
+    height: int = Field(default=1024, ge=256, le=2048)
+    quality: str = Field(default="standard", max_length=24)
+
+
+@router.post("/image/generate", response_model=dict)
+def image_generate(
+    payload: AIImageGenerateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    plan = plan_for_user(user)
+    require_feature(db, user.id, "image_generation")
+    requested_quality = payload.quality.strip().lower()
+    actual_quality = requested_quality
+    metric = "image_generation"
+    if requested_quality in {"high", "hd"}:
+        if plan.high_quality_allowed:
+            actual_quality = "high"
+            metric = "high_quality_image"
+        else:
+            # Starter includes images but explicitly excludes high-quality generation.
+            actual_quality = "standard"
+
+    consume_usage(
+        db,
+        user.id,
+        metric,
+        idempotency_key=idempotency_key,
+        event_meta={
+            "route": "/ai/image/generate",
+            "requested_quality": requested_quality,
+            "actual_quality": actual_quality,
+        },
+    )
+
+    try:
+        response = httpx.post(
+            f"{settings.ai_service_url.rstrip('/')}/image/generate",
+            headers=ai_service_headers(),
+            json={
+                "prompt": payload.prompt,
+                "width": payload.width,
+                "height": payload.height,
+                "quality": actual_quality,
+            },
+            timeout=120.0,
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        _raise_ai_service_error(exc, "Image generation failed")
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Image generation service unavailable: {exc}") from exc
+
+
+@router.post("/voiceover", response_model=AIVoiceoverResponse)
+def voiceover(
+    payload: AIVoiceoverRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> AIVoiceoverResponse:
+    user = db.get(User, payload.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    require_feature(db, payload.user_id, "voiceover")
+    consume_usage(
+        db,
+        payload.user_id,
+        "text_generation",
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/ai/voiceover", "feature": "voiceover_script"},
+    )
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
     recent_memories = list(
@@ -1071,6 +1173,7 @@ def voiceover(payload: AIVoiceoverRequest, db: Session = Depends(get_db)) -> AIV
     try:
         result = httpx.post(
             f"{settings.ai_service_url.rstrip('/')}/voiceover",
+            headers=ai_service_headers(),
             json={
                 "user_id": payload.user_id,
                 "topic": payload.topic,
@@ -1097,10 +1200,22 @@ def voiceover(payload: AIVoiceoverRequest, db: Session = Depends(get_db)) -> AIV
 
 
 @router.post("/voiceover/audio")
-def voiceover_audio(payload: AIVoiceoverAudioRequest, db: Session = Depends(get_db)) -> Response:
+def voiceover_audio(
+    payload: AIVoiceoverAudioRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> Response:
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    consume_usage(
+        db,
+        payload.user_id,
+        "voiceover",
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/ai/voiceover/audio"},
+    )
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
     recent_memories = list(
@@ -1121,6 +1236,7 @@ def voiceover_audio(payload: AIVoiceoverAudioRequest, db: Session = Depends(get_
     try:
         result = httpx.post(
             f"{settings.ai_service_url.rstrip('/')}/voiceover/audio",
+            headers=ai_service_headers(),
             json={
                 "user_id": payload.user_id,
                 "text": payload.text,
@@ -1147,10 +1263,22 @@ def voiceover_audio(payload: AIVoiceoverAudioRequest, db: Session = Depends(get_
 
 
 @router.post("/assistant", response_model=AIAssistantResponse)
-def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIAssistantResponse:
+def assistant(
+    payload: AIAssistantRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> AIAssistantResponse:
     user = _resolve_assistant_user(db, payload)
     if not user:
         return _build_missing_user_assistant_response(payload)
+
+    consume_usage(
+        db,
+        user.id,
+        "text_generation",
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/ai/assistant"},
+    )
 
     chat_id = _normalize_chat_id(payload.chat_id) if payload.chat_id else _generate_chat_id()
 
@@ -1196,6 +1324,7 @@ def assistant(payload: AIAssistantRequest, db: Session = Depends(get_db)) -> AIA
     try:
         response = httpx.post(
             f"{settings.ai_service_url.rstrip('/')}/assistant",
+            headers=ai_service_headers(),
             json={
                 "user_id": user.id,
                 "message": payload.message,
