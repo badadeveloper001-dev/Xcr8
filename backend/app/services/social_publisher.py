@@ -99,7 +99,7 @@ _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
     "threads": {
         "auth_url": "https://threads.net/oauth/authorize",
         "token_url": "https://graph.threads.net/oauth/access_token",
-        "scopes": "threads_basic,threads_content_publish",
+        "scopes": "threads_basic,threads_content_publish,threads_manage_insights",
         "cred_keys": ("threads_app_id", "threads_app_secret"),
     },
 }
