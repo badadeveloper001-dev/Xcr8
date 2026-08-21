@@ -7,6 +7,7 @@ import { Bot, History, MessageSquarePlus, SendHorizontal } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import {
   chatWithAiAssistant,
+  submitAiAssistantFeedback,
   getAiAssistantChatHistory,
   getApiErrorMessage,
   listAiAssistantChats,
@@ -133,6 +134,8 @@ export default function AssistantPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestedActions, setSuggestedActions] = useState<string[]>(starterPrompts);
+  const [feedbackTarget, setFeedbackTarget] = useState<{ chatId: string; response: string; model: string } | null>(null);
+  const [feedbackSent, setFeedbackSent] = useState<"helpful" | "not_helpful" | null>(null);
   const lastPromptParamRef = useRef<string | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const [isMobileInputMode, setIsMobileInputMode] = useState(false);
@@ -469,6 +472,8 @@ export default function AssistantPage() {
         data.suggested_actions.length > 0 ? data.suggested_actions : starterPrompts,
       );
       setActiveChatId(resolvedChatId);
+      setFeedbackTarget({ chatId: resolvedChatId, response: assistantMessage.content, model: data.model });
+      setFeedbackSent(null);
       setChatSessions((current) => {
         const existing = current.find((session) => session.chat_id === resolvedChatId);
         const updatedSession: AiAssistantChatSummary = {
@@ -569,6 +574,22 @@ export default function AssistantPage() {
                 </div>
               ))}
             </div>
+
+            {feedbackTarget ? (
+              <div className="mb-3 flex items-center gap-2 text-xs text-slate-400">
+                <span>Was this response useful?</span>
+                {(["helpful", "not_helpful"] as const).map((rating) => (
+                  <button key={rating} type="button" disabled={feedbackSent !== null} onClick={async () => {
+                    if (!userId) return;
+                    await submitAiAssistantFeedback({ user_id: userId, chat_id: feedbackTarget.chatId, rating, response_excerpt: feedbackTarget.response, model: feedbackTarget.model });
+                    setFeedbackSent(rating);
+                  }} className="rounded-lg border border-white/10 px-2.5 py-1 text-slate-300 disabled:opacity-60">
+                    {rating === "helpful" ? "Helpful" : "Not helpful"}
+                  </button>
+                ))}
+                {feedbackSent ? <span className="text-emerald-300">Thanks — this improves Cr8or AI.</span> : null}
+              </div>
+            ) : null}
 
             <form
               onSubmit={(event) => {
