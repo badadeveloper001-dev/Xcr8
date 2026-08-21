@@ -17,7 +17,7 @@ function backendPath(path: string[]): string | null {
     return "/api/v1/admin/incidents/test";
   }
 
-  if (/^incidents\/\d+$/.test(joined)) {
+  if (/^incidents\/\d+(?:\/notes)?$/.test(joined)) {
     return `/api/v1/admin/${joined}`;
   }
 
