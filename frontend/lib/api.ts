@@ -59,6 +59,30 @@ export type GoogleSessionPayload = {
   access_token: string;
 };
 
+export type AdminCreatorItem = {
+  user_id: number;
+  display_name: string;
+  email: string;
+  onboarding_complete: boolean;
+  updated_at?: string | null;
+  platforms: string[];
+  posts: number;
+  published: number;
+  scheduled: number;
+};
+
+export type AdminHealthPayload = {
+  checked_at: string;
+  services: Record<string, { status: string; detail?: string; queued?: number; failed?: number; cron_configured?: boolean; provider_configured?: boolean; model?: string }>;
+};
+
+export type AdminAiQualityPayload = {
+  sample_size: number;
+  models: Record<string, number>;
+  fallback_rate: number;
+  average_latency_ms: number;
+};
+
 export type AdminTopCreatorItem = {
   user_id: number;
   display_name: string;
@@ -553,6 +577,39 @@ export async function getAdminOverview(accessCode: string): Promise<AdminOvervie
       "x-admin-code": accessCode,
     },
     timeout: 30_000,
+  });
+  return data;
+}
+
+export async function getAdminCreators(accessCode: string, query = ""): Promise<{ items: AdminCreatorItem[]; count: number }> {
+  const { data } = await apiClient.get<{ items: AdminCreatorItem[]; count: number }>("/admin/data/creators", {
+    params: query ? { q: query } : undefined,
+    headers: { "x-admin-code": accessCode },
+    timeout: 30_000,
+  });
+  return data;
+}
+
+export async function getAdminContent(accessCode: string): Promise<{ items: Array<{ post_id: number; user_id: number; title: string; status: string; created_at?: string | null; schedules: Array<{ schedule_id: number; platform: string; scheduled_for: string; queue_status: string }> }> }> {
+  const { data } = await apiClient.get("/admin/data/content", {
+    headers: { "x-admin-code": accessCode },
+    timeout: 30_000,
+  });
+  return data;
+}
+
+export async function getAdminHealth(accessCode: string): Promise<AdminHealthPayload> {
+  const { data } = await apiClient.get<AdminHealthPayload>("/admin/data/health", {
+    headers: { "x-admin-code": accessCode },
+    timeout: 15_000,
+  });
+  return data;
+}
+
+export async function getAdminAiQuality(accessCode: string): Promise<AdminAiQualityPayload> {
+  const { data } = await apiClient.get<AdminAiQualityPayload>("/admin/data/ai-quality", {
+    headers: { "x-admin-code": accessCode },
+    timeout: 15_000,
   });
   return data;
 }
