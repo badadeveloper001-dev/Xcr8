@@ -7,7 +7,7 @@ from time import perf_counter
 
 from openai import OpenAI
 
-from app.core.config import settings
+from app.core.config import create_chat_completion, settings
 
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,7 @@ def detect_caption_language(text: str) -> dict:
 
     for attempt in range(max_retries + 1):
         try:
-            completion = client.chat.completions.create(
+            completion = create_chat_completion(client,
                 model=settings.openai_model,
                 temperature=0,
                 response_format={"type": "json_object"},
@@ -370,7 +370,7 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
     for attempt in range(max_retries + 1):
         started = perf_counter()
         try:
-            completion = client.chat.completions.create(
+            completion = create_chat_completion(client,
                 model=settings.openai_model,
                 temperature=0.7,
                 response_format={"type": "json_object"},
