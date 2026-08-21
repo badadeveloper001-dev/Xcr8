@@ -703,3 +703,23 @@ def retry_failed_schedule(
         "scheduled_for": schedule.scheduled_for.isoformat(),
         "message": "Schedule queued for the next secure dispatcher run.",
     }
+
+
+@router.post("/incidents/{incident_id}/notes")
+def add_incident_note(incident_id: int, payload: dict, request: Request, x_admin_code: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+    """Append a timestamped operational note to an incident timeline."""
+    _require_admin_access(x_admin_code, request)
+    incident = db.get(PulseIncident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    note = str(payload.get("note") or "").strip()
+    if not note:
+        raise HTTPException(status_code=422, detail="A note is required")
+    meta = dict(incident.incident_meta or {})
+    timeline = list(meta.get("timeline") or [])
+    timeline.append({"type": "note", "author": str(payload.get("author") or "Admin").strip()[:80], "note": note[:2000], "created_at": datetime.now(tz=UTC).isoformat()})
+    meta["timeline"] = timeline[-40:]
+    incident.incident_meta = meta
+    db.add(incident)
+    db.commit()
+    return {"incident_id": incident.id, "timeline": meta["timeline"]}
