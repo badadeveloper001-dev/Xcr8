@@ -109,6 +109,7 @@ export default function CalendarPage() {
                     </span>
                     <span className="text-xs text-slate-500">{item.timezone}</span>
                   </div>
+                  {item.status === "failed" ? <p className="mt-1 text-xs text-rose-300">{item.failure_reason || "Publishing failed. Reconnect the platform or try again."}</p> : null}
                 </div>
 
                 <span
