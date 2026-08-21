@@ -7,7 +7,7 @@ from time import perf_counter
 
 from openai import OpenAI
 
-from app.core.config import settings
+from app.core.config import create_chat_completion, settings
 
 
 logger = logging.getLogger(__name__)
@@ -476,7 +476,7 @@ def generate_assistant_reply(payload: dict) -> dict:
                 web_results_text = _format_search_results(search_results)
                 logger.info("Web search for '%s' returned %d results.", user_message[:60], len(search_results))
 
-        completion = client.chat.completions.create(
+        completion = create_chat_completion(client,
             model=selected_model,
             temperature=0.75,
             response_format={"type": "json_object"},
