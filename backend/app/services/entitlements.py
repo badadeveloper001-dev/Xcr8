@@ -213,15 +213,26 @@ def _feature_error(plan: PlanConfig, resource: str) -> HTTPException:
     )
 
 
-def require_feature(db: Session, user_id: int, feature: Literal["image_generation", "voiceover"]) -> PlanConfig:
-    user = _lock_user(db, user_id)
-    plan = plan_for_user(user)
-    limit = plan.image_generations if feature == "image_generation" else plan.voiceovers
+def assert_feature(
+    plan: PlanConfig,
+    feature: Literal["image_generation", "voiceover", "high_quality_image"],
+) -> PlanConfig:
+    if feature == "image_generation":
+        limit = plan.image_generations
+    elif feature == "voiceover":
+        limit = plan.voiceovers
+    else:
+        limit = plan.high_quality_images
     if limit <= 0:
-        db.rollback()
         raise _feature_error(plan, feature)
-    db.rollback()
     return plan
+
+
+def require_feature(db: Session, user_id: int, feature: Literal["image_generation", "voiceover"]) -> PlanConfig:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return assert_feature(plan_for_user(user), feature)
 
 
 def consume_usage(
@@ -328,7 +339,7 @@ def ensure_social_account_capacity(db: Session, user_id: int, platform: str) -> 
     existing = db.scalar(
         select(ConnectedPlatform).where(
             ConnectedPlatform.user_id == user.id,
-            func.lower(ConnectedPlatform.platform.cast(str)) == normalized_platform,
+            ConnectedPlatform.platform == normalized_platform,
         )
     )
     if existing and existing.is_active:
