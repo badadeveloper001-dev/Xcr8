@@ -202,13 +202,14 @@ def _refresh_live_signals(db: Session, user: User, interests: list[str], platfor
         topic = item["topic"]
         if topic.lower() in existing_topics:
             continue
+        traffic_note = f" with {item['traffic']} searches" if item["traffic"] else ""
         signal = TrendSignalEvent(
             user_id=user.id,
             topic=topic,
             platform=platform,
             title=f"{topic} is trending now",
             summary=(
-                f"Live Google Trends signal{f' with {item["traffic"]} searches' if item["traffic"] else ''}. "
+                f"Live Google Trends signal{traffic_note}."
                 "Check the source and map only a genuinely relevant angle to your audience."
             ),
             source_label="Google Trends (live)",
