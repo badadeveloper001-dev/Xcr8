@@ -30,7 +30,7 @@ export default function AdminLoginPage() {
     }
     try {
       await verifyAdminAccess(code);
-      sessionStorage.setItem(ADMIN_SESSION_KEY, code);
+      sessionStorage.setItem(ADMIN_SESSION_KEY, "authenticated");
       router.push("/admin/dashboard");
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not verify admin access."));
