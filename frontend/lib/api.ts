@@ -572,11 +572,11 @@ export async function loginWithGoogle(payload: GoogleSessionPayload): Promise<Se
 }
 
 export async function verifyAdminAccess(accessCode: string): Promise<{ authorized: boolean; expires_in_seconds: number }> {
-  const { data } = await apiClient.post<{ authorized: boolean; expires_in_seconds: number }>("/admin/data/session", {}, {
+  const { data } = await apiClient.get<AdminOverviewPayload>("/admin/data/overview", {
     headers: { "x-admin-code": accessCode },
     timeout: 15_000,
   });
-  return data;
+  return { authorized: true, expires_in_seconds: 3600 };
 }
 
 export async function getAdminOverview(accessCode: string): Promise<AdminOverviewPayload> {
