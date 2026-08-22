@@ -220,6 +220,7 @@ export default function SettingsPage() {
         username: session.username,
         phone: session.phone,
         avatarUrl: session.avatar_url ?? avatarUrl,
+        plan: session.plan,
         onboardingComplete,
       });
 
