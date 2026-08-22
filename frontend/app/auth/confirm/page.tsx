@@ -56,6 +56,7 @@ export default function ConfirmEmailPage() {
           fullName: session.full_name,
           username: session.username,
           avatarUrl: (session as { avatar_url?: string | null }).avatar_url ?? null,
+          plan: session.plan,
           onboardingComplete: session.onboarding_complete,
         });
 
