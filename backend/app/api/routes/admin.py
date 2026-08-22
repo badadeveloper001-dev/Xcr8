@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
-from app.db.models import AIGeneration, ConnectedPlatform, ContentPost, CreatorProfile, PostStatus, PulseIncident, ScheduledPost, TrendSignalEvent, User
+from app.db.models import AIGeneration, ConnectedPlatform, ContentPost, CreatorProfile, PlanTier, PostStatus, PulseIncident, ScheduledPost, TrendSignalEvent, UsageLedger, User
 from app.schemas.mvp import (
     AdminOverview,
     AdminSeriesPoint,
@@ -564,6 +564,7 @@ def admin_creators(
             "user_id": user.id,
             "display_name": user.display_name,
             "email": user.email,
+            "plan": user.plan_tier.value,
             "onboarding_complete": user.onboarding_complete,
             "updated_at": user.updated_at.isoformat() if user.updated_at else None,
             "platforms": [connection.platform.value for connection in connections],
@@ -572,6 +573,73 @@ def admin_creators(
             "scheduled": sum(1 for post in posts if post.status == PostStatus.scheduled),
         })
     return {"items": items, "count": len(items)}
+
+
+@router.patch("/creators/{user_id}/plan")
+def update_creator_plan(
+    user_id: int,
+    payload: dict,
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Grant or change a creator plan through an authenticated, audited owner override."""
+    _require_admin_access(x_admin_code, request)
+
+    requested_plan = str(payload.get("plan") or "").strip().lower()
+    normalized_plan = {"plus": "starter", "agency": "business"}.get(requested_plan, requested_plan)
+    if normalized_plan not in {"free", "starter", "pro", "business"}:
+        raise HTTPException(status_code=422, detail="Plan must be free, starter, pro, or business")
+
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if not user:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    now = datetime.now(tz=UTC)
+    previous_plan = user.plan_tier.value
+    actor = str(payload.get("actor") or "Admin").strip()[:80] or "Admin"
+    note = str(payload.get("note") or "Owner-granted plan override").strip()[:500]
+
+    user.plan_tier = PlanTier(normalized_plan)
+    user.plan_started_at = now
+    user.plan_expires_at = None
+    user.billing_meta = {
+        **(user.billing_meta or {}),
+        "grant_source": "admin_override",
+        "grant_actor": actor,
+        "grant_note": note,
+        "grant_previous_plan": previous_plan,
+        "grant_plan": normalized_plan,
+        "grant_updated_at": now.isoformat(),
+    }
+    db.add(user)
+    db.add(
+        UsageLedger(
+            user_id=user.id,
+            period_key=now.strftime("%Y-%m"),
+            event_type="admin_plan_override",
+            quantity=1,
+            credits_delta=0,
+            balance_after=None,
+            status="granted",
+            event_meta={
+                "previous_plan": previous_plan,
+                "plan": normalized_plan,
+                "actor": actor,
+                "note": note,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(user)
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "previous_plan": previous_plan,
+        "plan": user.plan_tier.value,
+        "updated_at": now.isoformat(),
+        "source": "admin_override",
+    }
 
 
 @router.get("/content")
