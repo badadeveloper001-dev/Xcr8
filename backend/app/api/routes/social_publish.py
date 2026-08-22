@@ -258,8 +258,6 @@ def _oauth_callback_impl(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    ensure_social_account_capacity(db, user_id, platform)
-
     redirect_uri = _redirect_uri()
     token_data = exchange_code_for_token(platform, payload.code, payload.state, redirect_uri)
     if not token_data:
@@ -424,6 +422,8 @@ def _oauth_callback_impl(
         )
     if platform == "instagram":
         auth_meta["source_user_access_token"] = source_user_access_token
+
+    ensure_social_account_capacity(db, user_id, platform)
 
     existing = db.scalar(
         select(ConnectedPlatform).where(
