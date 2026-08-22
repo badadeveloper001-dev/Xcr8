@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { apiClient } from "../../../../frontend/lib/api";
-import { useCreatorStore } from "../../../../frontend/lib/store";
+import { useRouter } from "next/navigation";
+import { MobileShell } from "@/components/mobile-shell";
+import { apiClient } from "@/lib/api";
+import { useCreatorStore } from "@/lib/store";
 
 type PlanItem = {
   id: string;
@@ -28,10 +30,18 @@ function formatStorage(megabytes: number): string {
 }
 
 export default function BillingPage() {
+  const router = useRouter();
+  const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [currentPlan, setCurrentPlan] = useState("free");
   const [message, setMessage] = useState<string | null>(null);
   const userId = useCreatorStore((state) => state.userId);
+
+  useEffect(() => {
+    if (hasHydrated && !userId) {
+      router.replace("/auth/login");
+    }
+  }, [hasHydrated, router, userId]);
 
   useEffect(() => {
     async function load() {
@@ -51,8 +61,10 @@ export default function BillingPage() {
       }
     }
 
-    void load();
-  }, [userId]);
+    if (hasHydrated && userId) {
+      void load();
+    }
+  }, [hasHydrated, userId]);
 
   function showUpgradeStatus(plan: PlanItem) {
     if (!userId) {
@@ -64,8 +76,14 @@ export default function BillingPage() {
     );
   }
 
+  if (!hasHydrated || !userId) return null;
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
+    <MobileShell
+      title="Plans & billing"
+      subtitle="Your credits, plan limits, and secure upgrade options."
+    >
+      <div className="mx-auto max-w-5xl">
       <div className="mb-8">
         <p className="text-sm font-medium text-blue-600">Plans & usage</p>
         <h1 className="mt-1 text-3xl font-semibold">Billing & Plans</h1>
@@ -156,6 +174,7 @@ export default function BillingPage() {
           );
         })}
       </div>
-    </div>
+      </div>
+    </MobileShell>
   );
 }

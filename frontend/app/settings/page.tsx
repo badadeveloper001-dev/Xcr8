@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Bell, Globe2, Link2, LogOut, Moon, Shield } from "lucide-react";
+import { Bell, CreditCard, Globe2, Link2, LogOut, Moon, Shield } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   connectPlatform,
@@ -417,6 +418,35 @@ export default function SettingsPage() {
             >
               {savingProfile ? "Saving..." : "Save profile"}
             </button>
+          </div>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.32, delay: 0.03 }}
+          className="xcr8-panel rounded-2xl border-2 border-violet-300/25 p-4"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-500/15 text-violet-300 light:bg-violet-100 light:text-violet-700">
+                <CreditCard size={18} />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white light:text-slate-900">
+                  Plans, credits & billing
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  View your current plan, monthly limits, credit balance, and future upgrades.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/settings/billing"
+              className="shrink-0 rounded-full border border-violet-400/30 bg-violet-500/15 px-3 py-2 text-xs font-semibold text-violet-200 transition hover:bg-violet-500/25 light:text-violet-700"
+            >
+              View plans
+            </Link>
           </div>
         </motion.section>
 
