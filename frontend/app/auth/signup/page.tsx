@@ -94,6 +94,7 @@ export default function SignupPage() {
             fullName: session.full_name,
             username: session.username,
             avatarUrl: session.avatar_url ?? null,
+            plan: session.plan,
             onboardingComplete: session.onboarding_complete,
           });
           router.push("/onboarding");
@@ -135,6 +136,7 @@ export default function SignupPage() {
         fullName: session.full_name,
         username: session.username,
         avatarUrl: (session as { avatar_url?: string | null }).avatar_url ?? null,
+        plan: session.plan,
         onboardingComplete: session.onboarding_complete,
       });
       router.push("/onboarding");
@@ -180,6 +182,7 @@ export default function SignupPage() {
         fullName: session.full_name,
         username: session.username,
         avatarUrl: (session as { avatar_url?: string | null }).avatar_url ?? null,
+        plan: session.plan,
         onboardingComplete: session.onboarding_complete,
       });
       router.push("/onboarding");

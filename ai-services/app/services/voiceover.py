@@ -275,7 +275,7 @@ def generate_voiceover_audio(payload: dict) -> bytes:
 
     provided_text = str(payload.get("text") or "").strip()
     if provided_text:
-        text = _compact_text(provided_text, 6000)
+        text = _compact_text(provided_text, 4096)
     else:
         script_result = generate_voiceover_script(payload)
         text = _compact_text(
@@ -286,7 +286,7 @@ def generate_voiceover_audio(payload: dict) -> bytes:
                     str(script_result.get("cta") or "").strip(),
                 ]
             ),
-            6000,
+            4096,
         )
 
     if not text:
@@ -311,7 +311,7 @@ def generate_voiceover_audio(payload: dict) -> bytes:
             "Accept": "audio/mpeg",
         },
         json={
-            "model": "tts-1",
+            "model": settings.openai_tts_model,
             "input": text,
             "voice": voice,
             "response_format": "mp3",

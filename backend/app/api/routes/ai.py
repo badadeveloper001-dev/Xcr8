@@ -45,8 +45,8 @@ from app.schemas.mvp import (
     AITrendMapperResponse,
     AITrendSignal,
 )
-from app.services.ai_adapter import ai_service_headers, generate_composed_content, generate_content_ideas
-from app.services.entitlements import consume_usage, plan_for_user, require_feature
+from app.services.ai_adapter import generate_composed_content, generate_content_ideas, post_ai_service
+from app.services.entitlements import consume_usage, plan_for_user, refund_usage, require_feature
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
@@ -1103,7 +1103,7 @@ def image_generate(
             # Starter includes images but explicitly excludes high-quality generation.
             actual_quality = "standard"
 
-    consume_usage(
+    usage_ledger = consume_usage(
         db,
         user.id,
         metric,
@@ -1116,10 +1116,9 @@ def image_generate(
     )
 
     try:
-        response = httpx.post(
-            f"{settings.ai_service_url.rstrip('/')}/image/generate",
-            headers=ai_service_headers(),
-            json={
+        response = post_ai_service(
+            "/image/generate",
+            {
                 "prompt": payload.prompt,
                 "width": payload.width,
                 "height": payload.height,
@@ -1127,12 +1126,13 @@ def image_generate(
             },
             timeout=120.0,
         )
-        response.raise_for_status()
         return response.json()
     except httpx.HTTPStatusError as exc:
-        _raise_ai_service_error(exc, "Image generation failed")
+        refund_usage(db, usage_ledger, reason="image_provider_rejected_request", event_meta={"provider_status": exc.response.status_code})
+        _raise_ai_service_error(exc, "Image provider rejected the request")
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Image generation service unavailable: {exc}") from exc
+        refund_usage(db, usage_ledger, reason="image_provider_unavailable")
+        raise HTTPException(status_code=502, detail="Image provider is unavailable. No Xcr8 credits were used.") from exc
 
 
 @router.post("/voiceover", response_model=AIVoiceoverResponse)
@@ -1146,7 +1146,7 @@ def voiceover(
         raise HTTPException(status_code=404, detail="User not found")
 
     require_feature(db, payload.user_id, "voiceover")
-    consume_usage(
+    usage_ledger = consume_usage(
         db,
         payload.user_id,
         "text_generation",
@@ -1171,10 +1171,9 @@ def voiceover(
     creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
     try:
-        result = httpx.post(
-            f"{settings.ai_service_url.rstrip('/')}/voiceover",
-            headers=ai_service_headers(),
-            json={
+        result = post_ai_service(
+            "/voiceover",
+            {
                 "user_id": payload.user_id,
                 "topic": payload.topic,
                 "platform": payload.platform,
@@ -1190,11 +1189,12 @@ def voiceover(
             },
             timeout=60.0,
         )
-        result.raise_for_status()
     except httpx.HTTPStatusError as exc:
+        refund_usage(db, usage_ledger, reason="voiceover_script_provider_rejected", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Voiceover generation failed")
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Voiceover service unavailable: {exc}") from exc
+        refund_usage(db, usage_ledger, reason="voiceover_script_provider_unavailable")
+        raise HTTPException(status_code=502, detail="Voiceover provider is unavailable. No Xcr8 credits were used.") from exc
 
     return AIVoiceoverResponse(**result.json())
 
@@ -1209,7 +1209,7 @@ def voiceover_audio(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    consume_usage(
+    usage_ledger = consume_usage(
         db,
         payload.user_id,
         "voiceover",
@@ -1234,10 +1234,9 @@ def voiceover_audio(
     creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
     try:
-        result = httpx.post(
-            f"{settings.ai_service_url.rstrip('/')}/voiceover/audio",
-            headers=ai_service_headers(),
-            json={
+        result = post_ai_service(
+            "/voiceover/audio",
+            {
                 "user_id": payload.user_id,
                 "text": payload.text,
                 "topic": payload.topic,
@@ -1253,11 +1252,12 @@ def voiceover_audio(
             },
             timeout=120.0,
         )
-        result.raise_for_status()
     except httpx.HTTPStatusError as exc:
-        _raise_ai_service_error(exc, "Voiceover audio generation failed")
+        refund_usage(db, usage_ledger, reason="voiceover_audio_provider_rejected", event_meta={"provider_status": exc.response.status_code})
+        _raise_ai_service_error(exc, "Voiceover audio provider rejected the request")
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Voiceover audio service unavailable: {exc}") from exc
+        refund_usage(db, usage_ledger, reason="voiceover_audio_provider_unavailable")
+        raise HTTPException(status_code=502, detail="Voiceover audio provider is unavailable. No Xcr8 credits were used.") from exc
 
     return Response(content=result.content, media_type=result.headers.get("content-type", "audio/mpeg"))
 
@@ -1272,7 +1272,7 @@ def assistant(
     if not user:
         return _build_missing_user_assistant_response(payload)
 
-    consume_usage(
+    usage_ledger = consume_usage(
         db,
         user.id,
         "text_generation",
@@ -1322,10 +1322,9 @@ def assistant(
     app_context = _build_app_context(profile, user, db)
 
     try:
-        response = httpx.post(
-            f"{settings.ai_service_url.rstrip('/')}/assistant",
-            headers=ai_service_headers(),
-            json={
+        response = post_ai_service(
+            "/assistant",
+            {
                 "user_id": user.id,
                 "message": payload.message,
                 "language": resolved_language,
@@ -1337,7 +1336,6 @@ def assistant(
             },
             timeout=60.0,
         )
-        response.raise_for_status()
         parsed_response = AIAssistantResponse(**response.json())
 
         if _is_probably_garbled_text(parsed_response.assistant_message):
@@ -1362,7 +1360,13 @@ def assistant(
         _persist_durable_assistant_facts(db, user.id, payload.message)
         parsed_response.chat_id = chat_id
         return parsed_response
-    except Exception:
+    except Exception as exc:
+        refund_usage(
+            db,
+            usage_ledger,
+            reason="assistant_provider_or_response_failure",
+            event_meta={"error_type": exc.__class__.__name__},
+        )
         summary = app_context.get("summary") if isinstance(app_context.get("summary"), dict) else {}
         assistant_message = (
             f"I hit a temporary assistant issue, but I can still help. "

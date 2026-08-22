@@ -13,6 +13,7 @@ type CreatorState = {
   fullName: string | null;
   username: string | null;
   phone: string | null;
+  plan: string;
   onboardingComplete: boolean;
   theme: "dark" | "light" | "system";
   distributionDraft: {
@@ -34,10 +35,12 @@ type CreatorState = {
     username?: string | null;
     phone?: string | null;
     avatarUrl?: string | null;
+    plan?: string;
     onboardingComplete: boolean;
   }) => void;
   clearSession: () => void;
   setAvatarUrl: (avatarUrl: string | null) => void;
+  setPlan: (plan: string) => void;
   setTheme: (theme: "dark" | "light" | "system") => void;
   setDistributionDraft: (payload: CreatorState["distributionDraft"]) => void;
 };
@@ -56,6 +59,7 @@ export const useCreatorStore = create<CreatorState>()(
       fullName: null,
       username: null,
       phone: null,
+      plan: "free",
       onboardingComplete: false,
       theme: "system",
       distributionDraft: null,
@@ -67,6 +71,7 @@ export const useCreatorStore = create<CreatorState>()(
         username,
         phone,
         avatarUrl,
+        plan,
         onboardingComplete,
       }) =>
         set({
@@ -77,6 +82,7 @@ export const useCreatorStore = create<CreatorState>()(
           fullName: fullName ?? displayName,
           username: username ?? null,
           phone: phone ?? null,
+          ...(plan ? { plan } : {}),
           onboardingComplete,
           activeCreatorId: String(userId),
         }),
@@ -89,11 +95,13 @@ export const useCreatorStore = create<CreatorState>()(
           fullName: null,
           username: null,
           phone: null,
+          plan: "free",
           onboardingComplete: false,
           activeCreatorId: null,
           distributionDraft: null,
         }),
       setAvatarUrl: (avatarUrl) => set({ avatarUrl }),
+      setPlan: (plan) => set({ plan }),
       setTheme: (theme) => set({ theme }),
       setDistributionDraft: (distributionDraft) => set({ distributionDraft }),
     }),
@@ -111,6 +119,7 @@ export const useCreatorStore = create<CreatorState>()(
         fullName: state.fullName,
         username: state.username,
         phone: state.phone,
+        plan: state.plan,
         onboardingComplete: state.onboardingComplete,
         theme: state.theme,
         activeCreatorId: state.activeCreatorId,

@@ -69,6 +69,7 @@ class AuthSessionResponse(BaseModel):
     username: str | None = None
     phone: str | None = None
     avatar_url: str | None = None
+    plan: str = "free"
     onboarding_complete: bool
     google_oauth_enabled: bool
 

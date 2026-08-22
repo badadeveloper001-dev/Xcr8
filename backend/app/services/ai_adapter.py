@@ -50,6 +50,42 @@ def ai_service_headers() -> dict[str, str]:
     return {"X-Xcr8-Internal-Token": token} if token else {}
 
 
+
+def post_ai_service(endpoint: str, payload: dict, *, timeout: float = 60.0) -> httpx.Response:
+    """Call the deployed AI service, falling back to the same-origin Vercel mount."""
+    clean_endpoint = "/" + str(endpoint or "").lstrip("/")
+    last_error: Exception | None = None
+
+    for base_url in _ai_service_candidates():
+        try:
+            response = httpx.post(
+                f"{base_url}{clean_endpoint}",
+                headers=ai_service_headers(),
+                json=payload,
+                timeout=timeout,
+            )
+            if response.status_code < 400:
+                return response
+
+            error = httpx.HTTPStatusError(
+                f"AI service returned {response.status_code}",
+                request=response.request,
+                response=response,
+            )
+            last_error = error
+            if response.status_code not in {404, 502, 503, 504}:
+                raise error
+        except httpx.HTTPStatusError:
+            raise
+        except httpx.RequestError as exc:
+            last_error = exc
+            logger.warning("AI service request to %s failed: %s", base_url, exc)
+
+    if last_error:
+        raise last_error
+    raise httpx.RequestError("No AI service endpoint is available")
+
+
 # ─── Local fallback adaptation ──────────────────────────────
 
 def _language_transform(text: str, language: str) -> str:
