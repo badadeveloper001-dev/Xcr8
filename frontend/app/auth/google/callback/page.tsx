@@ -72,6 +72,7 @@ export default function GoogleCallbackPage() {
           fullName: session.full_name,
           username: session.username,
           avatarUrl: session.avatar_url ?? null,
+          plan: session.plan,
           onboardingComplete: session.onboarding_complete,
         });
 
