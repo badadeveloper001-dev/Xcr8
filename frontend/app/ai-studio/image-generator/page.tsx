@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, ImagePlus, RefreshCw, Upload } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
+import { useCreatorStore } from "@/lib/store";
 
 type GenerationMode = "text-to-image" | "image-enhance";
 
@@ -231,6 +232,7 @@ function blobToPreviewDataUrl(blob: Blob): Promise<string> {
 }
 
 export default function ImageGeneratorPage() {
+  const userId = useCreatorStore((state) => state.userId);
   const historyStorageKey = useMemo(() => buildHistoryStorageKey(), []);
 
   const [subject, setSubject] = useState(defaultPreset.subject);
@@ -321,14 +323,21 @@ export default function ImageGeneratorPage() {
       height: String(height),
       seed: String(seed),
       attempts: String(attempts),
+      user_id: String(userId ?? 0),
+      quality: realism === "ultra" ? "high" : "standard",
     });
 
     const response = await fetch(`/api/image/generate?${params.toString()}`, { cache: "no-store" });
     if (!response.ok) {
       let detail = "";
       try {
-        const payload = (await response.json()) as { detail?: string };
-        detail = typeof payload.detail === "string" ? payload.detail.trim() : "";
+        const payload = (await response.json()) as {
+          detail?: string | { message?: string };
+        };
+        detail =
+          typeof payload.detail === "string"
+            ? payload.detail.trim()
+            : payload.detail?.message?.trim() ?? "";
       } catch {
         detail = "";
       }

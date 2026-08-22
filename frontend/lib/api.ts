@@ -11,6 +11,16 @@ export const apiClient = axios.create({
   timeout: 10_000,
 });
 
+function meteredRequestConfig(timeout?: number) {
+  const randomPart =
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return {
+    ...(timeout ? { timeout } : {}),
+    headers: { "Idempotency-Key": randomPart },
+  };
+}
+
 export type SessionPayload = {
   user_id: number;
   email: string;
@@ -720,9 +730,7 @@ export async function createDistributionDraft(
   const { data } = await apiClient.post<DistributionDraftResponse>(
     "/api/v1/distribution/draft",
     payload,
-    {
-      timeout: 60_000,
-    },
+    meteredRequestConfig(60_000),
   );
   return data;
 }
@@ -739,7 +747,11 @@ export async function approveDistribution(payload: {
 }
 
 export async function queueSchedule(payload: SchedulePayload): Promise<QueueScheduleResponse> {
-  const { data } = await apiClient.post<QueueScheduleResponse>("/api/v1/scheduling/queue", payload);
+  const { data } = await apiClient.post<QueueScheduleResponse>(
+    "/api/v1/scheduling/queue",
+    payload,
+    meteredRequestConfig(),
+  );
   return data;
 }
 
@@ -774,9 +786,11 @@ export async function getAiUsageSummary(userId: number): Promise<AiUsageSummaryR
 export async function generateAiBrainstorm(
   payload: AiBrainstormPayload,
 ): Promise<AiBrainstormResponse> {
-  const { data } = await apiClient.post<AiBrainstormResponse>("/api/v1/ai/brainstorm", payload, {
-    timeout: 60_000,
-  });
+  const { data } = await apiClient.post<AiBrainstormResponse>(
+    "/api/v1/ai/brainstorm",
+    payload,
+    meteredRequestConfig(60_000),
+  );
   return data;
 }
 
@@ -826,9 +840,11 @@ export async function submitIntelligenceFeedback(
 }
 
 export async function composeAiContent(payload: AiComposePayload): Promise<AiComposeResponse> {
-  const { data } = await apiClient.post<AiComposeResponse>("/api/v1/ai/compose", payload, {
-    timeout: 60_000,
-  });
+  const { data } = await apiClient.post<AiComposeResponse>(
+    "/api/v1/ai/compose",
+    payload,
+    meteredRequestConfig(60_000),
+  );
   return data;
 }
 
@@ -847,15 +863,17 @@ export async function markIntelligenceNotificationRead(
 export async function generateAiVoiceover(
   payload: AiVoiceoverPayload,
 ): Promise<AiVoiceoverResponse> {
-  const { data } = await apiClient.post<AiVoiceoverResponse>("/api/v1/ai/voiceover", payload, {
-    timeout: 60_000,
-  });
+  const { data } = await apiClient.post<AiVoiceoverResponse>(
+    "/api/v1/ai/voiceover",
+    payload,
+    meteredRequestConfig(60_000),
+  );
   return data;
 }
 
 export async function generateAiVoiceoverAudio(payload: AiVoiceoverAudioPayload): Promise<Blob> {
   const { data } = await apiClient.post<Blob>("/api/v1/ai/voiceover/audio", payload, {
-    timeout: 120_000,
+    ...meteredRequestConfig(120_000),
     responseType: "blob",
   });
   return data;
@@ -864,9 +882,11 @@ export async function generateAiVoiceoverAudio(payload: AiVoiceoverAudioPayload)
 export async function chatWithAiAssistant(
   payload: AiAssistantPayload,
 ): Promise<AiAssistantResponse> {
-  const { data } = await apiClient.post<AiAssistantResponse>("/api/v1/ai/assistant", payload, {
-    timeout: 60_000,
-  });
+  const { data } = await apiClient.post<AiAssistantResponse>(
+    "/api/v1/ai/assistant",
+    payload,
+    meteredRequestConfig(60_000),
+  );
   return data;
 }
 

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import ContentPost, Platform, PostStatus, ScheduledPost
 from app.schemas.mvp import ScheduleRequest
+from app.services.entitlements import consume_usage
 
 router = APIRouter(prefix="/scheduling", tags=["scheduling"])
 
@@ -20,10 +21,22 @@ _STALE_PROCESSING_AFTER = timedelta(minutes=10)
 
 
 @router.post("/queue")
-def queue_schedule(payload: ScheduleRequest, db: Session = Depends(get_db)) -> dict:
+def queue_schedule(
+    payload: ScheduleRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
     post = db.get(ContentPost, payload.post_id)
     if not post or post.user_id != payload.user_id:
         raise HTTPException(status_code=404, detail="Post not found")
+
+    consume_usage(
+        db,
+        payload.user_id,
+        "scheduled_post",
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/scheduling/queue", "post_id": payload.post_id, "platform": payload.platform},
+    )
 
     schedule = ScheduledPost(
         user_id=payload.user_id,

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.db.models import (
 )
 from app.schemas.mvp import ApprovalRequest, DistributionCreateRequest, DistributionDraftResponse
 from app.services.ai_adapter import detect_caption_language, generate_adaptation
+from app.services.entitlements import consume_usage
 
 router = APIRouter(prefix="/distribution", tags=["distribution"])
 
@@ -24,11 +25,21 @@ router = APIRouter(prefix="/distribution", tags=["distribution"])
 @router.post("/draft", response_model=DistributionDraftResponse)
 def create_distribution_draft(
     payload: DistributionCreateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> DistributionDraftResponse:
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    consume_usage(
+        db,
+        payload.user_id,
+        "text_generation",
+        quantity=max(1, len(payload.selected_platforms)),
+        idempotency_key=idempotency_key,
+        event_meta={"route": "/distribution/draft", "platforms": list(payload.selected_platforms)},
+    )
 
     language_detection = detect_caption_language(payload.master_caption)
     detected_language = str(language_detection.get("language", "english"))

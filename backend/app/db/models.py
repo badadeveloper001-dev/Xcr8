@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -31,9 +31,11 @@ class PostStatus(str, Enum):
 
 class PlanTier(str, Enum):
     free = "free"
-    plus = "plus"
+    starter = "starter"
+    plus = "plus"  # Legacy alias retained for existing rows.
     pro = "pro"
-    agency = "agency"
+    business = "business"
+    agency = "agency"  # Legacy alias retained for existing rows.
 
 
 class User(Base):
@@ -437,3 +439,70 @@ class AIFeedback(Base):
     model_name: Mapped[str] = mapped_column(String(120), default="unknown", index=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+
+class UsagePeriod(Base):
+    __tablename__ = "usage_periods"
+    __table_args__ = (
+        UniqueConstraint("user_id", "period_key", name="uq_usage_period_user_period"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    period_key: Mapped[str] = mapped_column(String(7), index=True)
+    credits_granted: Mapped[int] = mapped_column(Integer, default=0)
+    credits_used: Mapped[int] = mapped_column(Integer, default=0)
+    text_generations: Mapped[int] = mapped_column(Integer, default=0)
+    image_generations: Mapped[int] = mapped_column(Integer, default=0)
+    high_quality_images: Mapped[int] = mapped_column(Integer, default=0)
+    voiceovers: Mapped[int] = mapped_column(Integer, default=0)
+    scheduled_posts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UsageAccount(Base):
+    __tablename__ = "usage_accounts"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    storage_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UsageLedger(Base):
+    __tablename__ = "usage_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    period_key: Mapped[str] = mapped_column(String(7), index=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    quantity: Mapped[int] = mapped_column(BigInteger, default=1)
+    credits_delta: Mapped[int] = mapped_column(Integer, default=0)
+    balance_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="consumed", index=True)
+    event_meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class PaymentEvent(Base):
+    __tablename__ = "payment_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_event_id", name="uq_payment_provider_event"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider_event_id: Mapped[str] = mapped_column(String(160), index=True)
+    provider: Mapped[str] = mapped_column(String(80), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    plan: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    signature_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

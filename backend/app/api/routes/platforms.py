@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, Platform
+from app.services.entitlements import ensure_social_account_capacity
 
 router = APIRouter(prefix="/platforms", tags=["platforms"])
 
@@ -57,6 +58,8 @@ def connect_platform(
 
     if profile_url and not (profile_url.startswith("https://") or profile_url.startswith("http://")):
         raise HTTPException(status_code=400, detail="Profile URL must start with http:// or https://")
+
+    ensure_social_account_capacity(db, user_id, platform)
 
     auth_meta = {
         "connection_method": "manual",

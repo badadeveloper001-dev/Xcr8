@@ -261,16 +261,22 @@ export default function ComposePage() {
       try {
         const uploaded: UploadedMediaItem[] = [];
         for (const file of files) {
+          const uploadIdempotencyKey = crypto.randomUUID();
           // Step 1: ask backend for a Supabase signed upload URL.
           // This is a tiny JSON request — no Vercel payload limit applies.
           let presignResp: Response | null = null;
           try {
             presignResp = await fetch("/_/backend/api/v1/upload/presign", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "Idempotency-Key": uploadIdempotencyKey,
+              },
               body: JSON.stringify({
+                user_id: userId,
                 filename: file.name,
                 content_type: file.type || "application/octet-stream",
+                size_bytes: file.size,
               }),
             });
           } catch (e) {
@@ -326,10 +332,12 @@ export default function ComposePage() {
           // rejects payloads larger than ~4.5 MB through serverless functions).
           const formData = new FormData();
           formData.append("file", file);
+          formData.append("user_id", String(userId));
           let fallbackResp: Response | null = null;
           try {
             fallbackResp = await fetch("/_/backend/api/v1/upload", {
               method: "POST",
+              headers: { "Idempotency-Key": uploadIdempotencyKey },
               body: formData,
             });
           } catch (e) {

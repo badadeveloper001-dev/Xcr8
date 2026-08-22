@@ -44,6 +44,12 @@ def _ai_service_candidates() -> list[str]:
 
     return urls
 
+
+def ai_service_headers() -> dict[str, str]:
+    token = str(settings.ai_internal_token or settings.oauth_state_secret or settings.cron_secret or "").strip()
+    return {"X-Xcr8-Internal-Token": token} if token else {}
+
+
 # ─── Local fallback adaptation ──────────────────────────────
 
 def _language_transform(text: str, language: str) -> str:
@@ -292,6 +298,7 @@ def generate_adaptation(
             with httpx.Client(timeout=10.0) as client:
                 response = client.post(
                     f"{base_url}/caption/adapt",
+                    headers=ai_service_headers(),
                     json={
                         "text": text,
                         "platform": platform,
@@ -327,6 +334,7 @@ def detect_caption_language(text: str) -> dict:
             with httpx.Client(timeout=10.0) as client:
                 response = client.post(
                     f"{base_url}/caption/detect-language",
+                    headers=ai_service_headers(),
                     json={"text": cleaned},
                 )
                 response.raise_for_status()
@@ -349,6 +357,7 @@ def generate_content_ideas(payload: dict) -> dict:
             with httpx.Client(timeout=20.0) as client:
                 response = client.post(
                     f"{base_url}/ideas/generate",
+                    headers=ai_service_headers(),
                     json=payload,
                 )
                 response.raise_for_status()
@@ -406,6 +415,7 @@ def generate_composed_content(payload: dict) -> dict:
             with httpx.Client(timeout=30.0) as client:
                 response = client.post(
                     f"{base_url}/compose",
+                    headers=ai_service_headers(),
                     json=payload,
                 )
                 response.raise_for_status()

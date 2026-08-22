@@ -45,6 +45,8 @@
 - `PULSE_INTERNAL_TOKEN`: shared secret for internal Pulse event ingestion from workers/services
 - `PULSE_SLOW_REQUEST_MS`: threshold for slow-response incident capture (default `6000`)
 - `CRON_SECRET`: random secret used by Vercel Cron to securely invoke the due-post dispatcher.
+- `BILLING_WEBHOOK_SECRET`: HMAC secret required to activate paid plans through the verified billing webhook.
+- `AI_INTERNAL_TOKEN`: shared high-entropy secret used by the backend to call costly AI microservice routes. Set the same value for backend and AI services.
 - `THREADS_APP_ID` / `THREADS_APP_SECRET`: Threads OAuth credentials. The Meta app must allow the production callback URL at `https://your-domain/auth/platform-callback`.
 
 ## AI Services
@@ -54,6 +56,7 @@
 - `OPENAI_API_KEY`: OpenAI key for caption and memory intelligence
 - `OPENAI_MODEL`: everyday Cr8or AI model (recommended: `gpt-5.4-mini`)
 - `OPENAI_HIGH_REASONING_MODEL`: automatic high-quality model for deep research and strategy (recommended: `gpt-5.4`)
+- `AI_INTERNAL_TOKEN`: must match the backend value; direct public calls to AI generation endpoints are rejected.
 - `PINECONE_API_KEY`: Pinecone API key
 - `PINECONE_ENVIRONMENT`: Pinecone region/env
 
