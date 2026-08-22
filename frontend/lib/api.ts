@@ -890,11 +890,29 @@ export async function generateAiVoiceover(
 }
 
 export async function generateAiVoiceoverAudio(payload: AiVoiceoverAudioPayload): Promise<Blob> {
-  const { data } = await apiClient.post<Blob>("/api/v1/ai/voiceover/audio", payload, {
-    ...meteredRequestConfig(120_000),
-    responseType: "blob",
-  });
-  return data;
+  try {
+    const { data } = await apiClient.post<Blob>("/api/v1/ai/voiceover/audio", payload, {
+      ...meteredRequestConfig(120_000),
+      responseType: "blob",
+    });
+    return data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
+      try {
+        const body = JSON.parse(await error.response.data.text()) as {
+          detail?: string | { message?: string };
+        };
+        const message =
+          typeof body.detail === "string" ? body.detail : body.detail?.message;
+        if (message) throw new Error(message);
+      } catch (blobError) {
+        if (blobError instanceof Error && blobError.message !== "Unexpected end of JSON input") {
+          throw blobError;
+        }
+      }
+    }
+    throw error;
+  }
 }
 
 export async function chatWithAiAssistant(
@@ -1123,6 +1141,9 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
     if (typeof error.message === "string" && error.message.trim().length > 0) {
       return error.message;
     }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
   }
   return fallback;
 }
