@@ -12,10 +12,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
 from app.db import models
-from app.db.models import UsageLedger, UsagePeriod, User
+from app.db.models import PlanTier, UsageLedger, UsagePeriod, User
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.services.entitlements import consume_usage
+from app.services.entitlements import consume_usage, refund_usage
 
 
 # Ensure test database has current schema
@@ -155,6 +155,7 @@ def test_plan_catalog_matches_entitlements():
     assert plans["free"]["monthly_credits"] == 500
     assert plans["free"]["image_generations"] == 0
     assert plans["free"]["voiceovers"] == 0
+    assert plans["starter"]["creator_profiles"] == 3
     assert plans["starter"]["social_accounts"] == 3
     assert plans["pro"]["high_quality_images"] == 10
     assert plans["business"]["storage_megabytes"] == 50 * 1024
@@ -196,5 +197,78 @@ def test_admin_can_grant_business_plan_with_audit_ledger(monkeypatch):
             assert ledger.event_meta["plan"] == "business"
         finally:
             verify_db.close()
+    finally:
+        db.close()
+
+
+
+def test_starter_creator_profile_limit_is_enforced():
+    db = SessionLocal()
+    try:
+        user = User(
+            email="starter-profiles@test.local",
+            display_name="Starter Profiles",
+            plan_tier=PlanTier.starter,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        client = TestClient(app)
+        for index in range(3):
+            response = client.post(
+                "/api/v1/workspaces/",
+                params={"user_id": user.id},
+                json={"name": f"Brand {index + 1}", "description": "Managed creator profile"},
+            )
+            assert response.status_code == 200
+
+        blocked = client.post(
+            "/api/v1/workspaces/",
+            params={"user_id": user.id},
+            json={"name": "Brand 4"},
+        )
+        assert blocked.status_code == 429
+        assert blocked.json()["detail"]["resource"] == "creator_profiles"
+
+        summary = client.get("/api/v1/workspaces/summary", params={"user_id": user.id})
+        assert summary.status_code == 200
+        assert summary.json()["count"] == 3
+        assert summary.json()["limit"] == 3
+    finally:
+        db.close()
+
+
+def test_failed_provider_usage_is_refunded_atomically():
+    db = SessionLocal()
+    try:
+        user = User(
+            email="refund@test.local",
+            display_name="Refund Tester",
+            plan_tier=PlanTier.business,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        ledger = consume_usage(
+            db,
+            user.id,
+            "voiceover",
+            idempotency_key="failed-provider-call",
+            event_meta={"route": "test"},
+        )
+        refund = refund_usage(db, ledger, reason="provider_unavailable")
+        assert refund is not None
+        assert refund.credits_delta == -50
+
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        original = db.get(UsageLedger, ledger.id)
+        assert period.credits_used == 0
+        assert period.voiceovers == 0
+        assert original.status == "refunded"
+
+        duplicate = refund_usage(db, ledger, reason="provider_unavailable")
+        assert duplicate is None
     finally:
         db.close()
