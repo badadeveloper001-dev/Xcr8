@@ -166,7 +166,7 @@ class PulseStatusUpdateRequest(BaseModel):
     resolution_summary: str | None = Field(default=None, max_length=1000)
 
 class PlanUpgradeRequest(BaseModel):
-    plan: str = Field(pattern=r"^(free|plus|pro|agency)$")
+    plan: str = Field(pattern=r"^(free|starter|plus|pro|business|agency)$")
 
 class PlanResponse(BaseModel):
     user_id: int
