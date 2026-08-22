@@ -60,6 +60,8 @@ def health_provider() -> dict[str, str | bool]:
         "service": "ai-services",
         "provider_configured": bool(settings.openai_api_key),
         "model": settings.openai_model,
+        "image_model": settings.openai_image_model,
+        "tts_model": settings.openai_tts_model,
     }
 
 
@@ -100,7 +102,14 @@ def assistant(payload: AssistantRequest) -> AssistantResponse:
 
 @app.post("/image/generate", response_model=ImageGenerateResponse, dependencies=INTERNAL_ONLY)
 def image_generate(payload: ImageGenerateRequest) -> ImageGenerateResponse:
-    result = generate_image(payload.model_dump())
+    try:
+        result = generate_image(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Image provider failed: {exc}") from exc
     return ImageGenerateResponse(**result)
 
 
