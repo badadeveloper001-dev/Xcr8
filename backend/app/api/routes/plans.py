@@ -117,13 +117,20 @@ async def payment_webhook(
     if status not in PAID_WEBHOOK_STATUSES:
         raise HTTPException(status_code=400, detail="Webhook does not represent a verified paid event")
 
+    provider_id = provider.strip().lower()[:80] or "unknown"
+
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # The user lock serializes webhook processing so duplicate events cannot race
     # into two plan mutations.
-    previous = db.scalar(select(PaymentEvent).where(PaymentEvent.provider_event_id == event_id))
+    previous = db.scalar(
+        select(PaymentEvent).where(
+            PaymentEvent.provider == provider_id,
+            PaymentEvent.provider_event_id == event_id,
+        )
+    )
     if previous:
         db.rollback()
         return {"processed": False, "duplicate": True, "event_id": event_id}
@@ -149,7 +156,7 @@ async def payment_webhook(
     db.add(
         PaymentEvent(
             provider_event_id=event_id,
-            provider=provider.strip().lower()[:80] or "unknown",
+            provider=provider_id,
             user_id=user.id,
             plan=plan_id,
             status=status,
