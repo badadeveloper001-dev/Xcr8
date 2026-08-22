@@ -33,9 +33,10 @@ def generate_image(payload: dict) -> dict:
     width = int(payload.get("width") or 1024)
     height = int(payload.get("height") or 1280)
     size = _resolve_size(width, height)
-    quality = str(payload.get("quality") or "high").strip().lower() or "high"
+    requested_quality = str(payload.get("quality") or "standard").strip().lower() or "standard"
+    quality = {"standard": "medium", "hd": "high"}.get(requested_quality, requested_quality)
     if quality not in {"low", "medium", "high"}:
-        quality = "high"
+        quality = "medium"
 
     client = OpenAI(api_key=settings.openai_api_key)
     started = perf_counter()
