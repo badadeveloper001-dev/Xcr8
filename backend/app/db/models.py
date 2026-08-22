@@ -493,9 +493,12 @@ class UsageLedger(Base):
 
 class PaymentEvent(Base):
     __tablename__ = "payment_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_event_id", name="uq_payment_provider_event"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    provider_event_id: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    provider_event_id: Mapped[str] = mapped_column(String(160), index=True)
     provider: Mapped[str] = mapped_column(String(80), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     plan: Mapped[str] = mapped_column(String(32), index=True)
