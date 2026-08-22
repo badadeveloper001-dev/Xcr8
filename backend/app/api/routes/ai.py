@@ -1272,7 +1272,7 @@ def assistant(
     if not user:
         return _build_missing_user_assistant_response(payload)
 
-    consume_usage(
+    usage_ledger = consume_usage(
         db,
         user.id,
         "text_generation",
@@ -1322,10 +1322,9 @@ def assistant(
     app_context = _build_app_context(profile, user, db)
 
     try:
-        response = httpx.post(
-            f"{settings.ai_service_url.rstrip('/')}/assistant",
-            headers=ai_service_headers(),
-            json={
+        response = post_ai_service(
+            "/assistant",
+            {
                 "user_id": user.id,
                 "message": payload.message,
                 "language": resolved_language,
@@ -1337,7 +1336,6 @@ def assistant(
             },
             timeout=60.0,
         )
-        response.raise_for_status()
         parsed_response = AIAssistantResponse(**response.json())
 
         if _is_probably_garbled_text(parsed_response.assistant_message):
@@ -1362,7 +1360,13 @@ def assistant(
         _persist_durable_assistant_facts(db, user.id, payload.message)
         parsed_response.chat_id = chat_id
         return parsed_response
-    except Exception:
+    except Exception as exc:
+        refund_usage(
+            db,
+            usage_ledger,
+            reason="assistant_provider_or_response_failure",
+            event_meta={"error_type": exc.__class__.__name__},
+        )
         summary = app_context.get("summary") if isinstance(app_context.get("summary"), dict) else {}
         assistant_message = (
             f"I hit a temporary assistant issue, but I can still help. "
