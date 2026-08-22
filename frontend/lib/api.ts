@@ -29,6 +29,7 @@ export type SessionPayload = {
   username?: string | null;
   phone?: string | null;
   avatar_url?: string | null;
+  plan: string;
   onboarding_complete: boolean;
   google_oauth_enabled: boolean;
 };
@@ -1139,4 +1140,77 @@ export async function addAdminIncidentNote(accessCode: string, incidentId: numbe
 export async function submitAiAssistantFeedback(payload: { user_id: number; chat_id?: string | null; rating: "helpful" | "not_helpful"; response_excerpt: string; model?: string; comment?: string }): Promise<{ feedback_id: number; rating: string }> {
   const { data } = await apiClient.post<{ feedback_id: number; rating: string }>("/api/v1/ai/assistant/feedback", payload);
   return data;
+}
+
+
+export type PlanUsageResponse = {
+  user_id: number;
+  plan: {
+    id: string;
+    name: string;
+    monthly_credits: number;
+    creator_profiles: number;
+    image_generations: number;
+    high_quality_images: number;
+    voiceovers: number;
+    social_accounts: number;
+    scheduled_posts: number;
+    storage_megabytes: number;
+  };
+  credits: { granted: number; used: number; remaining: number };
+  usage: Record<string, number>;
+};
+
+export type CreatorWorkspace = {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+};
+
+export type CreatorWorkspaceSummary = {
+  items: CreatorWorkspace[];
+  count: number;
+  limit: number;
+  remaining: number;
+  plan: string;
+};
+
+export async function getPlanUsage(userId: number): Promise<PlanUsageResponse> {
+  const { data } = await apiClient.get<PlanUsageResponse>(`/api/v1/plans/${userId}/usage`);
+  return data;
+}
+
+export async function getCreatorWorkspaces(userId: number): Promise<CreatorWorkspaceSummary> {
+  const { data } = await apiClient.get<CreatorWorkspaceSummary>("/api/v1/workspaces/summary", {
+    params: { user_id: userId },
+  });
+  return data;
+}
+
+export async function createCreatorWorkspace(
+  userId: number,
+  payload: { name: string; description?: string | null },
+): Promise<CreatorWorkspace & { limit: number; remaining: number; plan: string }> {
+  const { data } = await apiClient.post("/api/v1/workspaces/", payload, {
+    params: { user_id: userId },
+  });
+  return data;
+}
+
+export async function updateCreatorWorkspace(
+  userId: number,
+  workspaceId: number,
+  payload: { name?: string; description?: string | null },
+): Promise<CreatorWorkspace> {
+  const { data } = await apiClient.patch(`/api/v1/workspaces/${workspaceId}`, payload, {
+    params: { user_id: userId },
+  });
+  return data;
+}
+
+export async function deleteCreatorWorkspace(userId: number, workspaceId: number): Promise<void> {
+  await apiClient.delete(`/api/v1/workspaces/${workspaceId}`, {
+    params: { user_id: userId },
+  });
 }
