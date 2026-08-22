@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
     openai_image_model: str = "gpt-image-1"
+    openai_tts_model: str = "gpt-4o-mini-tts"
     pinecone_api_key: str = ""
     pinecone_environment: str = "us-east-1-aws"
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/xcr8"
