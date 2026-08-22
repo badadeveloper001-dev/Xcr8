@@ -257,11 +257,11 @@ export async function GET(request: NextRequest) {
   const decodedImage = aiPayload.image_base64
     ? Buffer.from(aiPayload.image_base64, "base64")
     : null;
-  const aiServiceBody = decodedImage
-    ? decodedImage.buffer.slice(
+  const aiServiceBody: ArrayBuffer | null = decodedImage
+    ? (decodedImage.buffer.slice(
         decodedImage.byteOffset,
         decodedImage.byteOffset + decodedImage.byteLength,
-      )
+      ) as ArrayBuffer)
     : null;
   if (aiServiceBody) {
     try {
