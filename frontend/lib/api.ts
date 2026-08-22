@@ -73,6 +73,7 @@ export type AdminCreatorItem = {
   user_id: number;
   display_name: string;
   email: string;
+  plan: "free" | "starter" | "plus" | "pro" | "business" | "agency";
   onboarding_complete: boolean;
   updated_at?: string | null;
   platforms: string[];
@@ -606,6 +607,22 @@ export async function getAdminCreators(accessCode: string, query = ""): Promise<
     headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
+  return data;
+}
+
+export async function updateAdminCreatorPlan(
+  accessCode: string,
+  userId: number,
+  plan: "free" | "starter" | "pro" | "business",
+): Promise<{ user_id: number; email: string; previous_plan: string; plan: string; updated_at: string }> {
+  const { data } = await apiClient.patch(
+    `/admin/data/creators/${userId}/plan`,
+    { plan, actor: "Xcr8 Admin", note: "Owner-granted plan override" },
+    {
+      headers: adminHeaders(accessCode),
+      timeout: 30_000,
+    },
+  );
   return data;
 }
 
