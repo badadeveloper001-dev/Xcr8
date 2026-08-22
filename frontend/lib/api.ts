@@ -898,18 +898,17 @@ export async function generateAiVoiceoverAudio(payload: AiVoiceoverAudioPayload)
     return data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
+      let providerMessage = "";
       try {
         const body = JSON.parse(await error.response.data.text()) as {
           detail?: string | { message?: string };
         };
-        const message =
-          typeof body.detail === "string" ? body.detail : body.detail?.message;
-        if (message) throw new Error(message);
-      } catch (blobError) {
-        if (blobError instanceof Error && blobError.message !== "Unexpected end of JSON input") {
-          throw blobError;
-        }
+        providerMessage =
+          (typeof body.detail === "string" ? body.detail : body.detail?.message) || "";
+      } catch {
+        providerMessage = "";
       }
+      if (providerMessage) throw new Error(providerMessage);
     }
     throw error;
   }
