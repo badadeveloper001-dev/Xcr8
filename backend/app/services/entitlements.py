@@ -344,7 +344,6 @@ def ensure_social_account_capacity(db: Session, user_id: int, platform: str) -> 
         )
     )
     if existing and existing.is_active:
-        db.rollback()
         return plan
 
     active_count = int(
@@ -359,7 +358,6 @@ def ensure_social_account_capacity(db: Session, user_id: int, platform: str) -> 
     if active_count >= plan.social_accounts:
         db.rollback()
         raise _quota_error(plan, "social_accounts", plan.social_accounts)
-    db.rollback()
     return plan
 
 
