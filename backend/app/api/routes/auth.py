@@ -28,6 +28,7 @@ from app.schemas.mvp import (
     PasswordResetRequestResponse,
     SignupResponse,
 )
+from app.services.entitlements import effective_plan_id
 from app.services.auth import (
     SupabaseAuthError,
     stable_fallback_user_id,
@@ -86,6 +87,7 @@ def _session_payload(
         username=credential.username if credential else None,
         phone=phone,
         avatar_url=str(preferences.get("avatar_url") or "").strip() or None,
+        plan=effective_plan_id(user),
         onboarding_complete=user.onboarding_complete,
         google_oauth_enabled=settings.google_oauth_enabled,
     )
