@@ -16,6 +16,7 @@ from app.db.models import (
     UsageLedger,
     UsagePeriod,
     User,
+    WorkspaceMembership,
 )
 
 UsageMetric = Literal[
@@ -40,6 +41,7 @@ class PlanConfig:
     image_generations: int
     high_quality_images: int
     voiceovers: int
+    creator_profiles: int
     social_accounts: int
     scheduled_posts: int
     storage_bytes: int
@@ -59,6 +61,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         image_generations=0,
         high_quality_images=0,
         voiceovers=0,
+        creator_profiles=1,
         social_accounts=1,
         scheduled_posts=10,
         storage_bytes=200 * MEBIBYTE,
@@ -72,6 +75,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         image_generations=25,
         high_quality_images=0,
         voiceovers=10,
+        creator_profiles=3,
         social_accounts=3,
         scheduled_posts=100,
         storage_bytes=2 * GIBIBYTE,
@@ -85,6 +89,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         image_generations=100,
         high_quality_images=10,
         voiceovers=50,
+        creator_profiles=10,
         social_accounts=7,
         scheduled_posts=500,
         storage_bytes=10 * GIBIBYTE,
@@ -98,6 +103,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         image_generations=300,
         high_quality_images=300,
         voiceovers=200,
+        creator_profiles=25,
         social_accounts=20,
         scheduled_posts=2_000,
         storage_bytes=50 * GIBIBYTE,
@@ -332,6 +338,75 @@ def consume_usage(
     return ledger
 
 
+
+def refund_usage(
+    db: Session,
+    ledger_or_id: UsageLedger | int,
+    *,
+    reason: str,
+    event_meta: dict | None = None,
+) -> UsageLedger | None:
+    """Atomically restore quota and credits when a metered provider call fails."""
+    ledger_id = ledger_or_id.id if isinstance(ledger_or_id, UsageLedger) else int(ledger_or_id)
+    original = db.scalar(
+        select(UsageLedger).where(UsageLedger.id == ledger_id).with_for_update()
+    )
+    if not original or original.status != "consumed":
+        db.rollback()
+        return None
+
+    metric = str(original.event_type)
+    counter_field = _COUNTER_FIELDS.get(metric)
+    period = db.scalar(
+        select(UsagePeriod)
+        .where(
+            UsagePeriod.user_id == original.user_id,
+            UsagePeriod.period_key == original.period_key,
+        )
+        .with_for_update()
+    )
+    if not period or not counter_field:
+        db.rollback()
+        return None
+
+    quantity = max(1, int(original.quantity or 1))
+    current_count = int(getattr(period, counter_field) or 0)
+    setattr(period, counter_field, max(0, current_count - quantity))
+    if metric == "high_quality_image":
+        period.image_generations = max(0, int(period.image_generations or 0) - quantity)
+    period.credits_used = max(0, int(period.credits_used or 0) - int(original.credits_delta or 0))
+
+    clean_reason = str(reason or "provider_failure").strip()[:240] or "provider_failure"
+    original.status = "refunded"
+    original.event_meta = {
+        **(original.event_meta or {}),
+        "refund_reason": clean_reason,
+        "refunded_at": datetime.now(tz=UTC).isoformat(),
+        **(event_meta or {}),
+    }
+    refund_key = f"refund:{original.id}"
+    refund = UsageLedger(
+        user_id=original.user_id,
+        period_key=original.period_key,
+        event_type=f"{metric}_refund",
+        quantity=quantity,
+        credits_delta=-int(original.credits_delta or 0),
+        balance_after=period.credits_granted - period.credits_used,
+        idempotency_key=refund_key,
+        status="refunded",
+        event_meta={"source_ledger_id": original.id, "reason": clean_reason, **(event_meta or {})},
+    )
+    db.add(period)
+    db.add(original)
+    db.add(refund)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return db.scalar(select(UsageLedger).where(UsageLedger.idempotency_key == refund_key))
+    db.refresh(refund)
+    return refund
+
 def ensure_social_account_capacity(db: Session, user_id: int, platform: str) -> PlanConfig:
     user = _lock_user(db, user_id)
     plan = plan_for_user(user)
@@ -449,6 +524,15 @@ def usage_snapshot(db: Session, user_id: int) -> dict:
             "high_quality_images": period.high_quality_images,
             "voiceovers": period.voiceovers,
             "scheduled_posts": period.scheduled_posts,
+            "creator_profiles": int(
+                db.scalar(
+                    select(func.count(WorkspaceMembership.id)).where(
+                        WorkspaceMembership.user_id == user.id,
+                        WorkspaceMembership.is_owner.is_(True),
+                    )
+                )
+                or 0
+            ),
             "social_accounts": int(
                 db.scalar(
                     select(func.count(ConnectedPlatform.id)).where(
