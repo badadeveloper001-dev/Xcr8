@@ -158,3 +158,43 @@ def test_plan_catalog_matches_entitlements():
     assert plans["starter"]["social_accounts"] == 3
     assert plans["pro"]["high_quality_images"] == 10
     assert plans["business"]["storage_megabytes"] == 50 * 1024
+
+
+def test_admin_can_grant_business_plan_with_audit_ledger(monkeypatch):
+    db = SessionLocal()
+    try:
+        user = User(email="owner-grant@test.local", display_name="Owner Grant Tester")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        user_id = user.id
+
+        monkeypatch.setattr(settings, "admin_access_code", "strong-test-admin-code")
+        client = TestClient(app)
+        response = client.patch(
+            f"/api/v1/admin/creators/{user_id}/plan",
+            json={"plan": "agency", "actor": "Test Admin", "note": "Founder grant"},
+            headers={"x-admin-code": "strong-test-admin-code"},
+        )
+        assert response.status_code == 200
+        assert response.json()["plan"] == "business"
+
+        verify_db = SessionLocal()
+        try:
+            saved_user = verify_db.get(User, user_id)
+            assert saved_user.plan_tier.value == "business"
+            ledger = (
+                verify_db.query(UsageLedger)
+                .filter(
+                    UsageLedger.user_id == user_id,
+                    UsageLedger.event_type == "admin_plan_override",
+                )
+                .one()
+            )
+            assert ledger.status == "granted"
+            assert ledger.event_meta["previous_plan"] == "free"
+            assert ledger.event_meta["plan"] == "business"
+        finally:
+            verify_db.close()
+    finally:
+        db.close()
