@@ -25,6 +25,7 @@ export default function SplashPage() {
             fullName: session.full_name,
             username: session.username,
             avatarUrl: session.avatar_url ?? null,
+            plan: session.plan,
             onboardingComplete: session.onboarding_complete,
           });
           router.replace(session.onboarding_complete ? "/dashboard" : "/onboarding");
@@ -44,6 +45,7 @@ export default function SplashPage() {
               fullName: backendSession.full_name,
               username: backendSession.username,
               avatarUrl: backendSession.avatar_url ?? null,
+              plan: backendSession.plan,
               onboardingComplete: backendSession.onboarding_complete,
             });
             router.replace(backendSession.onboarding_complete ? "/dashboard" : "/onboarding");
