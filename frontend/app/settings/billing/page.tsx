@@ -15,6 +15,7 @@ type PlanItem = {
   image_generations: number;
   high_quality_images: number;
   voiceovers: number;
+  creator_profiles: number;
   social_accounts: number;
   scheduled_posts: number;
   storage_megabytes: number;
@@ -36,6 +37,7 @@ export default function BillingPage() {
   const [currentPlan, setCurrentPlan] = useState("free");
   const [message, setMessage] = useState<string | null>(null);
   const userId = useCreatorStore((state) => state.userId);
+  const setPlan = useCreatorStore((state) => state.setPlan);
 
   useEffect(() => {
     if (hasHydrated && !userId) {
@@ -53,7 +55,9 @@ export default function BillingPage() {
           const usageResponse = await apiClient.get<UsageResponse>(
             `/api/v1/plans/${userId}/usage`,
           );
-          setCurrentPlan(usageResponse.data.plan?.id || "free");
+          const nextPlan = usageResponse.data.plan?.id || "free";
+          setCurrentPlan(nextPlan);
+          setPlan(nextPlan);
         }
       } catch (error) {
         console.error(error);
@@ -64,7 +68,7 @@ export default function BillingPage() {
     if (hasHydrated && userId) {
       void load();
     }
-  }, [hasHydrated, userId]);
+  }, [hasHydrated, setPlan, userId]);
 
   function showUpgradeStatus(plan: PlanItem) {
     if (!userId) {
@@ -139,6 +143,10 @@ export default function BillingPage() {
                 <div>
                   <dt className="text-gray-500">Voiceovers</dt>
                   <dd className="font-medium">{plan.voiceovers.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Creator profiles</dt>
+                  <dd className="font-medium">{plan.creator_profiles.toLocaleString()}</dd>
                 </div>
                 <div>
                   <dt className="text-gray-500">Social accounts</dt>
