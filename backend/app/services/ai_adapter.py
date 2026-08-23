@@ -89,40 +89,18 @@ def post_ai_service(endpoint: str, payload: dict, *, timeout: float = 60.0) -> h
 # ─── Local fallback adaptation ──────────────────────────────
 
 def _language_transform(text: str, language: str) -> str:
-    lang = language.lower()
-    if lang == "nigerian_pidgin":
-        return text.replace(" is ", " na ").replace(" are ", " dey ") + " 🇳🇬"
-    if lang == "yoruba":
-        return text + "\n\nOya, e je ka gbe e lo! 🌍"
-    if lang == "code_switch":
-        return text + "\n\nWe dey run am live — no dulling abeg ⚡"
-    return text
+    """Preserve the creator's words in the deterministic fallback.
+
+    Translation and dialect conversion require a working language model. Mechanical
+    word replacement corrupts words such as "this" and "business", so the safe
+    fallback keeps the source caption intact.
+    """
+    return text.strip()
 
 
 def _platform_style(text: str, platform: str) -> tuple[str, str]:
-    p = platform.lower()
-    if p == "linkedin":
-        styled = f"{text}\n\nTry this structure:\n1) Show your process\n2) Share one proof point\n3) End with one next step"
-        hook = "If you're building in public, this workflow is worth trying this week."
-    elif p == "x":
-        styled = f"{text}\n\nReply with your current workflow and I'll share a tighter version."
-        hook = "Quick take: small systems beat random motivation."
-    elif p == "instagram":
-        styled = f"{text}\n\nSave this and test it on your next content day."
-        hook = "Before your next post, apply this 1-step tweak first."
-    elif p == "tiktok":
-        styled = f"POV: {text}"
-        hook = "Use this opening line and watch retention in the first 3 seconds."
-    elif p == "youtube_shorts":
-        styled = text
-        hook = "Keep this short and concrete so viewers stay till the last second."
-    elif p == "threads":
-        styled = f"{text}\n\nTesting this all week. I'll report the results here."
-        hook = "Trying this in real-time. Join the experiment."
-    else:
-        styled = text
-        hook = "Use a concrete example and invite one specific reply."
-    return styled, hook
+    """Return a source-faithful fallback without invented hooks or canned CTAs."""
+    return text.strip(), ""
 
 
 def _extract_keywords(text: str, max_items: int = 3) -> list[str]:
@@ -158,12 +136,30 @@ def _extract_keywords(text: str, max_items: int = 3) -> list[str]:
     return result
 
 
+_VOLATILE_MEMORY_KEYS = {
+    "last_master_caption",
+    "last_caption",
+    "last_prompt",
+    "last_assistant_reply",
+    "conversation_history",
+    "session_history",
+}
+
+
 def _memory_hint(creator_memory: dict) -> str:
+    """Use only durable creator facts; never recycle a previous post into a new one."""
     facts = creator_memory.get("memory_facts", [])
-    if isinstance(facts, list) and facts:
-        first = str(facts[0]).strip()
-        if first:
-            return first
+    if not isinstance(facts, list):
+        return ""
+
+    for raw_fact in facts:
+        fact = str(raw_fact).strip()
+        if not fact:
+            continue
+        key = fact.split(":", 1)[0].strip().lower().replace(" ", "_")
+        if key in _VOLATILE_MEMORY_KEYS or key.startswith(("last_", "recent_")):
+            continue
+        return fact[:240]
     return ""
 
 
@@ -202,10 +198,6 @@ def _local_adapt(text: str, platform: str, language: str, creator_memory: dict) 
     styled, hook = _platform_style(lang_text, platform)
 
     adapted = styled.strip()
-
-    memory_hint = _memory_hint(creator_memory)
-    if memory_hint:
-        adapted = f"{adapted}\n\nCreator note: {memory_hint}"
 
     limit = _LIMITS.get(platform, 2200)
     return {
@@ -331,7 +323,7 @@ def generate_adaptation(
     last_error: Exception | None = None
     for base_url in _ai_service_candidates():
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 response = client.post(
                     f"{base_url}/caption/adapt",
                     headers=ai_service_headers(),
@@ -367,7 +359,7 @@ def detect_caption_language(text: str) -> dict:
     last_error: Exception | None = None
     for base_url in _ai_service_candidates():
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=httpx.Timeout(25.0, connect=8.0)) as client:
                 response = client.post(
                     f"{base_url}/caption/detect-language",
                     headers=ai_service_headers(),
