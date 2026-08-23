@@ -8,9 +8,30 @@ from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
 from app.db.models import User, Workspace, WorkspaceMembership
+from app.db.session import engine
 from app.services.entitlements import plan_for_user
 
-router = APIRouter(prefix="/workspaces", tags=["workspaces"])
+_workspace_schema_ready = False
+
+
+def _ensure_workspace_schema() -> None:
+    """Create managed-profile tables on first use when serverless lifespan hooks are skipped."""
+    global _workspace_schema_ready
+    if _workspace_schema_ready:
+        return
+    Workspace.metadata.create_all(
+        bind=engine,
+        tables=[Workspace.__table__, WorkspaceMembership.__table__],
+        checkfirst=True,
+    )
+    _workspace_schema_ready = True
+
+
+router = APIRouter(
+    prefix="/workspaces",
+    tags=["workspaces"],
+    dependencies=[Depends(_ensure_workspace_schema)],
+)
 
 
 def _workspace_payload(workspace: Workspace) -> dict:
