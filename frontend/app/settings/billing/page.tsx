@@ -146,7 +146,7 @@ export default function BillingPage() {
                 </div>
                 <div>
                   <dt className="text-gray-500">Creator profiles</dt>
-                  <dd className="font-medium">{plan.creator_profiles > 0 ? plan.creator_profiles.toLocaleString() : "Pro and Business only"}</dd>
+                  <dd className="font-medium">{plan.creator_profiles > 0 ? plan.creator_profiles.toLocaleString() : "Business only"}</dd>
                 </div>
                 <div>
                   <dt className="text-gray-500">Social accounts</dt>

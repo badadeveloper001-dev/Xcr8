@@ -30,7 +30,7 @@ def test_create_and_list_workspace():
         user = User(
             email="workspace@test.local",
             display_name="Workspace Tester",
-            plan_tier=PlanTier.pro,
+            plan_tier=PlanTier.business,
         )
         db.add(user)
         db.commit()
@@ -162,7 +162,8 @@ def test_plan_catalog_matches_entitlements():
     assert plans["free"]["voiceovers"] == 0
     assert plans["free"]["creator_profiles"] == 0
     assert plans["starter"]["creator_profiles"] == 0
-    assert plans["pro"]["creator_profiles"] == 10
+    assert plans["pro"]["creator_profiles"] == 0
+    assert plans["business"]["creator_profiles"] == 5
     assert plans["starter"]["social_accounts"] == 3
     assert plans["pro"]["high_quality_images"] == 10
     assert plans["business"]["storage_megabytes"] == 50 * 1024
@@ -209,43 +210,69 @@ def test_admin_can_grant_business_plan_with_audit_ledger(monkeypatch):
 
 
 
-def test_managed_creator_profiles_require_pro_or_business():
+def test_managed_creator_profiles_require_business():
     db = SessionLocal()
     try:
         free_user = User(email="free-profiles@test.local", display_name="Free Profiles")
+        starter_user = User(
+            email="starter-profiles@test.local",
+            display_name="Starter Profiles",
+            plan_tier=PlanTier.starter,
+        )
         pro_user = User(
             email="pro-profiles@test.local",
             display_name="Pro Profiles",
             plan_tier=PlanTier.pro,
         )
-        db.add_all([free_user, pro_user])
+        business_user = User(
+            email="business-profiles@test.local",
+            display_name="Business Profiles",
+            plan_tier=PlanTier.business,
+        )
+        blocked_users = [free_user, starter_user, pro_user]
+        db.add_all([*blocked_users, business_user])
         db.commit()
-        db.refresh(free_user)
-        db.refresh(pro_user)
+        for user in [*blocked_users, business_user]:
+            db.refresh(user)
 
         client = TestClient(app)
-        blocked = client.post(
-            "/api/v1/workspaces/",
-            params={"user_id": free_user.id},
-            json={"name": "Free Brand"},
-        )
-        assert blocked.status_code == 403
-        assert blocked.json()["detail"]["code"] == "feature_not_in_plan"
-        assert blocked.json()["detail"]["resource"] == "creator_profiles"
-        assert blocked.json()["detail"]["limit"] == 0
+        for user in blocked_users:
+            blocked = client.post(
+                "/api/v1/workspaces/",
+                params={"user_id": user.id},
+                json={"name": f"{user.display_name} Brand"},
+            )
+            assert blocked.status_code == 403
+            assert blocked.json()["detail"]["code"] == "feature_not_in_plan"
+            assert blocked.json()["detail"]["resource"] == "creator_profiles"
+            assert blocked.json()["detail"]["limit"] == 0
 
-        created = client.post(
-            "/api/v1/workspaces/",
-            params={"user_id": pro_user.id},
-            json={"name": "Pro Brand", "description": "Managed creator profile"},
-        )
-        assert created.status_code == 200
-        assert created.json()["limit"] == 10
+        for index in range(1, 6):
+            created = client.post(
+                "/api/v1/workspaces/",
+                params={"user_id": business_user.id},
+                json={
+                    "name": f"Business Brand {index}",
+                    "description": "Managed creator profile",
+                },
+            )
+            assert created.status_code == 200
+            assert created.json()["limit"] == 5
 
-        summary = client.get("/api/v1/workspaces/summary", params={"user_id": pro_user.id})
+        over_limit = client.post(
+            "/api/v1/workspaces/",
+            params={"user_id": business_user.id},
+            json={"name": "Business Brand 6"},
+        )
+        assert over_limit.status_code == 429
+        assert over_limit.json()["detail"]["code"] == "plan_quota_exceeded"
+        assert over_limit.json()["detail"]["limit"] == 5
+
+        summary = client.get("/api/v1/workspaces/summary", params={"user_id": business_user.id})
         assert summary.status_code == 200
-        assert summary.json()["count"] == 1
-        assert summary.json()["limit"] == 10
+        assert summary.json()["count"] == 5
+        assert summary.json()["limit"] == 5
+        assert summary.json()["remaining"] == 0
     finally:
         db.close()
 

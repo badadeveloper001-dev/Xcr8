@@ -126,7 +126,7 @@ def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db))
                 "resource": "creator_profiles",
                 "plan": plan.id,
                 "limit": 0,
-                "message": "Managed creator profiles require the Pro or Business plan.",
+                "message": "Managed creator profiles require the Business plan.",
             },
         )
 

@@ -4,12 +4,12 @@ The backend is the source of truth for plans, quotas, credits, and entitlements.
 
 ## Monthly entitlements
 
-| Plan | Credits | Text | Images | High quality | Voiceovers | Social accounts | Scheduled posts | Storage |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Free | 500 | 50 | 0 | 0 | 0 | 1 | 10 | 200 MiB |
-| Starter | 5,000 | 500 | 25 | 0 | 10 | 3 | 100 | 2 GiB |
-| Pro | 15,000 | 2,500 | 100 | 10 | 50 | 7 | 500 | 10 GiB |
-| Business | 50,000 | 10,000 | 300 | 300 | 200 | 20 | 2,000 | 50 GiB |
+| Plan | Credits | Text | Images | High quality | Voiceovers | Creator profiles | Social accounts | Scheduled posts | Storage |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Free | 500 | 50 | 0 | 0 | 0 | 0 | 1 | 10 | 200 MiB |
+| Starter | 5,000 | 500 | 25 | 0 | 10 | 0 | 3 | 100 | 2 GiB |
+| Pro | 15,000 | 2,500 | 100 | 10 | 50 | 0 | 7 | 500 | 10 GiB |
+| Business | 50,000 | 10,000 | 300 | 300 | 200 | 5 | 20 | 2,000 | 50 GiB |
 
 Pro's limited high-quality allowance is centrally set to 10 per month. Paid plan prices are intentionally unset until commercial prices and a payment provider are selected.
 
