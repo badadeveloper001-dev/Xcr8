@@ -26,7 +26,11 @@ models.Base.metadata.create_all(bind=engine)
 def test_create_and_list_workspace():
     db = SessionLocal()
     try:
-        user = User(email="workspace@test.local", display_name="Workspace Tester")
+        user = User(
+            email="workspace@test.local",
+            display_name="Workspace Tester",
+            plan_tier=PlanTier.pro,
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -155,7 +159,9 @@ def test_plan_catalog_matches_entitlements():
     assert plans["free"]["monthly_credits"] == 500
     assert plans["free"]["image_generations"] == 0
     assert plans["free"]["voiceovers"] == 0
-    assert plans["starter"]["creator_profiles"] == 3
+    assert plans["free"]["creator_profiles"] == 0
+    assert plans["starter"]["creator_profiles"] == 0
+    assert plans["pro"]["creator_profiles"] == 10
     assert plans["starter"]["social_accounts"] == 3
     assert plans["pro"]["high_quality_images"] == 10
     assert plans["business"]["storage_megabytes"] == 50 * 1024
@@ -202,39 +208,43 @@ def test_admin_can_grant_business_plan_with_audit_ledger(monkeypatch):
 
 
 
-def test_starter_creator_profile_limit_is_enforced():
+def test_managed_creator_profiles_require_pro_or_business():
     db = SessionLocal()
     try:
-        user = User(
-            email="starter-profiles@test.local",
-            display_name="Starter Profiles",
-            plan_tier=PlanTier.starter,
+        free_user = User(email="free-profiles@test.local", display_name="Free Profiles")
+        pro_user = User(
+            email="pro-profiles@test.local",
+            display_name="Pro Profiles",
+            plan_tier=PlanTier.pro,
         )
-        db.add(user)
+        db.add_all([free_user, pro_user])
         db.commit()
-        db.refresh(user)
+        db.refresh(free_user)
+        db.refresh(pro_user)
 
         client = TestClient(app)
-        for index in range(3):
-            response = client.post(
-                "/api/v1/workspaces/",
-                params={"user_id": user.id},
-                json={"name": f"Brand {index + 1}", "description": "Managed creator profile"},
-            )
-            assert response.status_code == 200
-
         blocked = client.post(
             "/api/v1/workspaces/",
-            params={"user_id": user.id},
-            json={"name": "Brand 4"},
+            params={"user_id": free_user.id},
+            json={"name": "Free Brand"},
         )
-        assert blocked.status_code == 429
+        assert blocked.status_code == 403
+        assert blocked.json()["detail"]["code"] == "feature_not_in_plan"
         assert blocked.json()["detail"]["resource"] == "creator_profiles"
+        assert blocked.json()["detail"]["limit"] == 0
 
-        summary = client.get("/api/v1/workspaces/summary", params={"user_id": user.id})
+        created = client.post(
+            "/api/v1/workspaces/",
+            params={"user_id": pro_user.id},
+            json={"name": "Pro Brand", "description": "Managed creator profile"},
+        )
+        assert created.status_code == 200
+        assert created.json()["limit"] == 10
+
+        summary = client.get("/api/v1/workspaces/summary", params={"user_id": pro_user.id})
         assert summary.status_code == 200
-        assert summary.json()["count"] == 3
-        assert summary.json()["limit"] == 3
+        assert summary.json()["count"] == 1
+        assert summary.json()["limit"] == 10
     finally:
         db.close()
 

@@ -137,18 +137,18 @@ def detect_caption_language(text: str) -> dict:
     segments = _detect_language_segments(cleaned)
     profile = _build_language_profile(segments)
 
-    if not settings.openai_api_key:
+    if not settings.openai_api_key and not settings.deepseek_api_key:
         return {
             "language": profile["language"],
             "confidence": 0.65,
             "method": "heuristic",
-            "model": "rule-fallback-no-api-key",
+            "model": "rule-fallback-no-ai-provider",
             "secondary_language": profile["secondary_language"],
             "is_mixed": profile["is_mixed"],
             "segments": profile["segments"],
         }
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
     max_retries = 1
 
     for attempt in range(max_retries + 1):
@@ -199,7 +199,7 @@ def detect_caption_language(text: str) -> dict:
             }
         except Exception as exc:
             logger.warning(
-                "OpenAI language detection failed (attempt %s/%s): %s",
+                "AI language detection failed (attempt %s/%s): %s",
                 attempt + 1,
                 max_retries + 1,
                 exc,
@@ -209,7 +209,7 @@ def detect_caption_language(text: str) -> dict:
         "language": profile["language"],
         "confidence": 0.6,
         "method": "heuristic",
-        "model": "rule-fallback-after-openai-error",
+        "model": "rule-fallback-after-provider-error",
         "secondary_language": profile["secondary_language"],
         "is_mixed": profile["is_mixed"],
         "segments": profile["segments"],
@@ -358,12 +358,12 @@ def _build_contextual_hashtags(source_text: str, platform: str, language: str) -
 
 
 def adapt_caption(text: str, platform: str, language: str, creator_memory: dict) -> dict:
-    if not settings.openai_api_key:
+    if not settings.openai_api_key and not settings.deepseek_api_key:
         fallback = _fallback_caption(text, platform, language, creator_memory)
-        fallback["model"] = "rule-fallback-no-api-key"
+        fallback["model"] = "rule-fallback-no-ai-provider"
         return fallback
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
     max_retries = 2
     last_error: Exception | None = None
 
@@ -444,14 +444,14 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
         except Exception as exc:
             last_error = exc
             logger.warning(
-                "OpenAI caption generation failed (attempt %s/%s): %s",
+                "AI caption generation failed (attempt %s/%s): %s",
                 attempt + 1,
                 max_retries + 1,
                 exc,
             )
 
     fallback = _fallback_caption(text, platform, language, creator_memory)
-    fallback["model"] = "rule-fallback-after-openai-error"
+    fallback["model"] = "rule-fallback-after-provider-error"
     fallback["prompt_template_version"] = PROMPT_TEMPLATE_VERSION
     if last_error:
         fallback["error"] = str(last_error)

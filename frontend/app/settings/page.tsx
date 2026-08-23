@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Bell, CreditCard, Globe2, Link2, LogOut, Moon, Plus, Shield, Trash2 } from "lucide-react";
+import { DeviceMediaPicker } from "@/components/device-media-picker";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   connectPlatform,
@@ -53,7 +54,6 @@ export default function SettingsPage() {
   const setSession = useCreatorStore((s) => s.setSession);
   const avatarUrl = useCreatorStore((s) => s.avatarUrl);
   const setAvatarUrl = useCreatorStore((s) => s.setAvatarUrl);
-  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -141,6 +141,8 @@ export default function SettingsPage() {
   const profileCompleteness = Math.round((filledProfileFields / 2) * 100);
   const currentPlanName =
     planUsage?.plan.name || (plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "Free");
+  const canManageCreatorProfiles =
+    (planUsage?.plan.creator_profiles ?? (plan === "pro" || plan === "business" ? 1 : 0)) > 0;
 
   const createWorkspaceMutation = useMutation({
     mutationFn: () =>
@@ -319,9 +321,6 @@ export default function SettingsPage() {
       setError(getApiErrorMessage(err, "Could not upload profile picture."));
     } finally {
       setUploadingAvatar(false);
-      if (avatarInputRef.current) {
-        avatarInputRef.current.value = "";
-      }
     }
   };
 
@@ -393,28 +392,16 @@ export default function SettingsPage() {
             ))}
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void handleAvatarUpload(file);
-                }
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={uploadingAvatar}
-              className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
-            >
-              {uploadingAvatar ? "Uploading..." : "Change profile picture"}
-            </button>
-          </div>
+          <DeviceMediaPicker
+            kind="image"
+            disabled={uploadingAvatar}
+            photoLabel={uploadingAvatar ? "Uploading..." : "Choose profile photo"}
+            className="mt-3"
+            onFiles={(files) => {
+              const file = files[0];
+              if (file) void handleAvatarUpload(file);
+            }}
+          />
         </motion.section>
 
         {notice ? (
@@ -518,100 +505,127 @@ export default function SettingsPage() {
           transition={{ duration: 0.32, delay: 0.035 }}
           className="xcr8-panel rounded-2xl border-2 border-fuchsia-300/25 p-4"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="xcr8-eyebrow">Creator profiles</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Run separate brands or clients from one account. Your {currentPlanName} plan supports{" "}
-                {workspaceSummary?.limit ?? planUsage?.plan.creator_profiles ?? 1}.
-              </p>
-            </div>
-            <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-2.5 py-1 text-xs font-semibold text-fuchsia-200 light:text-fuchsia-700">
-              {workspaceSummary?.count ?? 0}/{workspaceSummary?.limit ?? planUsage?.plan.creator_profiles ?? 1}
-            </span>
-          </div>
+          {canManageCreatorProfiles ? (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="xcr8-eyebrow">Creator profiles</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Run separate brands or clients from one account. Your {currentPlanName} plan
+                    supports {workspaceSummary?.limit ?? planUsage?.plan.creator_profiles ?? 0}.
+                  </p>
+                </div>
+                <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-2.5 py-1 text-xs font-semibold text-fuchsia-200 light:text-fuchsia-700">
+                  {workspaceSummary?.count ?? 0}/
+                  {workspaceSummary?.limit ?? planUsage?.plan.creator_profiles ?? 0}
+                </span>
+              </div>
 
-          <div className="mt-3 space-y-2">
-            {workspacesLoading ? (
-              <p className="text-xs text-slate-500">Loading creator profiles...</p>
-            ) : (workspaceSummary?.items ?? []).length ? (
-              workspaceSummary?.items.map((workspace) => {
-                const selected = activeCreatorId === `workspace:${workspace.id}`;
-                return (
-                  <div key={workspace.id} className="surface-soft flex items-center justify-between gap-3 rounded-xl px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setActiveCreatorId(`workspace:${workspace.id}`)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <p className="truncate text-sm font-semibold text-white light:text-slate-900">
-                        {workspace.name}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {workspace.description || "No profile description yet"}
-                      </p>
-                    </button>
-                    <div className="flex items-center gap-2">
-                      {selected ? (
-                        <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-300 light:text-emerald-700">
-                          Active
-                        </span>
-                      ) : (
+              <div className="mt-3 space-y-2">
+                {workspacesLoading ? (
+                  <p className="text-xs text-slate-500">Loading creator profiles...</p>
+                ) : (workspaceSummary?.items ?? []).length ? (
+                  workspaceSummary?.items.map((workspace) => {
+                    const selected = activeCreatorId === `workspace:${workspace.id}`;
+                    return (
+                      <div
+                        key={workspace.id}
+                        className="surface-soft flex items-center justify-between gap-3 rounded-xl px-3 py-3"
+                      >
                         <button
                           type="button"
                           onClick={() => setActiveCreatorId(`workspace:${workspace.id}`)}
-                          className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-300 light:border-slate-200 light:text-slate-700"
+                          className="min-w-0 flex-1 text-left"
                         >
-                          Switch
+                          <p className="truncate text-sm font-semibold text-white light:text-slate-900">
+                            {workspace.name}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {workspace.description || "No profile description yet"}
+                          </p>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        aria-label={`Delete ${workspace.name}`}
-                        onClick={() => void deleteWorkspaceMutation.mutateAsync(workspace.id)}
-                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-400"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="rounded-xl border border-dashed border-white/10 px-3 py-3 text-xs text-slate-500 light:border-slate-200">
-                Create your first managed creator profile below.
-              </p>
-            )}
-          </div>
+                        <div className="flex items-center gap-2">
+                          {selected ? (
+                            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-300 light:text-emerald-700">
+                              Active
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setActiveCreatorId(`workspace:${workspace.id}`)}
+                              className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-300 light:border-slate-200 light:text-slate-700"
+                            >
+                              Switch
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            aria-label={`Delete ${workspace.name}`}
+                            onClick={() => void deleteWorkspaceMutation.mutateAsync(workspace.id)}
+                            className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-400"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="rounded-xl border border-dashed border-white/10 px-3 py-3 text-xs text-slate-500 light:border-slate-200">
+                    Create your first managed creator profile below.
+                  </p>
+                )}
+              </div>
 
-          {(workspaceSummary?.remaining ?? planUsage?.plan.creator_profiles ?? 1) > 0 ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
-              <input
-                value={workspaceName}
-                onChange={(event) => setWorkspaceName(event.target.value)}
-                className="xcr8-input"
-                placeholder="Profile or brand name"
-              />
-              <input
-                value={workspaceDescription}
-                onChange={(event) => setWorkspaceDescription(event.target.value)}
-                className="xcr8-input"
-                placeholder="Niche, audience, or client notes"
-              />
-              <button
-                type="button"
-                disabled={!workspaceName.trim() || createWorkspaceMutation.isPending}
-                onClick={() => void createWorkspaceMutation.mutateAsync()}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-fuchsia-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-              >
-                <Plus size={14} />
-                Add profile
-              </button>
-            </div>
+              {(workspaceSummary?.remaining ?? planUsage?.plan.creator_profiles ?? 0) > 0 ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
+                  <input
+                    value={workspaceName}
+                    onChange={(event) => setWorkspaceName(event.target.value)}
+                    className="xcr8-input"
+                    placeholder="Profile or brand name"
+                  />
+                  <input
+                    value={workspaceDescription}
+                    onChange={(event) => setWorkspaceDescription(event.target.value)}
+                    className="xcr8-input"
+                    placeholder="Niche, audience, or client notes"
+                  />
+                  <button
+                    type="button"
+                    disabled={!workspaceName.trim() || createWorkspaceMutation.isPending}
+                    onClick={() => void createWorkspaceMutation.mutateAsync()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-fuchsia-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    <Plus size={14} />
+                    Add profile
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-amber-300 light:text-amber-700">
+                  You have reached the creator-profile limit for {currentPlanName}.
+                </p>
+              )}
+            </>
           ) : (
-            <p className="mt-3 text-xs text-amber-300 light:text-amber-700">
-              You have reached the creator-profile limit for {currentPlanName}.
-            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="xcr8-eyebrow">Creator profiles</p>
+                <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
+                  Manage multiple brands and clients with Pro
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Your main account profile stays active. Creating and switching managed profiles
+                  starts on the Pro plan.
+                </p>
+              </div>
+              <Link
+                href="/settings/billing"
+                className="shrink-0 rounded-xl bg-fuchsia-600 px-4 py-2 text-center text-xs font-semibold text-white transition hover:bg-fuchsia-500"
+              >
+                Upgrade to Pro
+              </Link>
+            </div>
           )}
         </motion.section>
 

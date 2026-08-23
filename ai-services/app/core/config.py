@@ -39,24 +39,26 @@ logger = logging.getLogger(__name__)
 
 
 def create_chat_completion(client, **kwargs):
-    """Try OpenAI models first, then DeepSeek when every OpenAI attempt fails."""
+    """Try OpenAI when configured, then DeepSeek, including DeepSeek-only deployments."""
     primary_model = str(kwargs.get("model") or "").strip()
-    primary_error: Exception | None = None
+    last_error: Exception | None = None
 
-    try:
-        return client.chat.completions.create(**kwargs)
-    except Exception as exc:
-        primary_error = exc
-        logger.warning("OpenAI model %s failed: %s", primary_model, exc)
-
-    fallback_model = str(settings.openai_compatibility_model or "").strip()
-    if fallback_model and fallback_model != primary_model:
+    if client is not None:
         try:
-            fallback_kwargs = dict(kwargs)
-            fallback_kwargs["model"] = fallback_model
-            return client.chat.completions.create(**fallback_kwargs)
+            return client.chat.completions.create(**kwargs)
         except Exception as exc:
-            logger.warning("OpenAI compatibility model %s failed: %s", fallback_model, exc)
+            last_error = exc
+            logger.warning("OpenAI model %s failed: %s", primary_model, exc)
+
+        fallback_model = str(settings.openai_compatibility_model or "").strip()
+        if fallback_model and fallback_model != primary_model:
+            try:
+                fallback_kwargs = dict(kwargs)
+                fallback_kwargs["model"] = fallback_model
+                return client.chat.completions.create(**fallback_kwargs)
+            except Exception as exc:
+                last_error = exc
+                logger.warning("OpenAI compatibility model %s failed: %s", fallback_model, exc)
 
     deepseek_key = str(settings.deepseek_api_key or "").strip()
     if deepseek_key:
@@ -67,11 +69,12 @@ def create_chat_completion(client, **kwargs):
             )
             deepseek_kwargs = dict(kwargs)
             deepseek_kwargs["model"] = str(settings.deepseek_model or "deepseek-v4-flash").strip()
-            logger.info("Retrying failed OpenAI request with DeepSeek fallback.")
+            logger.info("Using DeepSeek after OpenAI was unavailable or failed.")
             return deepseek_client.chat.completions.create(**deepseek_kwargs)
         except Exception as exc:
+            last_error = exc
             logger.warning("DeepSeek fallback failed: %s", exc)
 
-    if primary_error:
-        raise primary_error
+    if last_error:
+        raise last_error
     raise RuntimeError("No AI provider is configured.")
