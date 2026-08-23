@@ -167,7 +167,7 @@ export default function PulsePage() {
 
                   <div className="flex gap-2">
                     <input value={notes[incident.id] || ""} onChange={(event) => setNotes((current) => ({ ...current, [incident.id]: event.target.value }))} placeholder="Add evidence, owner update or resolution note" className="xcr8-input !py-2 text-xs" />
-                    <button type="button" disabled={!notes[incident.id]?.trim() || addNote.isPending} onClick={() => addNote.mutate({ id: incident.id, note: notes[incident.id].trim() })} className="rounded-lg border border-white/10 px-3 text-xs text-slate-300 disabled:opacity-50">Add note</button>
+                    <button type="button" disabled={!notes[incident.id]?.trim() || addNote.isPending} onClick={() => addNote.mutate({ id: incident.id, note: notes[incident.id]?.trim() || "" })} className="rounded-lg border border-white/10 px-3 text-xs text-slate-300 disabled:opacity-50">Add note</button>
                   </div>
                 </div>
               ) : null}
