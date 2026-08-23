@@ -144,20 +144,20 @@ export default function ManagedProfilePage() {
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {[
-              ["/settings#connected-platforms", "Connect this profile’s socials"],
-              ["/compose", "Create profile content"],
-              ["/calendar", "Manage profile schedule"],
-              ["/analytics", "View profile analytics"],
-              ["/ai-studio", "Open profile AI Studio"],
-              ["/dashboard", "Open profile dashboard"],
-            ].map(([href, label]) => (
+              { href: "/settings#connected-platforms", label: "Connect this profile’s socials" },
+              { href: "/compose", label: "Create profile content" },
+              { href: "/calendar", label: "Manage profile schedule" },
+              { href: "/analytics", label: "View profile analytics" },
+              { href: "/ai-studio", label: "Open profile AI Studio" },
+              { href: "/dashboard", label: "Open profile dashboard" },
+            ].map((action) => (
               <Link
-                key={href}
-                href={href}
+                key={action.href}
+                href={action.href}
                 onClick={() => setActiveCreatorId(`workspace:${workspaceId}`)}
                 className="surface-soft rounded-xl px-3 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 light:text-slate-700"
               >
-                {label}
+                {action.label}
               </Link>
             ))}
           </div>
