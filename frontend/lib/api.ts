@@ -12,7 +12,7 @@ const apiBaseUrl =
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,
-  timeout: 10_000,
+  timeout: 30_000,
 });
 
 // Managed profiles always use the same deployed backend service. Keeping this path
