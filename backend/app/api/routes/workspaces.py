@@ -3,13 +3,14 @@ from __future__ import annotations
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
 from app.db.models import User, Workspace, WorkspaceMembership
 from app.db.session import engine
 from app.services.entitlements import plan_for_user
+from app.services.profile_scope import SCOPED_MODELS
 
 _workspace_schema_ready = False
 
@@ -198,6 +199,15 @@ def update_workspace(
 @router.delete("/{workspace_id}", response_model=dict)
 def delete_workspace(workspace_id: int, user_id: int, db: Session = Depends(get_db)) -> dict:
     workspace = _owned_workspace(db, user_id, workspace_id)
+    # Preserve the creator's work by moving profile-owned records back to the main account.
+    for model in SCOPED_MODELS:
+        db.execute(
+            update(model)
+            .where(model.workspace_id == workspace.id)
+            .values(workspace_id=None)
+            .execution_options(skip_profile_scope=True)
+        )
+
     memberships = list(
         db.scalars(select(WorkspaceMembership).where(WorkspaceMembership.workspace_id == workspace.id))
     )
