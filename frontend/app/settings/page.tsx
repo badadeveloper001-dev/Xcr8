@@ -27,6 +27,7 @@ import { useCreatorStore } from "@/lib/store";
 import { updateAvatarUrl } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 const platforms = [
   { id: "instagram", label: "Instagram", cls: "badge-ig" },
@@ -54,6 +55,7 @@ export default function SettingsPage() {
   const setSession = useCreatorStore((s) => s.setSession);
   const avatarUrl = useCreatorStore((s) => s.avatarUrl);
   const setAvatarUrl = useCreatorStore((s) => s.setAvatarUrl);
+  const { activeName, ownerName, isManaged } = useActiveCreatorIdentity();
 
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -349,12 +351,16 @@ export default function SettingsPage() {
             </div>
             <div>
               <p className="text-lg font-semibold text-white light:text-slate-900">
-                {displayName ?? "Creator"}
+                {activeName}
               </p>
               <p className="text-xs text-slate-500">
-                Keep this profile synced with your creator identity and publishing connections.
+                {isManaged
+                  ? `Managed profile under ${ownerName}. Connections and work below belong to this profile.`
+                  : "Keep this profile synced with your creator identity and publishing connections."}
               </p>
-              <p className="text-sm text-slate-500">{email ?? "user@xcr8.app"}</p>
+              <p className="text-sm text-slate-500">
+                {isManaged ? `Owner: ${email ?? ownerName}` : email ?? "user@xcr8.app"}
+              </p>
             </div>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
