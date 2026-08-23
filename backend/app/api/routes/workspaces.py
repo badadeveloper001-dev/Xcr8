@@ -19,7 +19,7 @@ def _ensure_workspace_schema() -> None:
     global _workspace_schema_ready
     if _workspace_schema_ready:
         return
-    Workspace.metadata.create_all(
+    Workspace.__table__.metadata.create_all(
         bind=engine,
         tables=[Workspace.__table__, WorkspaceMembership.__table__],
         checkfirst=True,
