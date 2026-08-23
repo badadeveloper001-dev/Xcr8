@@ -9,9 +9,20 @@ The backend is the source of truth for plans, quotas, credits, and entitlements.
 | Free | 500 | 50 | 0 | 0 | 0 | 0 | 1 | 10 | 200 MiB |
 | Starter | 5,000 | 500 | 25 | 0 | 10 | 0 | 3 | 100 | 2 GiB |
 | Pro | 15,000 | 2,500 | 100 | 10 | 50 | 0 | 7 | 500 | 10 GiB |
-| Business | 50,000 | 10,000 | 300 | 300 | 200 | 5 | 20 | 2,000 | 50 GiB |
+| Business | 50,000 | 10,000 | 300 | 50 | 200 | 5 | 20 | 2,000 | 50 GiB |
 
-Pro's limited high-quality allowance is centrally set to 10 per month. Paid plan prices are intentionally unset until commercial prices and a payment provider are selected.
+Pro's high-quality allowance is 10 per month and Business is capped at 50 per month to protect unit economics.
+
+## Regional pricing
+
+| Plan | Global monthly | Global annual | Nigeria monthly | Nigeria annual |
+| --- | ---: | ---: | ---: | ---: |
+| Free | $0 | $0 | ₦0 | ₦0 |
+| Starter | $9 | $90 | ₦7,500 | ₦75,000 |
+| Pro | $29 | $290 | ₦20,000 | ₦200,000 |
+| Business | $99 | $990 | ₦50,000 | ₦500,000 |
+
+Vercel's `X-Vercel-IP-Country` header selects the display catalog. Nigerian requests receive NGN pricing; other requests receive USD pricing. Regional display is not a payment security boundary: the verified webhook must match the exact configured amount, currency, and billing cycle.
 
 Credit costs are also centralized:
 
@@ -46,13 +57,16 @@ Required payload:
   "user_id": 123,
   "plan": "starter",
   "status": "paid",
+  "currency": "USD",
+  "billing_cycle": "monthly",
+  "amount_minor": 900,
   "customer_id": "optional",
   "subscription_id": "optional",
   "expires_at": "optional ISO-8601 timestamp"
 }
 ```
 
-Allowed paid statuses are `paid`, `succeeded`, `active`, and `completed`. Webhook event IDs are idempotent.
+Allowed paid statuses are `paid`, `succeeded`, `active`, and `completed`. Currency must be `USD` or `NGN`; billing cycle must be `monthly` or `annual`; and `amount_minor` must exactly match the central catalog. Webhook event IDs are idempotent.
 
 ## Atomic accounting
 
