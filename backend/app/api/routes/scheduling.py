@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -13,8 +14,10 @@ from app.db.deps import get_db
 from app.db.models import ContentPost, Platform, PostStatus, ScheduledPost
 from app.schemas.mvp import ScheduleRequest
 from app.services.entitlements import consume_usage
+from app.services.pulse import record_pulse_event
 
 router = APIRouter(prefix="/scheduling", tags=["scheduling"])
+logger = logging.getLogger(__name__)
 
 _DISPATCH_BATCH_SIZE = 20
 _STALE_PROCESSING_AFTER = timedelta(minutes=10)
@@ -58,6 +61,37 @@ def queue_schedule(
         "queue_status": schedule.queue_status,
         "scheduled_for": schedule.scheduled_for.isoformat(),
     }
+
+
+def _record_schedule_failure(
+    db: Session,
+    schedule: ScheduledPost,
+    detail: str,
+    *,
+    http_status: int = 500,
+) -> None:
+    """Report a terminal publishing failure without breaking the dispatcher."""
+    try:
+        record_pulse_event(
+            db,
+            {
+                "event_type": "background_job_failure",
+                "feature": "scheduling_dispatch",
+                "route": "/api/v1/scheduling/dispatch-due",
+                "method": "GET",
+                "http_status": http_status,
+                "detail": detail,
+                "user_id": schedule.user_id,
+                "event_meta": {
+                    "schedule_id": schedule.id,
+                    "post_id": schedule.post_id,
+                    "platform": schedule.platform.value,
+                },
+            },
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Pulse could not record terminal schedule failure %s", schedule.id)
 
 
 def _authorize_cron(authorization: str | None) -> None:
@@ -125,6 +159,13 @@ def dispatch_due_posts(
                 db.add(post)
 
             db.commit()
+            if not published:
+                _record_schedule_failure(
+                    db,
+                    schedule,
+                    f"Scheduled publish returned no successful result for {schedule.platform.value}.",
+                    http_status=502,
+                )
             processed.append(
                 {
                     "schedule_id": schedule.id,
@@ -151,6 +192,13 @@ def dispatch_due_posts(
                         schedule.queue_status = "queued"
                         schedule.scheduled_for = datetime.now(tz=UTC) + timedelta(minutes=2 ** failures)
                 db.commit()
+                if schedule.queue_status == "failed":
+                    _record_schedule_failure(
+                        db,
+                        schedule,
+                        f"Scheduled publish failed after retries: {str(exc.detail)}",
+                        http_status=exc.status_code,
+                    )
             processed.append(
                 {
                     "schedule_id": schedule.id if schedule else None,
@@ -176,6 +224,12 @@ def dispatch_due_posts(
                         schedule.queue_status = "queued"
                         schedule.scheduled_for = datetime.now(tz=UTC) + timedelta(minutes=2 ** failures)
                 db.commit()
+                if schedule.queue_status == "failed":
+                    _record_schedule_failure(
+                        db,
+                        schedule,
+                        f"Scheduled publish failed after retries: {str(exc)}",
+                    )
             processed.append(
                 {
                     "schedule_id": schedule.id if schedule else None,
