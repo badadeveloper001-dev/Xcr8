@@ -19,6 +19,16 @@ type PlanItem = {
   social_accounts: number;
   scheduled_posts: number;
   storage_megabytes: number;
+  pricing: {
+    region: "nigeria" | "global";
+    country_code: string | null;
+    currency: "NGN" | "USD";
+    monthly_amount_minor: number;
+    annual_amount_minor: number;
+    monthly_formatted: string;
+    annual_formatted: string;
+    annual_savings_months: number;
+  };
 };
 
 type UsageResponse = {
@@ -35,6 +45,7 @@ export default function BillingPage() {
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [currentPlan, setCurrentPlan] = useState("free");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [message, setMessage] = useState<string | null>(null);
   const userId = useCreatorStore((state) => state.userId);
   const setPlan = useCreatorStore((state) => state.setPlan);
@@ -75,8 +86,12 @@ export default function BillingPage() {
       setMessage("Sign in to upgrade your plan.");
       return;
     }
+    const quotedPrice =
+      billingCycle === "annual"
+        ? plan.pricing.annual_formatted
+        : plan.pricing.monthly_formatted;
     setMessage(
-      `${plan.name} checkout will be available here when Xcr8 pricing and secure payment are enabled.`,
+      `${plan.name} is ${quotedPrice}/${billingCycle === "annual" ? "year" : "month"} in your region. Secure checkout is the remaining payment-provider step; no plan will activate without a verified payment webhook.`,
     );
   }
 
@@ -92,8 +107,8 @@ export default function BillingPage() {
         <p className="text-sm font-medium text-blue-600">Plans & usage</p>
         <h1 className="mt-1 text-3xl font-semibold">Billing & Plans</h1>
         <p className="mt-2 max-w-2xl text-sm text-gray-500">
-          Compare plan limits here. Secure upgrades will be activated after pricing and payment
-          checkout are finalized.
+          Compare monthly or annual plans. Xcr8 automatically shows Nigerian regional pricing
+          when Vercel detects a Nigerian request; everyone else sees global USD pricing.
         </p>
       </div>
 
@@ -102,6 +117,40 @@ export default function BillingPage() {
           {message}
         </div>
       )}
+
+      {plans.length > 0 ? (
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              {plans[0]?.pricing.region === "nigeria"
+                ? "Nigerian regional pricing"
+                : "Global pricing"}
+            </p>
+            <p className="text-xs text-gray-500">
+              {plans[0]?.pricing.region === "nigeria"
+                ? "Prices are shown in naira based on your detected country."
+                : "Prices are shown in US dollars based on your detected country."}
+            </p>
+          </div>
+          <div className="inline-flex rounded-xl bg-gray-100 p-1">
+            {(["monthly", "annual"] as const).map((cycle) => (
+              <button
+                key={cycle}
+                type="button"
+                onClick={() => setBillingCycle(cycle)}
+                className={`rounded-lg px-4 py-2 text-xs font-semibold capitalize transition ${
+                  billingCycle === cycle
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {cycle}
+                {cycle === "annual" ? " · 2 months free" : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {plans.map((plan) => {
@@ -117,7 +166,18 @@ export default function BillingPage() {
                 <div>
                   <h2 className="text-xl font-semibold">{plan.name}</h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    {plan.price_cents === 0 ? "Free" : "Pricing to be announced"}
+                    {plan.price_cents === 0 ? (
+                      "Free"
+                    ) : (
+                      <>
+                        <span className="text-lg font-semibold text-gray-900">
+                          {billingCycle === "annual"
+                            ? plan.pricing.annual_formatted
+                            : plan.pricing.monthly_formatted}
+                        </span>
+                        <span> / {billingCycle === "annual" ? "year" : "month"}</span>
+                      </>
+                    )}
                   </p>
                 </div>
                 {isCurrent && (
@@ -176,7 +236,11 @@ export default function BillingPage() {
                 disabled={isCurrent}
                 onClick={() => showUpgradeStatus(plan)}
               >
-                {isCurrent ? "Your current plan" : "Upgrade here soon"}
+                {isCurrent
+                  ? "Your current plan"
+                  : plan.id === "free"
+                    ? "Free plan"
+                    : `Choose ${plan.name}`}
               </button>
             </section>
           );

@@ -3,9 +3,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,8 +20,17 @@ PAID_WEBHOOK_STATUSES = {"paid", "succeeded", "active", "completed"}
 
 
 @router.get("/", response_model=list)
-def list_plans() -> list:
-    return [serialize_plan(PLAN_CONFIG[plan_id]) for plan_id in ("free", "starter", "pro", "business")]
+def list_plans(request: Request, response: Response) -> list:
+    # Vercel supplies an ISO country code derived from the request IP. This is
+    # appropriate for regional display; payment activation still requires a
+    # verified provider webhook and must validate the charged currency/amount.
+    country_code = str(request.headers.get("x-vercel-ip-country") or "").strip().upper()[:2]
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "X-Vercel-IP-Country"
+    return [
+        serialize_plan(PLAN_CONFIG[plan_id], country_code=country_code)
+        for plan_id in ("free", "starter", "pro", "business")
+    ]
 
 
 @router.get("/{user_id}/usage", response_model=dict)
@@ -117,6 +126,43 @@ async def payment_webhook(
     if status not in PAID_WEBHOOK_STATUSES:
         raise HTTPException(status_code=400, detail="Webhook does not represent a verified paid event")
 
+    currency = str(payload.get("currency") or "").strip().upper()
+    billing_cycle = str(payload.get("billing_cycle") or "monthly").strip().lower()
+    if currency not in {"USD", "NGN"}:
+        raise HTTPException(status_code=400, detail="Webhook currency must be USD or NGN")
+    if billing_cycle not in {"monthly", "annual"}:
+        raise HTTPException(status_code=400, detail="Webhook billing_cycle must be monthly or annual")
+    try:
+        amount_minor = int(payload.get("amount_minor"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Webhook amount_minor must be an integer")
+
+    plan = PLAN_CONFIG[plan_id]
+    if currency == "NGN":
+        expected_amount_minor = (
+            plan.ngn_annual_price_kobo
+            if billing_cycle == "annual"
+            else plan.ngn_price_kobo
+        )
+    else:
+        expected_amount_minor = (
+            plan.annual_price_cents
+            if billing_cycle == "annual"
+            else plan.price_cents
+        )
+    if amount_minor != expected_amount_minor:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "payment_amount_mismatch",
+                "message": "The verified payment amount does not match the selected Xcr8 plan.",
+                "currency": currency,
+                "billing_cycle": billing_cycle,
+                "expected_amount_minor": expected_amount_minor,
+                "received_amount_minor": amount_minor,
+            },
+        )
+
     provider_id = provider.strip().lower()[:80] or "unknown"
 
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
@@ -136,7 +182,7 @@ async def payment_webhook(
         return {"processed": False, "duplicate": True, "event_id": event_id}
 
     now = datetime.now(tz=UTC)
-    expires_at = None
+    expires_at = now + timedelta(days=365 if billing_cycle == "annual" else 31)
     if payload.get("expires_at"):
         try:
             expires_at = datetime.fromisoformat(str(payload["expires_at"]).replace("Z", "+00:00"))
@@ -151,6 +197,9 @@ async def payment_webhook(
         "customer_id": payload.get("customer_id"),
         "subscription_id": payload.get("subscription_id"),
         "last_event_id": event_id,
+        "currency": currency,
+        "amount_minor": amount_minor,
+        "billing_cycle": billing_cycle,
         "last_verified_at": now.isoformat(),
     }
     db.add(
