@@ -13,6 +13,7 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.db import models
 from app.db.session import SessionLocal, engine
+from app.services.entitlements import expire_plan_if_needed, plan_for_user
 from app.services.pulse import auto_resolve_stable_incidents, is_benign_slow_route, notify_founders_fallback, record_pulse_event
 from app.services.profile_scope import (
     ensure_profile_scope_schema,
@@ -176,16 +177,34 @@ async def pulse_request_middleware(request: Request, call_next):
 
         validation_db = SessionLocal()
         try:
-            membership = validation_db.scalar(
-                select(models.WorkspaceMembership.id).where(
-                    models.WorkspaceMembership.workspace_id == scope,
-                    models.WorkspaceMembership.user_id == scoped_user_id,
+            scoped_user = validation_db.get(models.User, scoped_user_id)
+            if scoped_user:
+                expire_plan_if_needed(validation_db, scoped_user)
+            profile_access_allowed = bool(
+                scoped_user and plan_for_user(scoped_user).creator_profiles > 0
+            )
+            membership = (
+                validation_db.scalar(
+                    select(models.WorkspaceMembership.id).where(
+                        models.WorkspaceMembership.workspace_id == scope,
+                        models.WorkspaceMembership.user_id == scoped_user_id,
+                    )
                 )
+                if profile_access_allowed
+                else None
             )
         finally:
             validation_db.close()
         if not membership:
-            return JSONResponse(status_code=403, content={"detail": "You do not have access to this creator profile."})
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": {
+                        "code": "managed_profiles_unavailable",
+                        "message": "Managed profiles require an active Business plan.",
+                    }
+                },
+            )
 
     scope_token = set_profile_scope(scope)
     try:
