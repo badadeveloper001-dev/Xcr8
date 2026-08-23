@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, ImagePlus, RefreshCw, Upload } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
+import { DeviceMediaPicker } from "@/components/device-media-picker";
 import { useCreatorStore } from "@/lib/store";
 
 type GenerationMode = "text-to-image" | "image-enhance";
@@ -258,6 +259,16 @@ export default function ImageGeneratorPage() {
 
   const canGenerate =
     mode === "image-enhance" ? Boolean(sourceImageFile) : subject.trim().length > 4;
+
+  const handleSourceImageFiles = (files: File[]) => {
+    const file = files[0] ?? null;
+    setSourceImageFile(file);
+    setError(null);
+    setSourceImagePreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -751,29 +762,19 @@ export default function ImageGeneratorPage() {
               <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Source image
               </label>
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-6 text-center transition hover:bg-white/10 light:border-slate-200 light:bg-white/70">
-                <Upload size={18} className="text-cyan-300" />
-                <span className="text-sm font-medium text-slate-200 light:text-slate-800">
-                  {sourceImageFile ? sourceImageFile.name : "Upload an image to edit or enhance"}
-                </span>
-                <span className="text-xs text-slate-500">PNG, JPG, WEBP, or GIF up to 12MB</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    setSourceImageFile(file);
-                    setError(null);
-                    setSourceImagePreview((current) => {
-                      if (current) {
-                        URL.revokeObjectURL(current);
-                      }
-                      return file ? URL.createObjectURL(file) : null;
-                    });
-                  }}
+              <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-5 light:border-slate-200 light:bg-white/70">
+                <div className="flex items-center gap-2">
+                  <Upload size={18} className="text-cyan-300" />
+                  <span className="text-sm font-medium text-slate-200 light:text-slate-800">
+                    {sourceImageFile ? sourceImageFile.name : "Choose an image to edit or enhance"}
+                  </span>
+                </div>
+                <DeviceMediaPicker
+                  kind="image"
+                  className="mt-3"
+                  onFiles={handleSourceImageFiles}
                 />
-              </label>
+              </div>
 
               {sourceImagePreview ? (
                 // eslint-disable-next-line @next/next/no-img-element -- src is a local blob URL
