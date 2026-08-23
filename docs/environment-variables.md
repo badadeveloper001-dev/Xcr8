@@ -44,6 +44,7 @@
 - `PULSE_DISCORD_WEBHOOK_URL`: optional Discord webhook for founder alerts
 - `PULSE_INTERNAL_TOKEN`: shared secret for internal Pulse event ingestion from workers/services
 - `PULSE_SLOW_REQUEST_MS`: threshold for slow-response incident capture (default `6000`)
+- `PULSE_USER_EMAIL_ENABLED`: optional switch for Pulse user emails (default `false`). In-app notifications remain the primary user channel.
 - `CRON_SECRET`: random secret used by Vercel Cron to securely invoke the due-post dispatcher.
 - `BILLING_WEBHOOK_SECRET`: HMAC secret required to activate paid plans through the verified billing webhook.
 - `AI_INTERNAL_TOKEN`: shared high-entropy secret used by the backend to call costly AI microservice routes. Set the same value for backend and AI services.
