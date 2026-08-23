@@ -165,6 +165,71 @@ def effective_plan_id(user: User, now: datetime | None = None) -> str:
     return normalize_plan_id(user.plan_tier)
 
 
+def expire_plan_if_needed(
+    db: Session,
+    user: User,
+    *,
+    now: datetime | None = None,
+    commit: bool = True,
+) -> bool:
+    """Persist an expired paid subscription as Free without deleting user data."""
+    current = now or datetime.now(tz=UTC)
+    previous_plan = normalize_plan_id(user.plan_tier)
+    expires_at = user.plan_expires_at
+    if previous_plan == "free" or expires_at is None:
+        return False
+    normalized_expiry = expires_at.replace(tzinfo=UTC) if expires_at.tzinfo is None else expires_at
+    if normalized_expiry > current:
+        return False
+
+    previous_meta = user.billing_meta if isinstance(user.billing_meta, dict) else {}
+    user.plan_tier = PlanTier.free
+    user.plan_started_at = None
+    user.plan_expires_at = None
+    user.billing_meta = {
+        **previous_meta,
+        "status": "expired",
+        "expired_plan": previous_plan,
+        "expired_at": normalized_expiry.isoformat(),
+        "demoted_at": current.isoformat(),
+    }
+
+    period_key = _period_key(current)
+    period = db.scalar(
+        select(UsagePeriod)
+        .where(UsagePeriod.user_id == user.id, UsagePeriod.period_key == period_key)
+        .with_for_update()
+    )
+    free_credits = PLAN_CONFIG["free"].monthly_credits
+    if period:
+        period.credits_granted = free_credits
+        db.add(period)
+
+    db.add(user)
+    db.add(
+        UsageLedger(
+            user_id=user.id,
+            period_key=period_key,
+            event_type="plan_expired",
+            quantity=1,
+            credits_delta=0,
+            balance_after=max(0, free_credits - int(period.credits_used or 0)) if period else free_credits,
+            status="expired",
+            event_meta={
+                "previous_plan": previous_plan,
+                "expired_at": normalized_expiry.isoformat(),
+                "profiles_preserved": True,
+            },
+        )
+    )
+    if commit:
+        db.commit()
+        db.refresh(user)
+    else:
+        db.flush()
+    return True
+
+
 def plan_for_user(user: User) -> PlanConfig:
     return PLAN_CONFIG[effective_plan_id(user)]
 
@@ -277,6 +342,7 @@ def require_feature(db: Session, user_id: int, feature: Literal["image_generatio
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    expire_plan_if_needed(db, user)
     return assert_feature(plan_for_user(user), feature)
 
 
@@ -300,6 +366,7 @@ def consume_usage(
             return existing
 
     user = _lock_user(db, user_id)
+    expire_plan_if_needed(db, user, commit=False)
     plan = plan_for_user(user)
     period = _usage_period(db, user)
 
@@ -448,6 +515,7 @@ def refund_usage(
 
 def ensure_social_account_capacity(db: Session, user_id: int, platform: str) -> PlanConfig:
     user = _lock_user(db, user_id)
+    expire_plan_if_needed(db, user, commit=False)
     plan = plan_for_user(user)
     normalized_platform = str(platform or "").strip().lower()
 
@@ -498,6 +566,7 @@ def reserve_storage(
             return existing
 
     user = _lock_user(db, user_id)
+    expire_plan_if_needed(db, user, commit=False)
     plan = plan_for_user(user)
     account = db.scalar(select(UsageAccount).where(UsageAccount.user_id == user.id).with_for_update())
     if not account:
@@ -549,6 +618,7 @@ def reserve_storage(
 
 def usage_snapshot(db: Session, user_id: int) -> dict:
     user = _lock_user(db, user_id)
+    expire_plan_if_needed(db, user)
     plan = plan_for_user(user)
     period = _usage_period(db, user)
     account = db.scalar(select(UsageAccount).where(UsageAccount.user_id == user.id))

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
@@ -22,6 +22,87 @@ from app.services.entitlements import consume_usage
 router = APIRouter(prefix="/distribution", tags=["distribution"])
 
 
+def _owned_draft(db: Session, user_id: int, post_id: int) -> ContentPost:
+    post = db.scalar(
+        select(ContentPost).where(
+            ContentPost.id == post_id,
+            ContentPost.user_id == user_id,
+            ContentPost.status == PostStatus.draft,
+        )
+    )
+    if not post:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return post
+
+
+def _draft_payload(db: Session, post: ContentPost) -> dict:
+    meta = post.content_meta if isinstance(post.content_meta, dict) else {}
+    media_urls = [str(value) for value in (meta.get("media_urls") or [post.media_url]) if value]
+    media_types = [str(value) for value in (meta.get("media_types") or [post.media_type]) if value]
+    variants = list(
+        db.scalars(
+            select(PostVariant)
+            .where(PostVariant.post_id == post.id)
+            .order_by(PostVariant.id)
+        )
+    )
+    return {
+        "post_id": post.id,
+        "status": post.status.value,
+        "title": post.title,
+        "master_caption": post.master_caption,
+        "media_url": post.media_url,
+        "media_urls": media_urls,
+        "media_type": post.media_type,
+        "media_types": media_types,
+        "primary_language": post.primary_language,
+        "selected_platforms": list(post.selected_platforms or []),
+        "updated_at": post.updated_at,
+        "variants": [
+            {
+                "platform": variant.platform.value,
+                "language": variant.language,
+                "adapted_caption": variant.adapted_caption,
+                "hashtags": list(variant.hashtags or []),
+                "hook": variant.hook,
+                "approved": variant.approved,
+            }
+            for variant in variants
+        ],
+    }
+
+
+@router.get("/drafts", response_model=list)
+def list_distribution_drafts(
+    user_id: int,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+) -> list:
+    if not db.get(User, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    posts = list(
+        db.scalars(
+            select(ContentPost)
+            .where(
+                ContentPost.user_id == user_id,
+                ContentPost.status == PostStatus.draft,
+            )
+            .order_by(ContentPost.updated_at.desc(), ContentPost.id.desc())
+            .limit(max(1, min(limit, 100)))
+        )
+    )
+    return [_draft_payload(db, post) for post in posts]
+
+
+@router.get("/drafts/{post_id}", response_model=dict)
+def get_distribution_draft(
+    post_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    return _draft_payload(db, _owned_draft(db, user_id, post_id))
+
+
 @router.post("/draft", response_model=DistributionDraftResponse)
 def create_distribution_draft(
     payload: DistributionCreateRequest,
@@ -31,6 +112,12 @@ def create_distribution_draft(
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    existing_post = (
+        _owned_draft(db, payload.user_id, payload.post_id)
+        if payload.post_id is not None
+        else None
+    )
 
     consume_usage(
         db,
@@ -44,25 +131,46 @@ def create_distribution_draft(
     language_detection = detect_caption_language(payload.master_caption)
     detected_language = str(language_detection.get("language", "english"))
 
-    post = ContentPost(
-        user_id=payload.user_id,
-        title=payload.title,
-        media_url=payload.media_url,
-        media_type=payload.media_type,
-        master_caption=payload.master_caption,
-        primary_language=detected_language,
-        selected_platforms=payload.selected_platforms,
-        status=PostStatus.draft,
-        content_meta={
+    if existing_post is not None:
+        post = existing_post
+        db.execute(delete(PostVariant).where(PostVariant.post_id == post.id))
+        db.execute(delete(AIGeneration).where(AIGeneration.post_id == post.id))
+        post.title = payload.title
+        post.media_url = payload.media_url
+        post.media_type = payload.media_type
+        post.master_caption = payload.master_caption
+        post.primary_language = detected_language
+        post.selected_platforms = payload.selected_platforms
+        post.status = PostStatus.draft
+        post.content_meta = {
             "target_languages": [detected_language],
             "detected_language": detected_language,
             "language_detection": language_detection,
             "media_urls": payload.media_urls or [payload.media_url],
             "media_types": payload.media_types or [payload.media_type],
-        },
-    )
-    db.add(post)
-    db.flush()
+        }
+        db.add(post)
+        db.flush()
+    else:
+        post = ContentPost(
+            user_id=payload.user_id,
+            title=payload.title,
+            media_url=payload.media_url,
+            media_type=payload.media_type,
+            master_caption=payload.master_caption,
+            primary_language=detected_language,
+            selected_platforms=payload.selected_platforms,
+            status=PostStatus.draft,
+            content_meta={
+                "target_languages": [detected_language],
+                "detected_language": detected_language,
+                "language_detection": language_detection,
+                "media_urls": payload.media_urls or [payload.media_url],
+                "media_types": payload.media_types or [payload.media_type],
+            },
+        )
+        db.add(post)
+        db.flush()
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
     recent_memories = list(

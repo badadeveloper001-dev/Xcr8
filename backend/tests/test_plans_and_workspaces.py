@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -506,5 +507,143 @@ def test_pulse_delivers_deduplicated_in_app_issue_and_resolution_notifications(m
         )
         assert len(notifications) == 2
         assert "working normally again" in notifications[-1].body
+    finally:
+        db.close()
+
+
+def test_expired_business_plan_demotes_and_preserves_hidden_profiles():
+    db = SessionLocal()
+    try:
+        user = User(
+            email="expired-business@test.local",
+            display_name="Expired Business",
+            plan_tier=PlanTier.business,
+            plan_started_at=datetime.now(tz=UTC) - timedelta(days=40),
+            plan_expires_at=datetime.now(tz=UTC) - timedelta(minutes=1),
+        )
+        workspace = Workspace(name="Preserved Client", slug="preserved-client")
+        db.add_all([user, workspace])
+        db.flush()
+        db.add(
+            WorkspaceMembership(
+                workspace_id=workspace.id,
+                user_id=user.id,
+                role="owner",
+                is_owner=True,
+            )
+        )
+        db.commit()
+        user_id = user.id
+        workspace_id = workspace.id
+
+        client = TestClient(app)
+        expired = client.get("/api/v1/workspaces/summary", params={"user_id": user_id})
+        assert expired.status_code == 200
+        assert expired.json()["plan"] == "free"
+        assert expired.json()["items"] == []
+        assert expired.json()["limit"] == 0
+
+        db.expire_all()
+        demoted = db.get(User, user_id)
+        assert demoted.plan_tier == PlanTier.free
+        assert db.get(Workspace, workspace_id) is not None
+        assert (
+            db.query(WorkspaceMembership)
+            .filter(
+                WorkspaceMembership.user_id == user_id,
+                WorkspaceMembership.workspace_id == workspace_id,
+            )
+            .count()
+            == 1
+        )
+
+        demoted.plan_tier = PlanTier.business
+        demoted.plan_started_at = datetime.now(tz=UTC)
+        demoted.plan_expires_at = datetime.now(tz=UTC) + timedelta(days=31)
+        db.add(demoted)
+        db.commit()
+
+        renewed = client.get("/api/v1/workspaces/summary", params={"user_id": user_id})
+        assert renewed.status_code == 200
+        assert renewed.json()["plan"] == "business"
+        assert [item["id"] for item in renewed.json()["items"]] == [workspace_id]
+    finally:
+        db.close()
+
+
+def test_saved_distribution_draft_can_be_reopened_and_updated(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.distribution.detect_caption_language",
+        lambda _: {"language": "english", "is_mixed": False, "segments": []},
+    )
+    monkeypatch.setattr(
+        "app.api.routes.distribution.generate_adaptation",
+        lambda text, platform, language, creator_memory: {
+            "adapted_caption": f"{platform}: {text}",
+            "hashtags": ["#xcr8"],
+            "hook": "Saved hook",
+            "model": "test-model",
+        },
+    )
+
+    db = SessionLocal()
+    try:
+        user = User(email="saved-draft@test.local", display_name="Saved Draft")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        user_id = user.id
+
+        client = TestClient(app)
+        created = client.post(
+            "/api/v1/distribution/draft",
+            json={
+                "user_id": user_id,
+                "title": "Original draft",
+                "media_url": "https://example.com/one.jpg",
+                "media_urls": ["https://example.com/one.jpg"],
+                "media_types": ["image"],
+                "media_type": "image",
+                "master_caption": "Original caption",
+                "primary_language": "english",
+                "selected_platforms": ["instagram"],
+            },
+        )
+        assert created.status_code == 200
+        post_id = created.json()["post_id"]
+
+        reopened = client.get(
+            f"/api/v1/distribution/drafts/{post_id}",
+            params={"user_id": user_id},
+        )
+        assert reopened.status_code == 200
+        assert reopened.json()["title"] == "Original draft"
+        assert reopened.json()["master_caption"] == "Original caption"
+        assert reopened.json()["variants"][0]["adapted_caption"] == "instagram: Original caption"
+
+        updated = client.post(
+            "/api/v1/distribution/draft",
+            json={
+                "user_id": user_id,
+                "post_id": post_id,
+                "title": "Updated draft",
+                "media_url": "https://example.com/one.jpg",
+                "media_urls": ["https://example.com/one.jpg"],
+                "media_types": ["image"],
+                "media_type": "image",
+                "master_caption": "Updated caption",
+                "primary_language": "english",
+                "selected_platforms": ["threads"],
+            },
+        )
+        assert updated.status_code == 200
+        assert updated.json()["post_id"] == post_id
+
+        db.expire_all()
+        posts = db.query(ContentPost).filter(ContentPost.user_id == user_id).all()
+        assert len(posts) == 1
+        assert posts[0].title == "Updated draft"
+        assert posts[0].master_caption == "Updated caption"
+        assert posts[0].selected_platforms == ["threads"]
     finally:
         db.close()

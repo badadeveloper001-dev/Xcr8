@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getCreatorWorkspaces, type CreatorWorkspace } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -16,6 +17,7 @@ export function useActiveCreatorIdentity(): ActiveCreatorIdentity {
   const userId = useCreatorStore((state) => state.userId);
   const ownerName = useCreatorStore((state) => state.displayName) || "Main account";
   const activeCreatorId = useCreatorStore((state) => state.activeCreatorId);
+  const setActiveCreatorId = useCreatorStore((state) => state.setActiveCreatorId);
 
   const { data } = useQuery({
     queryKey: ["creator-workspaces", userId],
@@ -32,6 +34,17 @@ export function useActiveCreatorIdentity(): ActiveCreatorIdentity {
     activeWorkspaceId && Number.isFinite(activeWorkspaceId)
       ? profiles.find((profile) => profile.id === activeWorkspaceId) ?? null
       : null;
+
+  useEffect(() => {
+    if (
+      data &&
+      userId &&
+      activeCreatorId?.startsWith("workspace:") &&
+      !activeProfile
+    ) {
+      setActiveCreatorId(String(userId));
+    }
+  }, [activeCreatorId, activeProfile, data, setActiveCreatorId, userId]);
 
   return {
     ownerName,

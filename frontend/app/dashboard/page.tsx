@@ -99,6 +99,7 @@ export default function DashboardPage() {
       return data.recent_posts.slice(0, 4).map((post) => ({
         id: String(post.post_id),
         title: post.title,
+        rawStatus: post.status,
         status: post.status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
       }));
     }
@@ -267,7 +268,11 @@ export default function DashboardPage() {
                   <button
                     key={post.id}
                     type="button"
-                    onClick={() => router.push("/compose")}
+                    onClick={() =>
+                      router.push(
+                        post.rawStatus === "draft" ? `/compose?draft=${post.id}` : "/calendar",
+                      )
+                    }
                     className="surface-soft flex w-full items-center justify-between rounded-xl px-3 py-3 text-left"
                   >
                     <div>

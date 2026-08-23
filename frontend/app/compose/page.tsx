@@ -11,6 +11,7 @@ import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-p
 import {
   approveDistribution,
   createDistributionDraft,
+  getDistributionDraft,
   getApiErrorMessage,
   publishPost,
   queueSchedule,
@@ -31,10 +32,14 @@ export default function ComposePage() {
   const queryClient = useQueryClient();
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
+  const activeCreatorId = useCreatorStore((s) => s.activeCreatorId);
   const setDistributionDraft = useCreatorStore((s) => s.setDistributionDraft);
   const distributionDraft = useCreatorStore((s) => s.distributionDraft);
 
   const [title, setTitle] = useState("New Creator Post");
+  const [resumedPostId, setResumedPostId] = useState<number | null>(null);
+  const [restoringDraft, setRestoringDraft] = useState(true);
+  const [localDraftReady, setLocalDraftReady] = useState(false);
   const [mediaItems, setMediaItems] = useState<UploadedMediaItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
@@ -53,6 +58,116 @@ export default function ComposePage() {
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
   }, [hasHydrated, router, userId]);
+
+  const localDraftKey = `xcr8-compose-draft:${userId || "guest"}:${activeCreatorId || "main"}`;
+
+  useEffect(() => {
+    if (!hasHydrated || !userId) return;
+    let cancelled = false;
+
+    async function restoreDraft() {
+      setRestoringDraft(true);
+      setLocalDraftReady(false);
+      const requestedId = Number(
+        new URLSearchParams(window.location.search).get("draft") || 0,
+      );
+
+      if (Number.isInteger(requestedId) && requestedId > 0) {
+        try {
+          const saved = await getDistributionDraft(userId as number, requestedId);
+          if (cancelled) return;
+          setTitle(saved.title || "New Creator Post");
+          setCaption(saved.master_caption || "");
+          setSelectedPlatforms(saved.selected_platforms || []);
+          setMediaItems(
+            (saved.media_urls || [saved.media_url])
+              .filter(Boolean)
+              .map<UploadedMediaItem>((url, index) => ({
+              url,
+              mediaType:
+                saved.media_types?.[index] === "video" ? "video" : "image",
+                name: url.split("/").pop()?.split("?")[0] || `Saved media ${index + 1}`,
+              })),
+          );
+          setResumedPostId(saved.post_id);
+          setDistributionDraft({
+            postId: saved.post_id,
+            variants: saved.variants.map((variant) => ({
+              platform: variant.platform,
+              language: variant.language,
+              adaptedCaption: variant.adapted_caption,
+              approved: variant.approved,
+              hashtags: variant.hashtags,
+              hook: variant.hook,
+            })),
+          });
+          setNotice("Saved draft restored. Continue editing, approve it, or publish when ready.");
+        } catch (err) {
+          if (!cancelled) {
+            setError(getApiErrorMessage(err, "Could not restore this draft."));
+          }
+        }
+      } else {
+        try {
+          const raw = window.localStorage.getItem(localDraftKey);
+          if (raw) {
+            const saved = JSON.parse(raw) as {
+              title?: string;
+              caption?: string;
+              selectedPlatforms?: string[];
+              scheduleAt?: string;
+              mediaItems?: UploadedMediaItem[];
+              postId?: number | null;
+            };
+            if (cancelled) return;
+            setTitle(saved.title || "New Creator Post");
+            setCaption(saved.caption || "");
+            setSelectedPlatforms(saved.selectedPlatforms?.length ? saved.selectedPlatforms : ["instagram", "facebook"]);
+            setScheduleAt(saved.scheduleAt || "");
+            setMediaItems(Array.isArray(saved.mediaItems) ? saved.mediaItems : []);
+            setResumedPostId(saved.postId || null);
+          }
+        } catch {
+          window.localStorage.removeItem(localDraftKey);
+        }
+      }
+
+      if (!cancelled) {
+        setLocalDraftReady(true);
+        setRestoringDraft(false);
+      }
+    }
+
+    void restoreDraft();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCreatorId, hasHydrated, localDraftKey, setDistributionDraft, userId]);
+
+  useEffect(() => {
+    if (!localDraftReady || !userId) return;
+    window.localStorage.setItem(
+      localDraftKey,
+      JSON.stringify({
+        title,
+        caption,
+        selectedPlatforms,
+        scheduleAt,
+        mediaItems,
+        postId: resumedPostId,
+      }),
+    );
+  }, [
+    caption,
+    localDraftKey,
+    localDraftReady,
+    mediaItems,
+    resumedPostId,
+    scheduleAt,
+    selectedPlatforms,
+    title,
+    userId,
+  ]);
 
   const groupedVariants = useMemo(() => {
     const variants = distributionDraft?.variants ?? [];
@@ -90,6 +205,7 @@ export default function ComposePage() {
     try {
       const draft = await createDistributionDraft({
         user_id: userId,
+        ...(resumedPostId ? { post_id: resumedPostId } : {}),
         title,
         media_url: mediaItems[0]?.url ?? "",
         media_urls: mediaItems.map((item) => item.url),
@@ -100,6 +216,7 @@ export default function ComposePage() {
         selected_platforms: selectedPlatforms,
       });
 
+      setResumedPostId(draft.post_id);
       setDistributionDraft({
         postId: draft.post_id,
         variants: draft.variants.map((variant) => ({
@@ -121,7 +238,11 @@ export default function ComposePage() {
       });
 
       await queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
-      setNotice("Draft generated. Review below, then approve and queue.");
+      setNotice(
+        resumedPostId
+          ? "Draft updated. Review below, then approve or publish."
+          : "Draft generated and saved. Review below, then approve or publish.",
+      );
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not generate this draft."));
     } finally {
@@ -162,6 +283,9 @@ export default function ComposePage() {
         queryClient.invalidateQueries({ queryKey: ["dashboard", userId] }),
         queryClient.invalidateQueries({ queryKey: ["calendar", userId] }),
       ]);
+      window.localStorage.removeItem(localDraftKey);
+      setDistributionDraft(null);
+      setResumedPostId(null);
       setNotice("Approved and queued. Redirecting to calendar...");
       router.push("/calendar");
     } catch (err) {
@@ -202,6 +326,9 @@ export default function ComposePage() {
       const total = Object.keys(response.results).length;
 
       if (successCount > 0) {
+        window.localStorage.removeItem(localDraftKey);
+        setDistributionDraft(null);
+        setResumedPostId(null);
         setNotice(
           `Published to ${successCount} of ${total} platform${total !== 1 ? "s" : ""}. Check results below.`,
         );
@@ -376,6 +503,11 @@ export default function ComposePage() {
 
   return (
     <MobileShell title="Compose" subtitle="Creative flow without the noise.">
+      {restoringDraft ? (
+        <div className="mb-4 rounded-xl border border-violet-400/20 bg-violet-500/10 px-4 py-3 text-sm text-violet-200 light:text-violet-700">
+          Restoring your saved draft...
+        </div>
+      ) : null}
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

@@ -211,6 +211,7 @@ class AdminOverview(BaseModel):
 
 class DistributionCreateRequest(BaseModel):
     user_id: int
+    post_id: int | None = None
     title: str = "Untitled Post"
     media_url: str
     media_urls: list[str] | None = None
