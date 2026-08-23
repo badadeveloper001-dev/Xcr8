@@ -63,6 +63,19 @@ def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail="Creator profile name is required")
 
     plan = plan_for_user(user)
+    if plan.creator_profiles <= 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "feature_not_in_plan",
+                "resource": "creator_profiles",
+                "plan": plan.id,
+                "limit": 0,
+                "message": "Managed creator profiles require the Pro or Business plan.",
+            },
+        )
+
     owned_count = int(
         db.scalar(
             select(func.count(WorkspaceMembership.id)).where(
