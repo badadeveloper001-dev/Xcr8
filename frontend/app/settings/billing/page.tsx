@@ -52,6 +52,13 @@ const GLOBAL_FALLBACK_PRICES: Record<string, { monthly: number; annual: number }
   business: { monthly: 9900, annual: 99000 },
 };
 
+const FALLBACK_PLAN_LIMITS: PlanItemApi[] = [
+  { id: "free", name: "Free", price_cents: 0, monthly_credits: 500, text_generations: 50, image_generations: 0, high_quality_images: 0, voiceovers: 0, creator_profiles: 0, social_accounts: 1, scheduled_posts: 10, storage_megabytes: 200 },
+  { id: "starter", name: "Starter", price_cents: 900, monthly_credits: 5000, text_generations: 500, image_generations: 25, high_quality_images: 0, voiceovers: 10, creator_profiles: 0, social_accounts: 3, scheduled_posts: 100, storage_megabytes: 2048 },
+  { id: "pro", name: "Pro", price_cents: 2900, monthly_credits: 15000, text_generations: 2500, image_generations: 100, high_quality_images: 10, voiceovers: 50, creator_profiles: 0, social_accounts: 7, scheduled_posts: 500, storage_megabytes: 10240 },
+  { id: "business", name: "Business", price_cents: 9900, monthly_credits: 50000, text_generations: 10000, image_generations: 300, high_quality_images: 50, voiceovers: 200, creator_profiles: 5, social_accounts: 20, scheduled_posts: 2000, storage_megabytes: 51200 },
+];
+
 function fallbackPricing(planId: string): RegionalPricing {
   const price = GLOBAL_FALLBACK_PRICES[planId] ?? { monthly: 0, annual: 0 };
   const format = (amount: number) =>
@@ -81,8 +88,9 @@ function formatStorage(megabytes: number): string {
 export default function BillingPage() {
   const router = useRouter();
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
+  const storedPlan = useCreatorStore((state) => state.plan);
   const [plans, setPlans] = useState<PlanItem[]>([]);
-  const [currentPlan, setCurrentPlan] = useState("free");
+  const [currentPlan, setCurrentPlan] = useState(storedPlan || "free");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [message, setMessage] = useState<string | null>(null);
   const userId = useCreatorStore((state) => state.userId);
@@ -96,41 +104,46 @@ export default function BillingPage() {
 
   useEffect(() => {
     async function load() {
-      try {
-        const [plansResponse, pricingCatalog] = await Promise.all([
-          apiClient.get<PlanItemApi[]>("/api/v1/plans"),
-          fetch("/api/pricing", { cache: "no-store" })
-            .then(async (response) =>
-              response.ok ? ((await response.json()) as PricingCatalogResponse) : null,
-            )
-            .catch(() => null),
-        ]);
+      const pricingCatalogPromise = fetch("/api/pricing", { cache: "no-store" })
+        .then(async (response) =>
+          response.ok ? ((await response.json()) as PricingCatalogResponse) : null,
+        )
+        .catch(() => null);
 
-        const pricingByPlan = pricingCatalog?.plans || {};
-        const normalizedPlans = (plansResponse.data || []).map((plan) => ({
+      let sourcePlans = FALLBACK_PLAN_LIMITS;
+      try {
+        const plansResponse = await apiClient.get<PlanItemApi[]>("/api/v1/plans/");
+        if (plansResponse.data?.length) sourcePlans = plansResponse.data;
+      } catch (error) {
+        console.error("Plan catalog request failed; using the safe local catalog.", error);
+      }
+
+      const pricingCatalog = await pricingCatalogPromise;
+      const pricingByPlan = pricingCatalog?.plans || {};
+      setPlans(
+        sourcePlans.map((plan) => ({
           ...plan,
           pricing: pricingByPlan[plan.id] || plan.pricing || fallbackPricing(plan.id),
-        }));
-        setPlans(normalizedPlans);
+        })),
+      );
 
-        if (userId) {
-          const usageResponse = await apiClient.get<UsageResponse>(
-            `/api/v1/plans/${userId}/usage`,
-          );
-          const nextPlan = usageResponse.data.plan?.id || "free";
-          setCurrentPlan(nextPlan);
-          setPlan(nextPlan);
-        }
+      try {
+        const usageResponse = await apiClient.get<UsageResponse>(
+          `/api/v1/plans/${userId}/usage`,
+        );
+        const nextPlan = usageResponse.data.plan?.id || "free";
+        setCurrentPlan(nextPlan);
+        setPlan(nextPlan);
       } catch (error) {
-        console.error(error);
-        setMessage("Could not load billing information.");
+        console.error("Plan usage request failed; keeping the signed-in plan.", error);
+        setCurrentPlan(storedPlan || "free");
       }
     }
 
     if (hasHydrated && userId) {
       void load();
     }
-  }, [hasHydrated, setPlan, userId]);
+  }, [hasHydrated, setPlan, storedPlan, userId]);
 
   function showUpgradeStatus(plan: PlanItem) {
     if (!userId) {
