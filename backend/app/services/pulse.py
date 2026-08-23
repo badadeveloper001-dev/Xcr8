@@ -43,7 +43,7 @@ def _redact_sensitive_detail(detail: object) -> str:
     redacted = _clean_text(detail, "Unexpected error")
     redacted = re.sub(r"(?i)bearer\s+[a-z0-9._~+\-/=]+", "Bearer [redacted]", redacted)
     redacted = re.sub(
-        r"(?i)(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*[^\s,;]+",
+        r"(?i)(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)\s*[:=]\s*[^\s,;]+",
         r"\1=[redacted]",
         redacted,
     )
