@@ -166,8 +166,34 @@ def test_plan_catalog_matches_entitlements():
     assert plans["pro"]["creator_profiles"] == 0
     assert plans["business"]["creator_profiles"] == 5
     assert plans["starter"]["social_accounts"] == 3
+    assert plans["starter"]["price_cents"] == 900
+    assert plans["starter"]["pricing"]["currency"] == "USD"
+    assert plans["starter"]["pricing"]["monthly_formatted"] == "$9"
+    assert plans["starter"]["pricing"]["annual_formatted"] == "$90"
     assert plans["pro"]["high_quality_images"] == 10
+    assert plans["business"]["high_quality_images"] == 50
     assert plans["business"]["storage_megabytes"] == 50 * 1024
+
+
+def test_plan_catalog_uses_nigerian_regional_prices_from_vercel_country_header():
+    client = TestClient(app)
+    response = client.get(
+        "/api/v1/plans/",
+        headers={"x-vercel-ip-country": "NG"},
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store"
+    assert response.headers["vary"] == "X-Vercel-IP-Country"
+
+    plans = {row["id"]: row for row in response.json()}
+    assert plans["starter"]["pricing"]["region"] == "nigeria"
+    assert plans["starter"]["pricing"]["currency"] == "NGN"
+    assert plans["starter"]["pricing"]["monthly_formatted"] == "₦7,500"
+    assert plans["starter"]["pricing"]["annual_formatted"] == "₦75,000"
+    assert plans["pro"]["pricing"]["monthly_formatted"] == "₦20,000"
+    assert plans["pro"]["pricing"]["annual_formatted"] == "₦200,000"
+    assert plans["business"]["pricing"]["monthly_formatted"] == "₦50,000"
+    assert plans["business"]["pricing"]["annual_formatted"] == "₦500,000"
 
 
 def test_admin_can_grant_business_plan_with_audit_ledger(monkeypatch):
