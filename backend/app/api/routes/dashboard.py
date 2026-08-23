@@ -15,9 +15,11 @@ from app.db.models import (
     ScheduledPost,
     TrendSignalEvent,
     User,
+    Workspace,
 )
 from app.api.routes.intelligence import _profile_interests, _refresh_live_signals
 from app.schemas.mvp import Cr8orAIAlert, DashboardOverview, PlatformConnection
+from app.services.profile_scope import current_profile_id
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -137,6 +139,10 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    active_workspace_id = current_profile_id()
+    active_workspace = db.get(Workspace, active_workspace_id) if active_workspace_id else None
+    active_creator_name = active_workspace.name if active_workspace else user.display_name
 
     drafts = db.scalar(
         select(func.count(ContentPost.id)).where(
@@ -306,7 +312,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
 
     return DashboardOverview(
         greeting="Good evening" if datetime.utcnow().hour >= 12 else "Good morning",
-        creator_name=user.display_name,
+        creator_name=active_creator_name,
         platforms_connected=sum(1 for _ in platforms),
         drafts=drafts or 0,
         scheduled=scheduled or 0,
