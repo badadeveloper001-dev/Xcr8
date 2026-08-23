@@ -14,6 +14,7 @@ import {
   type AiAssistantChatSummary,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 type ChatItem = {
   role: "user" | "assistant";
@@ -123,9 +124,9 @@ function isChatSummary(value: unknown): value is AiAssistantChatSummary {
 export default function AssistantPage() {
   const userId = useCreatorStore((state) => state.userId);
   const email = useCreatorStore((state) => state.email);
-  const displayName = useCreatorStore((state) => state.displayName);
+  const { activeName } = useActiveCreatorIdentity();
   const searchParams = useSearchParams();
-  const welcomeMessage = useMemo(() => buildWelcomeMessage(displayName), [displayName]);
+  const welcomeMessage = useMemo(() => buildWelcomeMessage(activeName), [activeName]);
   const [messages, setMessages] = useState<ChatItem[]>([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState<AiAssistantChatSummary[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
