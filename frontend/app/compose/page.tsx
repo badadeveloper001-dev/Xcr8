@@ -1,10 +1,11 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { CheckCircle2, ExternalLink, Link2, Send, Sparkles, XCircle } from "lucide-react";
+import { DeviceMediaPicker } from "@/components/device-media-picker";
 import { MobileShell } from "@/components/mobile-shell";
 import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
 import {
@@ -15,6 +16,7 @@ import {
   queueSchedule,
   writeMemory,
 } from "@/lib/api";
+import { uploadMediaFile, type UploadedMediaItem } from "@/lib/media-upload";
 import { useCreatorStore } from "@/lib/store";
 
 const platformOptions = [
@@ -23,42 +25,6 @@ const platformOptions = [
   { id: "youtube_shorts", label: "YouTube Shorts", cls: "badge-yt" },
   { id: "threads", label: "Threads", cls: "badge-th" },
 ];
-
-function getUploadUrl(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
-
-  const candidate =
-    "url" in payload
-      ? payload.url
-      : "file_url" in payload
-        ? payload.file_url
-        : "path" in payload
-          ? payload.path
-          : "";
-
-  return typeof candidate === "string" ? candidate : "";
-}
-
-function guessMediaType(file: File): string {
-  if (file.type.startsWith("video/")) return "video";
-  return "image";
-}
-
-function isValidSignedUploadUrl(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim();
-  if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) return false;
-  return (
-    normalized.includes("/storage/v1/object/upload/sign/") ||
-    normalized.includes("/object/upload/sign/")
-  );
-}
-
-type UploadedMediaItem = {
-  url: string;
-  mediaType: string;
-  name: string;
-};
 
 export default function ComposePage() {
   const router = useRouter();
@@ -251,8 +217,7 @@ export default function ComposePage() {
     }
   };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
+  const handleFiles = (files: File[]) => {
     if (!files.length) return;
 
     void (async () => {
@@ -261,119 +226,15 @@ export default function ComposePage() {
       try {
         const uploaded: UploadedMediaItem[] = [];
         for (const file of files) {
-          const uploadIdempotencyKey = crypto.randomUUID();
-          // Step 1: ask backend for a Supabase signed upload URL.
-          // This is a tiny JSON request — no Vercel payload limit applies.
-          let presignResp: Response | null = null;
-          try {
-            presignResp = await fetch("/_/backend/api/v1/upload/presign", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Idempotency-Key": uploadIdempotencyKey,
-              },
-              body: JSON.stringify({
-                user_id: userId,
-                filename: file.name,
-                content_type: file.type || "application/octet-stream",
-                size_bytes: file.size,
-              }),
-            });
-          } catch (e) {
-            throw new Error(
-              `Failed to connect to presign service: ${e instanceof Error ? e.message : "network error"}`,
-            );
-          }
-
-          if (presignResp.ok) {
-            try {
-              const presignData = (await presignResp.json()) as {
-                signed_url?: string;
-                public_url?: string;
-              };
-              const signedUrl = presignData.signed_url;
-              const publicUrl = presignData.public_url;
-
-              if (signedUrl && publicUrl && isValidSignedUploadUrl(signedUrl)) {
-                // Step 2: PUT the file directly from the browser to Supabase when the URL looks valid.
-                try {
-                  const uploadResp = await fetch(signedUrl, {
-                    method: "PUT",
-                    headers: { "Content-Type": file.type || "application/octet-stream" },
-                    body: file,
-                  });
-                  if (!uploadResp.ok) {
-                    const txt = await uploadResp.text().catch(() => "");
-                    throw new Error(
-                      `Storage upload failed (${uploadResp.status})${txt ? ": " + txt.slice(0, 120) : "."}`,
-                    );
-                  }
-                  uploaded.push({
-                    url: publicUrl,
-                    mediaType: guessMediaType(file),
-                    name: file.name,
-                  });
-                  continue;
-                } catch (directUploadError) {
-                  console.warn(
-                    "Direct upload failed; falling back to backend upload.",
-                    directUploadError,
-                  );
-                }
-              }
-            } catch (e) {
-              throw new Error(
-                `Direct upload failed: ${e instanceof Error ? e.message : "unknown error"}`,
-              );
-            }
-          }
-
-          // Fallback: POST through the backend proxy (small files only — Vercel
-          // rejects payloads larger than ~4.5 MB through serverless functions).
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("user_id", String(userId));
-          let fallbackResp: Response | null = null;
-          try {
-            fallbackResp = await fetch("/_/backend/api/v1/upload", {
-              method: "POST",
-              headers: { "Idempotency-Key": uploadIdempotencyKey },
-              body: formData,
-            });
-          } catch (e) {
-            throw new Error(
-              `Fallback upload endpoint unreachable: ${e instanceof Error ? e.message : "network error"}`,
-            );
-          }
-
-          let fallbackData: unknown;
-          try {
-            fallbackData = await fallbackResp.json();
-          } catch {
-            throw new Error(`Fallback upload returned invalid JSON (${fallbackResp.status})`);
-          }
-
-          if (!fallbackResp.ok) {
-            const errMsg =
-              typeof fallbackData === "object" && fallbackData && "detail" in fallbackData
-                ? String((fallbackData as Record<string, unknown>).detail)
-                : "Upload failed. Please try again.";
-            throw new Error(errMsg);
-          }
-          const url = getUploadUrl(fallbackData);
-          if (url) {
-            uploaded.push({ url, mediaType: guessMediaType(file), name: file.name });
-          } else {
-            throw new Error("Upload succeeded but no URL was returned");
-          }
+          uploaded.push(await uploadMediaFile(userId, file));
         }
         setMediaItems((current) => [...current, ...uploaded]);
       } catch (err) {
-        if (err instanceof Error && err.message.trim().length > 0) {
-          setError(err.message);
-        } else {
-          setError("Upload failed. Please try again.");
-        }
+        setError(
+          err instanceof Error && err.message.trim()
+            ? err.message
+            : "Upload failed. Please try again.",
+        );
       } finally {
         setUploading(false);
       }
@@ -402,13 +263,11 @@ export default function ComposePage() {
               <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 <Link2 size={11} /> Media
               </label>
-              <input
-                type="file"
-                accept="image/*,video/*"
+              <DeviceMediaPicker
+                kind="media"
                 multiple
-                className="xcr8-input"
                 disabled={uploading}
-                onChange={handleFileChange}
+                onFiles={handleFiles}
               />
               <p className="mt-1 text-xs text-slate-500">
                 {uploading
