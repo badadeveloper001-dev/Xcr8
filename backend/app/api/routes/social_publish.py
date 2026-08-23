@@ -15,6 +15,7 @@ from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, ContentPost, Platform, PostVariant, User
 from app.services.entitlements import ensure_social_account_capacity
 from app.services.profile_scope import current_profile_id
+from app.services.pulse import record_pulse_event
 from app.services.social_publisher import (
     configured_platforms,
     exchange_code_for_token,
@@ -497,6 +498,8 @@ class PublishPostRequest(BaseModel):
     user_id: int
     post_id: int
     platforms: list[str] | None = None  # None means publish to all approved platforms
+    pulse_source: str = "direct"
+    schedule_id: int | None = None
 
 
 @router.post("/publish")
@@ -636,6 +639,39 @@ def publish_post(
         results[platform_name] = result
         if result.get("success"):
             published_any = True
+
+    if not published_any and results:
+        error_detail = " ".join(
+            str(item.get("error") or "")
+            for item in results.values()
+            if isinstance(item, dict) and not item.get("success")
+        )
+        user_action_required = any(
+            token in error_detail.lower()
+            for token in ["no active connection", "connected manually", "approved variant"]
+        )
+        record_pulse_event(
+            db,
+            {
+                "event_type": "publishing_failure",
+                "feature": "scheduling_dispatch" if payload.pulse_source == "scheduler" else "publishing",
+                "route": (
+                    "/api/v1/scheduling/dispatch-due"
+                    if payload.pulse_source == "scheduler"
+                    else "/api/v1/social/publish"
+                ),
+                "method": "GET" if payload.pulse_source == "scheduler" else "POST",
+                "http_status": 409 if user_action_required else 502,
+                "detail": error_detail or "Social publishing returned no successful result.",
+                "user_id": payload.user_id,
+                "event_meta": {
+                    "post_id": post.id,
+                    "platforms": sorted(results),
+                    "schedule_id": payload.schedule_id,
+                    "source": payload.pulse_source,
+                },
+            },
+        )
 
     return {
         "post_id": post.id,

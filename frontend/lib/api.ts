@@ -163,7 +163,7 @@ export type PulseIncidentItem = {
   severity: string;
   provider?: string | null;
   possible_reason: string;
-  status: "investigating" | "fixed";
+  status: "investigating" | "monitoring" | "fixed";
   affected_users_count: number;
   total_events_count: number;
   first_seen_at: string;

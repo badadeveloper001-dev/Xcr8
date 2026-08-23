@@ -17,6 +17,7 @@ import {
 import { useCreatorStore } from "@/lib/store";
 
 const severityStyles: Record<string, string> = {
+  critical: "border-rose-500/40 bg-rose-500/15 text-rose-100 light:border-rose-300 light:bg-rose-50 light:text-rose-800",
   high: "border-rose-500/25 bg-rose-500/10 text-rose-200 light:border-rose-200 light:bg-rose-50 light:text-rose-700",
   medium:
     "border-amber-500/25 bg-amber-500/10 text-amber-200 light:border-amber-200 light:bg-amber-50 light:text-amber-700",
@@ -52,7 +53,7 @@ export default function NotificationsPage() {
     queryFn: () => getIntelligenceFeed(userId as number),
     enabled: Boolean(userId),
     staleTime: 60_000,
-    refetchInterval: 120_000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 
@@ -120,7 +121,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <MobileShell title="Notifications" subtitle="Open one to mark it read.">
+    <MobileShell title="Notifications" subtitle="Trend updates and Pulse support messages appear here.">
       <div className="space-y-4">
         <section className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">

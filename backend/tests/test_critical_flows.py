@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes.scheduling import _authorize_cron
-from app.services.pulse import classify_error, escalate_severity
+from app.services.pulse import _redact_sensitive_detail, classify_error, detect_feature, escalate_severity
 from app.services.social_publisher import build_oauth_state, verify_oauth_state
 
 
@@ -44,3 +44,20 @@ def test_pulse_classifies_critical_auth_database_failure():
     )
     assert error_type == "system_error"
     assert severity == "critical"
+
+
+def test_pulse_redacts_credentials_and_personal_email():
+    detail = _redact_sensitive_detail(
+        "Authorization: Bearer private-token password=hunter2 user@example.com"
+    )
+    assert "private-token" not in detail
+    assert "hunter2" not in detail
+    assert "user@example.com" not in detail
+    assert "[redacted]" in detail
+
+
+def test_pulse_detects_costly_and_background_features():
+    assert detect_feature("/api/v1/ai/image/generate") == "image_generation"
+    assert detect_feature("/api/v1/ai/video/export") == "video_generation"
+    assert detect_feature("/api/v1/scheduling/dispatch-due") == "scheduling_dispatch"
+    assert detect_feature("/api/v1/plans/webhook/paystack") == "payment"

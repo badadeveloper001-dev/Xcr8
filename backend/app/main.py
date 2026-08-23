@@ -13,7 +13,7 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.db import models
 from app.db.session import SessionLocal, engine
-from app.services.pulse import auto_resolve_stable_incidents, is_benign_slow_route, record_pulse_event
+from app.services.pulse import auto_resolve_stable_incidents, is_benign_slow_route, notify_founders_fallback, record_pulse_event
 from app.services.profile_scope import (
     ensure_profile_scope_schema,
     reset_profile_scope,
@@ -24,28 +24,40 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_identity(request: Request) -> tuple[int | None, str | None]:
+    """Resolve the affected user from trusted app context before falling back to request data."""
     user_id: int | None = None
     email: str | None = None
 
-    path_user_id = request.path_params.get("user_id") if hasattr(request, "path_params") else None
-    if path_user_id is not None:
+    id_candidates = [
+        request.headers.get("x-xcr8-user-id"),
+        request.query_params.get("user_id"),
+        request.path_params.get("user_id") if hasattr(request, "path_params") else None,
+    ]
+    for candidate in id_candidates:
+        if candidate is None:
+            continue
         try:
-            user_id = int(path_user_id)
+            parsed = int(candidate)
         except (TypeError, ValueError):
-            user_id = None
+            continue
+        if parsed > 0:
+            user_id = parsed
+            break
 
     raw_body = str(getattr(request.state, "body_text", "") or "").strip()
     if raw_body:
         try:
-            parsed = json.loads(raw_body)
-            if isinstance(parsed, dict):
-                body_user_id = parsed.get("user_id")
-                body_email = parsed.get("email")
+            parsed_body = json.loads(raw_body)
+            if isinstance(parsed_body, dict):
+                body_user_id = parsed_body.get("user_id")
+                body_email = parsed_body.get("email")
                 if user_id is None and body_user_id is not None:
                     try:
-                        user_id = int(body_user_id)
+                        parsed_user_id = int(body_user_id)
+                        if parsed_user_id > 0:
+                            user_id = parsed_user_id
                     except (TypeError, ValueError):
-                        user_id = None
+                        pass
                 if isinstance(body_email, str) and body_email.strip():
                     email = body_email.strip().lower()
         except ValueError:
@@ -58,7 +70,6 @@ def _extract_identity(request: Request) -> tuple[int | None, str | None]:
 
     return user_id, email
 
-
 def _should_capture_http_exception(request: Request, status_code: int) -> bool:
     path = request.url.path
     if not path.startswith("/api/v1"):
@@ -68,6 +79,19 @@ def _should_capture_http_exception(request: Request, status_code: int) -> bool:
     if status_code in {404, 405} and request.method == "GET":
         return False
     return status_code >= 400
+
+
+def _report_pulse_fallback(request: Request, title: str, detail: str, feature: str = "platform") -> None:
+    try:
+        notify_founders_fallback(
+            title,
+            detail,
+            feature=feature,
+            severity="critical",
+            request_id=getattr(request.state, "request_id", None),
+        )
+    except Exception:
+        logger.exception("Pulse fallback founder alert failed")
 
 def _ensure_postgres_enum_values() -> None:
     """Keep existing PostgreSQL installations compatible with newly supported enum values."""
@@ -119,8 +143,14 @@ async def pulse_request_middleware(request: Request, call_next):
 
     try:
         ensure_profile_scope_schema()
-    except Exception:
+    except Exception as exc:
         logger.exception("Managed-profile schema initialization failed")
+        _report_pulse_fallback(
+            request,
+            "Database or profile schema initialization failed",
+            str(exc) or exc.__class__.__name__,
+            "database",
+        )
         return JSONResponse(
             status_code=503,
             content={"detail": "Profile data is temporarily unavailable. Please retry shortly."},
@@ -184,9 +214,10 @@ async def pulse_request_middleware(request: Request, call_next):
                 },
             )
             request.state.pulse_recorded = True
-        except Exception:
+        except Exception as exc:
             db.rollback()
             logger.exception("Pulse failed to record 5xx response")
+            _report_pulse_fallback(request, "Pulse could not record a backend failure", str(exc))
         finally:
             db.close()
 
@@ -213,9 +244,10 @@ async def pulse_request_middleware(request: Request, call_next):
                     "event_meta": {"threshold_ms": int(settings.pulse_slow_request_ms or 6000)},
                 },
             )
-        except Exception:
+        except Exception as exc:
             db.rollback()
             logger.exception("Pulse failed to record slow response")
+            _report_pulse_fallback(request, "Pulse could not record a slow-response incident", str(exc))
         finally:
             db.close()
 
@@ -227,9 +259,10 @@ async def pulse_request_middleware(request: Request, call_next):
         db = SessionLocal()
         try:
             auto_resolve_stable_incidents(db, request.url.path, request.method, response.status_code)
-        except Exception:
+        except Exception as exc:
             db.rollback()
-            logger.exception("Pulse failed to auto-resolve stable incidents")
+            logger.exception("Pulse failed to update incident recovery")
+            _report_pulse_fallback(request, "Pulse recovery tracking failed", str(exc))
         finally:
             db.close()
 
@@ -259,9 +292,10 @@ async def pulse_http_exception_handler(request: Request, exc: HTTPException):
                 },
             )
             request.state.pulse_recorded = True
-        except Exception:
+        except Exception as record_exc:
             db.rollback()
             logger.exception("Pulse failed to record HTTPException")
+            _report_pulse_fallback(request, "Pulse could not persist an HTTP failure", str(record_exc))
         finally:
             db.close()
 
@@ -288,9 +322,10 @@ async def pulse_unhandled_exception_handler(request: Request, exc: Exception):
             },
         )
         request.state.pulse_recorded = True
-    except Exception:
+    except Exception as record_exc:
         db.rollback()
         logger.exception("Pulse failed to record unhandled exception")
+        _report_pulse_fallback(request, "Pulse could not persist an unhandled failure", str(record_exc))
     finally:
         db.close()
 
