@@ -15,6 +15,13 @@ export const apiClient = axios.create({
   timeout: 30_000,
 });
 
+// Admin routes are Next.js same-origin handlers. They must never inherit the
+// backend service prefix or requests become /_/backend/admin/data/* and 404.
+const adminClient = axios.create({
+  baseURL: "/",
+  timeout: 30_000,
+});
+
 // Managed profiles always use the same deployed backend service. Keeping this path
 // same-origin avoids CORS and stale NEXT_PUBLIC_API_URL values on Vercel aliases/previews.
 const workspaceApiClient = axios.create({
@@ -630,14 +637,14 @@ export async function loginWithGoogle(payload: GoogleSessionPayload): Promise<Se
 }
 
 export async function verifyAdminAccess(accessCode: string): Promise<{ authorized: boolean; expires_in_seconds: number }> {
-  const { data } = await apiClient.post<{ authorized: boolean; expires_in_seconds: number }>("/admin/data/session", { accessCode });
+  const { data } = await adminClient.post<{ authorized: boolean; expires_in_seconds: number }>("/admin/data/session", { accessCode });
   return data;
 }
 
 function adminHeaders(accessCode: string) { return accessCode === "authenticated" ? undefined : { "x-admin-code": accessCode }; }
 
 export async function getAdminOverview(accessCode: string): Promise<AdminOverviewPayload> {
-  const { data } = await apiClient.get<AdminOverviewPayload>("/admin/data/overview", {
+  const { data } = await adminClient.get<AdminOverviewPayload>("/admin/data/overview", {
     headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
@@ -645,7 +652,7 @@ export async function getAdminOverview(accessCode: string): Promise<AdminOvervie
 }
 
 export async function getAdminCreators(accessCode: string, query = ""): Promise<{ items: AdminCreatorItem[]; count: number }> {
-  const { data } = await apiClient.get<{ items: AdminCreatorItem[]; count: number }>("/admin/data/creators", {
+  const { data } = await adminClient.get<{ items: AdminCreatorItem[]; count: number }>("/admin/data/creators", {
     params: query ? { q: query } : undefined,
     headers: adminHeaders(accessCode),
     timeout: 30_000,
@@ -658,7 +665,7 @@ export async function updateAdminCreatorPlan(
   userId: number,
   plan: "free" | "starter" | "pro" | "business",
 ): Promise<{ user_id: number; email: string; previous_plan: string; plan: string; updated_at: string }> {
-  const { data } = await apiClient.patch(
+  const { data } = await adminClient.patch(
     `/admin/data/creators/${userId}/plan`,
     { plan, actor: "Xcr8 Admin", note: "Owner-granted plan override" },
     {
@@ -670,7 +677,7 @@ export async function updateAdminCreatorPlan(
 }
 
 export async function getAdminContent(accessCode: string): Promise<{ items: Array<{ post_id: number; user_id: number; title: string; status: string; created_at?: string | null; schedules: Array<{ schedule_id: number; platform: string; scheduled_for: string; queue_status: string }> }> }> {
-  const { data } = await apiClient.get("/admin/data/content", {
+  const { data } = await adminClient.get("/admin/data/content", {
     headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
@@ -678,7 +685,7 @@ export async function getAdminContent(accessCode: string): Promise<{ items: Arra
 }
 
 export async function getAdminHealth(accessCode: string): Promise<AdminHealthPayload> {
-  const { data } = await apiClient.get<AdminHealthPayload>("/admin/data/health", {
+  const { data } = await adminClient.get<AdminHealthPayload>("/admin/data/health", {
     headers: adminHeaders(accessCode),
     timeout: 15_000,
   });
@@ -686,7 +693,7 @@ export async function getAdminHealth(accessCode: string): Promise<AdminHealthPay
 }
 
 export async function getAdminAiQuality(accessCode: string): Promise<AdminAiQualityPayload> {
-  const { data } = await apiClient.get<AdminAiQualityPayload>("/admin/data/ai-quality", {
+  const { data } = await adminClient.get<AdminAiQualityPayload>("/admin/data/ai-quality", {
     headers: adminHeaders(accessCode),
     timeout: 15_000,
   });
@@ -694,7 +701,7 @@ export async function getAdminAiQuality(accessCode: string): Promise<AdminAiQual
 }
 
 export async function getAdminIncidents(accessCode: string): Promise<PulseIncidentItem[]> {
-  const { data } = await apiClient.get<PulseIncidentItem[]>("/admin/data/incidents", {
+  const { data } = await adminClient.get<PulseIncidentItem[]>("/admin/data/incidents", {
     headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
@@ -706,7 +713,7 @@ export async function updateAdminIncident(
   incidentId: number,
   payload: { status: "investigating" | "fixed"; resolution_summary?: string | null },
 ): Promise<PulseIncidentItem> {
-  const { data } = await apiClient.patch<PulseIncidentItem>(
+  const { data } = await adminClient.patch<PulseIncidentItem>(
     `/admin/data/incidents/${incidentId}`,
     payload,
     {
@@ -718,7 +725,7 @@ export async function updateAdminIncident(
 }
 
 export async function retryAdminSchedule(accessCode: string, scheduleId: number): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(`/admin/data/schedules/${scheduleId}/retry`, {}, {
+  const { data } = await adminClient.post<{ message: string }>(`/admin/data/schedules/${scheduleId}/retry`, {}, {
     headers: adminHeaders(accessCode),
     timeout: 30_000,
   });
@@ -726,7 +733,7 @@ export async function retryAdminSchedule(accessCode: string, scheduleId: number)
 }
 
 export async function triggerAdminTestIncident(accessCode: string): Promise<PulseIncidentItem> {
-  const { data } = await apiClient.post<PulseIncidentItem>(
+  const { data } = await adminClient.post<PulseIncidentItem>(
     "/admin/data/incidents/test",
     {},
     {
@@ -1191,11 +1198,11 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
 
 
 export async function acknowledgeAdminIncident(accessCode: string, incidentId: number, owner = "Admin"): Promise<void> {
-  await apiClient.post("/admin/data/incidents/" + incidentId + "/acknowledge", { owner }, { headers: adminHeaders(accessCode) });
+  await adminClient.post("/admin/data/incidents/" + incidentId + "/acknowledge", { owner }, { headers: adminHeaders(accessCode) });
 }
 
 export async function addAdminIncidentNote(accessCode: string, incidentId: number, note: string, author = "Admin"): Promise<void> {
-  await apiClient.post("/admin/data/incidents/" + incidentId + "/notes", { note, author }, { headers: adminHeaders(accessCode) });
+  await adminClient.post("/admin/data/incidents/" + incidentId + "/notes", { note, author }, { headers: adminHeaders(accessCode) });
 }
 
 
