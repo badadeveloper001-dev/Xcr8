@@ -11,7 +11,7 @@ from app.core.config import create_chat_completion, settings
 
 
 logger = logging.getLogger(__name__)
-PROMPT_TEMPLATE_VERSION = "caption-v2"
+PROMPT_TEMPLATE_VERSION = "caption-v3"
 DETECT_TEMPLATE_VERSION = "detect-lang-v1"
 
 SUPPORTED_LANGUAGES = {"english", "nigerian_pidgin", "yoruba", "code_switch"}
@@ -28,13 +28,18 @@ PLATFORM_LIMITS = {
 
 
 SYSTEM_PROMPT = (
-    "You are Xcr8 Caption Engine. Adapt creator captions for platform-native tone and structure while keeping "
-    "intent intact. Return strict JSON with keys: adapted_caption (string), hashtags (array of strings), hook (string). "
-    "Do not include markdown fences. Keep hashtags relevant and concise. If creator memory facts are provided, "
-    "use them as personalization hints without inventing details. For mixed-language captions, preserve language shifts "
-    "sentence by sentence while keeping flow natural. Avoid generic creator clichés like 'consistency beats perfection', "
-    "'stop scrolling', 'what do you think?', or empty motivation lines. Prefer concrete details, specific actions, and "
-    "a distinct voice. Use at least one content clue from source_caption and one relevant creator memory fact when available."
+    "You are Xcr8 Caption Engine, a careful editor—not a motivational quote generator. "
+    "Rewrite only the supplied source_caption into a platform-native version while preserving its exact topic, "
+    "facts, names, offer, meaning, and language style. Never introduce a different topic, fake experience, "
+    "unsupported claim, generic advice, or a recycled previous caption. Keep the creator's level of formality. "
+    "Do not add labels such as 'Caption:', 'Creator note:', or 'Here is your post'. Do not repeat the hook inside "
+    "adapted_caption. Hashtags must be directly supported by words or named concepts in source_caption; return an "
+    "empty array when none are useful. Return JSON only, with exactly this shape: "
+    "{\"adapted_caption\":\"...\",\"hashtags\":[\"#example\"],\"hook\":\"...\"}. "
+    "For Instagram, use readable spacing and at most 5 useful hashtags. For Facebook, favor natural paragraphs "
+    "and avoid hashtag stuffing. For Threads, be conversational and stay within 500 characters. For YouTube "
+    "Shorts, make the caption concise and searchable. For mixed-language text, preserve the same language shifts. "
+    "Durable creator facts may guide tone, but source_caption always wins."
 )
 
 DETECT_SYSTEM_PROMPT = (
@@ -217,64 +222,22 @@ def detect_caption_language(text: str) -> dict:
 
 
 def _language_transform(text: str, language: str) -> str:
-    lang = language.lower()
-    if lang == "nigerian_pidgin":
-        return (
-            text.replace("you", "you")
-            .replace("your", "your")
-            .replace("for", "for")
-            .replace("is", "na")
-        )
-    if lang == "yoruba":
-        return f"{text} Oya, e je ka gbe e lo!"
-    if lang == "code_switch":
-        return f"{text} We dey run am live, no dulling."
-    return text
+    """Never attempt rule-based translation; preserve the creator's source wording."""
+    return text.strip()
 
 
 def _platform_style(text: str, platform: str) -> tuple[str, str]:
-    platform_key = platform.lower()
-    if platform_key == "linkedin":
-        return (
-            f"{text}\n\nKey takeaway:\n- Ship consistently\n- Learn fast\n- Build in public",
-            "Creators that document their process grow trust faster.",
-        )
-    if platform_key == "x":
-        return (f"{text}\n\nWhat do you think?", "Hot take: consistency beats perfection every time.")
-    if platform_key == "instagram":
-        return (
-            f"{text}\n.\n.\n.\nSave this for your next content sprint.",
-            "Stop scrolling: this one shift changes your creator growth trajectory.",
-        )
-    if platform_key == "tiktok":
-        return (f"POV: {text}", "This is how creators scale faster with less stress.")
-    if platform_key == "youtube_shorts":
-        return (f"{text}", "3 seconds in and your audience should already care.")
-    if platform_key == "threads":
-        return (f"{text}\n\nWho else is testing this strategy today?", "Threads rewards native, punchy opinions.")
-    return (text, "Lead with value, then invite conversation.")
+    """Safe provider fallback: original caption, no invented hook or canned CTA."""
+    return (text.strip(), "")
 
 
 def _generate_hashtags(platform: str, language: str) -> list[str]:
-    base = ["#xcr8", "#creatoros", "#contentstrategy"]
-    platform_tag = {
-        "instagram": "#instagramcreator",
-        "tiktok": "#tiktokcreator",
-        "x": "#xcreator",
-        "linkedin": "#linkedincreator",
-        "facebook": "#facebookcreator",
-        "youtube_shorts": "#shortscreator",
-        "threads": "#threadscreator",
-    }.get(platform, "#creator")
-
-    language_tag = {
-        "english": "#contentenglish",
-        "nigerian_pidgin": "#naijacreator",
-        "yoruba": "#yorubacreator",
-        "code_switch": "#afrodigital",
-    }.get(language, "#globalcreator")
-
-    return [platform_tag, language_tag, *base]
+    """Fallback tags must come from the source; add no Xcr8 or generic growth tags."""
+    if language == "nigerian_pidgin":
+        return ["#naijacreator"]
+    if language == "yoruba":
+        return ["#yorubacreator"]
+    return []
 
 
 def _extract_keywords(text: str, max_items: int = 4) -> list[str]:
@@ -335,15 +298,51 @@ def _looks_generic(text: str) -> bool:
         "who else is testing",
         "grow faster",
         "changes everything",
+        "creator note:",
+        "here is your caption",
+        "here's your caption",
+        "adapted caption:",
+        "source caption:",
+        "as an ai",
     ]
     return any(marker in lowered for marker in generic_markers)
 
 
+def _has_source_anchor(candidate: str, source_text: str, language: str) -> bool:
+    """Reject unrelated English outputs while allowing multilingual rewrites."""
+    source_keywords = _extract_keywords(source_text, max_items=8)
+    if len(source_keywords) < 3 or language.lower() != "english":
+        return True
+    candidate_tokens = set(_extract_keywords(candidate, max_items=40))
+    return any(keyword in candidate_tokens for keyword in source_keywords)
+
+
+_VOLATILE_MEMORY_KEYS = {
+    "last_master_caption",
+    "last_caption",
+    "last_prompt",
+    "last_assistant_reply",
+    "conversation_history",
+    "session_history",
+}
+
+
+def _durable_memory_facts(memory_facts: list[str]) -> list[str]:
+    durable: list[str] = []
+    for raw_fact in memory_facts:
+        fact = str(raw_fact).strip()
+        if not fact:
+            continue
+        key = fact.split(":", 1)[0].strip().lower().replace(" ", "_")
+        if key in _VOLATILE_MEMORY_KEYS or key.startswith(("last_", "recent_")):
+            continue
+        durable.append(fact[:240])
+    return durable[:4]
+
+
 def _memory_hint(memory_facts: list[str]) -> str:
-    if not memory_facts:
-        return ""
-    # Use one concrete memory line to keep captions distinct without bloating output.
-    return memory_facts[0].strip()
+    durable = _durable_memory_facts(memory_facts)
+    return durable[0] if durable else ""
 
 
 def _build_contextual_hashtags(source_text: str, platform: str, language: str) -> list[str]:
@@ -387,7 +386,9 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
                                     "tone": creator_memory.get("tone", "confident"),
                                     "emoji_style": creator_memory.get("emoji_style", "🔥"),
                                     "slang_profile": creator_memory.get("slang_profile", "light"),
-                                    "memory_facts": creator_memory.get("memory_facts", []),
+                                    "memory_facts": _durable_memory_facts(
+                                        creator_memory.get("memory_facts", [])
+                                    ),
                                     "language_profile": creator_memory.get("language_profile", {}),
                                 },
                                 "constraints": {
@@ -415,15 +416,12 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
             if not hashtags:
                 hashtags = _build_contextual_hashtags(text, platform, language)
 
-            if _looks_generic(adapted_caption):
-                memory_hint = _memory_hint(creator_memory.get("memory_facts", []))
-                keywords = _extract_keywords(text, max_items=2)
-                detail_line = ""
-                if memory_hint:
-                    detail_line = f"\n\nCreator note: {memory_hint}"
-                elif keywords:
-                    detail_line = f"\n\nFocus on: {', '.join(keywords)}"
-                adapted_caption = f"{text.strip()}{detail_line}".strip()
+            if (
+                not adapted_caption
+                or _looks_generic(adapted_caption)
+                or not _has_source_anchor(adapted_caption, text, language)
+            ):
+                raise ValueError("Caption provider returned a generic or unrelated adaptation")
 
             if _looks_generic(hook):
                 hook = _build_dynamic_hook(text, platform)
@@ -462,10 +460,7 @@ def _fallback_caption(text: str, platform: str, language: str, creator_memory: d
     language_mapped = _language_transform(text.strip(), language)
     platform_caption, hook = _platform_style(language_mapped, platform)
 
-    memory_hint = _memory_hint(creator_memory.get("memory_facts", []))
     styled_caption = platform_caption.strip()
-    if memory_hint:
-        styled_caption = f"{styled_caption}\n\nCreator note: {memory_hint}"
 
     limit = PLATFORM_LIMITS.get(platform, 2200)
     adapted_caption = styled_caption[:limit]
