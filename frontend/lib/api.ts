@@ -5,7 +5,10 @@ const useDirectApi = process.env.NEXT_PUBLIC_USE_DIRECT_API === "true";
 
 // Vercel mounts the FastAPI service here. Same-origin requests keep profile context
 // headers private to Xcr8 and avoid CORS failures across deployment aliases.
-const apiBaseUrl = useDirectApi && configuredApiUrl ? configuredApiUrl : "/_/backend";
+const apiBaseUrl =
+  process.env.NODE_ENV === "development" && useDirectApi && configuredApiUrl
+    ? configuredApiUrl
+    : "/_/backend";
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,
