@@ -413,20 +413,24 @@ def ensure_social_account_capacity(db: Session, user_id: int, platform: str) -> 
     normalized_platform = str(platform or "").strip().lower()
 
     existing = db.scalar(
-        select(ConnectedPlatform).where(
+        select(ConnectedPlatform)
+        .where(
             ConnectedPlatform.user_id == user.id,
             ConnectedPlatform.platform == normalized_platform,
         )
+        .execution_options(skip_profile_scope=True)
     )
     if existing and existing.is_active:
         return plan
 
     active_count = int(
         db.scalar(
-            select(func.count(ConnectedPlatform.id)).where(
+            select(func.count(ConnectedPlatform.id))
+            .where(
                 ConnectedPlatform.user_id == user.id,
                 ConnectedPlatform.is_active.is_(True),
             )
+            .execution_options(skip_profile_scope=True)
         )
         or 0
     )
@@ -535,10 +539,12 @@ def usage_snapshot(db: Session, user_id: int) -> dict:
             ),
             "social_accounts": int(
                 db.scalar(
-                    select(func.count(ConnectedPlatform.id)).where(
+                    select(func.count(ConnectedPlatform.id))
+                    .where(
                         ConnectedPlatform.user_id == user.id,
                         ConnectedPlatform.is_active.is_(True),
                     )
+                    .execution_options(skip_profile_scope=True)
                 )
                 or 0
             ),
