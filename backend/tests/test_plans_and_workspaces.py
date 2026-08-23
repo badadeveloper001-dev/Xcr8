@@ -240,25 +240,39 @@ def test_managed_creator_profiles_require_business():
             blocked = client.post(
                 "/api/v1/workspaces/",
                 params={"user_id": user.id},
-                json={"name": `${user.display_name} Brand`},
+                json={"name": f"{user.display_name} Brand"},
             )
             assert blocked.status_code == 403
             assert blocked.json()["detail"]["code"] == "feature_not_in_plan"
             assert blocked.json()["detail"]["resource"] == "creator_profiles"
             assert blocked.json()["detail"]["limit"] == 0
 
-        created = client.post(
+        for index in range(1, 6):
+            created = client.post(
+                "/api/v1/workspaces/",
+                params={"user_id": business_user.id},
+                json={
+                    "name": f"Business Brand {index}",
+                    "description": "Managed creator profile",
+                },
+            )
+            assert created.status_code == 200
+            assert created.json()["limit"] == 5
+
+        over_limit = client.post(
             "/api/v1/workspaces/",
             params={"user_id": business_user.id},
-            json={"name": "Business Brand", "description": "Managed creator profile"},
+            json={"name": "Business Brand 6"},
         )
-        assert created.status_code == 200
-        assert created.json()["limit"] == 5
+        assert over_limit.status_code == 429
+        assert over_limit.json()["detail"]["code"] == "plan_quota_exceeded"
+        assert over_limit.json()["detail"]["limit"] == 5
 
         summary = client.get("/api/v1/workspaces/summary", params={"user_id": business_user.id})
         assert summary.status_code == 200
-        assert summary.json()["count"] == 1
+        assert summary.json()["count"] == 5
         assert summary.json()["limit"] == 5
+        assert summary.json()["remaining"] == 0
     finally:
         db.close()
 
