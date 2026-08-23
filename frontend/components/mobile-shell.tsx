@@ -47,7 +47,13 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
               <ThemeToggle />
             </div>
           </header>
-        ) : null}
+        ) : (
+          <div className="mb-4 flex items-start justify-end gap-2" aria-label="Active profile and account">
+            <CreatorProfileSwitcher />
+            <NotificationBellButton />
+            <ThemeToggle />
+          </div>
+        )}
         <main id="main-content" className="relative">
           <div className="pointer-events-none absolute inset-x-0 -top-2 -z-10 h-8 rounded-full bg-violet-500/8 blur-xl" />
           {children}
