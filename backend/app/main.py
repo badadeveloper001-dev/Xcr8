@@ -7,13 +7,18 @@ import logging
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.api.router import api_router
 from app.core.config import settings
 from app.db import models
 from app.db.session import SessionLocal, engine
 from app.services.pulse import auto_resolve_stable_incidents, is_benign_slow_route, record_pulse_event
+from app.services.profile_scope import (
+    ensure_profile_scope_schema,
+    reset_profile_scope,
+    set_profile_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +117,51 @@ async def pulse_request_middleware(request: Request, call_next):
 
     request._receive = receive
 
-    response = await call_next(request)
+    try:
+        ensure_profile_scope_schema()
+    except Exception:
+        logger.exception("Managed-profile schema initialization failed")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Profile data is temporarily unavailable. Please retry shortly."},
+        )
+
+    requested_scope = str(request.headers.get("x-xcr8-workspace-id") or "").strip().lower()
+    scope: str | int = "unscoped"
+    if requested_scope in {"main", "0"}:
+        scope = "main"
+    elif requested_scope:
+        try:
+            scope = int(requested_scope)
+            if scope <= 0:
+                raise ValueError
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid creator profile context."})
+
+        raw_user_id = str(request.headers.get("x-xcr8-user-id") or "").strip()
+        try:
+            scoped_user_id = int(raw_user_id)
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Creator profile context requires a user."})
+
+        validation_db = SessionLocal()
+        try:
+            membership = validation_db.scalar(
+                select(models.WorkspaceMembership.id).where(
+                    models.WorkspaceMembership.workspace_id == scope,
+                    models.WorkspaceMembership.user_id == scoped_user_id,
+                )
+            )
+        finally:
+            validation_db.close()
+        if not membership:
+            return JSONResponse(status_code=403, content={"detail": "You do not have access to this creator profile."})
+
+    scope_token = set_profile_scope(scope)
+    try:
+        response = await call_next(request)
+    finally:
+        reset_profile_scope(scope_token)
     elapsed_ms = int((perf_counter() - started) * 1000)
     response.headers["x-request-id"] = request_id
 
