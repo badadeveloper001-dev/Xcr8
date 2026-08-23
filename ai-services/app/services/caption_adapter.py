@@ -327,7 +327,10 @@ _VOLATILE_MEMORY_KEYS = {
 }
 
 
-def _durable_memory_facts(memory_facts: list[str]) -> list[str]:
+def _durable_memory_facts(memory_facts: object) -> list[str]:
+    if not isinstance(memory_facts, list):
+        return []
+
     durable: list[str] = []
     for raw_fact in memory_facts:
         fact = str(raw_fact).strip()
