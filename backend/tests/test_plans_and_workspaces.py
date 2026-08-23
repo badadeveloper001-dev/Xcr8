@@ -12,10 +12,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
 from app.db import models
-from app.db.models import PlanTier, UsageLedger, UsagePeriod, User
+from app.db.models import ContentPost, PlanTier, UsageLedger, UsagePeriod, User, Workspace, WorkspaceMembership
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.services.entitlements import consume_usage, refund_usage
+from app.services.profile_scope import reset_profile_scope, set_profile_scope
 
 
 # Ensure test database has current schema
@@ -280,5 +281,82 @@ def test_failed_provider_usage_is_refunded_atomically():
 
         duplicate = refund_usage(db, ledger, reason="provider_unavailable")
         assert duplicate is None
+    finally:
+        db.close()
+
+
+def test_managed_profile_context_isolates_creator_content():
+    db = SessionLocal()
+    try:
+        user = User(
+            email="profile-scope@test.local",
+            display_name="Profile Scope Tester",
+            plan_tier=PlanTier.business,
+        )
+        workspace = Workspace(name="Scoped Brand", slug="scoped-brand-test")
+        db.add_all([user, workspace])
+        db.flush()
+        db.add(
+            WorkspaceMembership(
+                workspace_id=workspace.id,
+                user_id=user.id,
+                role="owner",
+                is_owner=True,
+            )
+        )
+        db.commit()
+        db.refresh(user)
+        db.refresh(workspace)
+
+        main_token = set_profile_scope("main")
+        try:
+            db.add(
+                ContentPost(
+                    user_id=user.id,
+                    title="Main account post",
+                    media_url="https://example.com/main.jpg",
+                    master_caption="Main",
+                    selected_platforms=["instagram"],
+                )
+            )
+            db.commit()
+        finally:
+            reset_profile_scope(main_token)
+
+        profile_token = set_profile_scope(workspace.id)
+        try:
+            db.add(
+                ContentPost(
+                    user_id=user.id,
+                    title="Managed profile post",
+                    media_url="https://example.com/profile.jpg",
+                    master_caption="Profile",
+                    selected_platforms=["instagram"],
+                )
+            )
+            db.commit()
+            scoped_titles = [
+                row.title
+                for row in db.query(ContentPost)
+                .filter(ContentPost.user_id == user.id)
+                .order_by(ContentPost.id)
+                .all()
+            ]
+            assert scoped_titles == ["Managed profile post"]
+        finally:
+            reset_profile_scope(profile_token)
+
+        main_token = set_profile_scope("main")
+        try:
+            main_titles = [
+                row.title
+                for row in db.query(ContentPost)
+                .filter(ContentPost.user_id == user.id)
+                .order_by(ContentPost.id)
+                .all()
+            ]
+            assert main_titles == ["Main account post"]
+        finally:
+            reset_profile_scope(main_token)
     finally:
         db.close()
