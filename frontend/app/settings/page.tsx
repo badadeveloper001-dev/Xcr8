@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Bell, CreditCard, Globe2, Link2, LogOut, Moon, Plus, Shield, Trash2 } from "lucide-react";
+import { DeviceMediaPicker } from "@/components/device-media-picker";
 import { MobileShell } from "@/components/mobile-shell";
 import {
   connectPlatform,
@@ -53,7 +54,6 @@ export default function SettingsPage() {
   const setSession = useCreatorStore((s) => s.setSession);
   const avatarUrl = useCreatorStore((s) => s.avatarUrl);
   const setAvatarUrl = useCreatorStore((s) => s.setAvatarUrl);
-  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -319,9 +319,6 @@ export default function SettingsPage() {
       setError(getApiErrorMessage(err, "Could not upload profile picture."));
     } finally {
       setUploadingAvatar(false);
-      if (avatarInputRef.current) {
-        avatarInputRef.current.value = "";
-      }
     }
   };
 
@@ -393,28 +390,16 @@ export default function SettingsPage() {
             ))}
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void handleAvatarUpload(file);
-                }
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={uploadingAvatar}
-              className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
-            >
-              {uploadingAvatar ? "Uploading..." : "Change profile picture"}
-            </button>
-          </div>
+          <DeviceMediaPicker
+            kind="image"
+            disabled={uploadingAvatar}
+            photoLabel={uploadingAvatar ? "Uploading..." : "Choose profile photo"}
+            className="mt-3"
+            onFiles={(files) => {
+              const file = files[0];
+              if (file) void handleAvatarUpload(file);
+            }}
+          />
         </motion.section>
 
         {notice ? (
