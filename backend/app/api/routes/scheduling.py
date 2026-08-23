@@ -143,6 +143,8 @@ def dispatch_due_posts(
                     user_id=schedule.user_id,
                     post_id=schedule.post_id,
                     platforms=[schedule.platform.value],
+                    pulse_source="scheduler",
+                    schedule_id=schedule.id,
                 ),
                 db,
             )
@@ -159,22 +161,6 @@ def dispatch_due_posts(
                 db.add(post)
 
             db.commit()
-            if not published:
-                result_errors = " ".join(
-                    str(item.get("error") or "")
-                    for item in (result.get("results") or {}).values()
-                    if isinstance(item, dict)
-                )
-                user_action_required = any(
-                    token in result_errors.lower()
-                    for token in ["no active connection", "connected manually", "approved variant"]
-                )
-                _record_schedule_failure(
-                    db,
-                    schedule,
-                    result_errors or f"Scheduled publish returned no successful result for {schedule.platform.value}.",
-                    http_status=409 if user_action_required else 502,
-                )
             processed.append(
                 {
                     "schedule_id": schedule.id,
