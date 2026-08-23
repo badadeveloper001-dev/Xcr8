@@ -498,6 +498,8 @@ class PublishPostRequest(BaseModel):
     user_id: int
     post_id: int
     platforms: list[str] | None = None  # None means publish to all approved platforms
+    pulse_source: str = "direct"
+    schedule_id: int | None = None
 
 
 @router.post("/publish")
@@ -652,13 +654,22 @@ def publish_post(
             db,
             {
                 "event_type": "publishing_failure",
-                "feature": "publishing",
-                "route": "/api/v1/social/publish",
-                "method": "POST",
+                "feature": "scheduling_dispatch" if payload.pulse_source == "scheduler" else "publishing",
+                "route": (
+                    "/api/v1/scheduling/dispatch-due"
+                    if payload.pulse_source == "scheduler"
+                    else "/api/v1/social/publish"
+                ),
+                "method": "GET" if payload.pulse_source == "scheduler" else "POST",
                 "http_status": 409 if user_action_required else 502,
                 "detail": error_detail or "Social publishing returned no successful result.",
                 "user_id": payload.user_id,
-                "event_meta": {"post_id": post.id, "platforms": sorted(results)},
+                "event_meta": {
+                    "post_id": post.id,
+                    "platforms": sorted(results),
+                    "schedule_id": payload.schedule_id,
+                    "source": payload.pulse_source,
+                },
             },
         )
 
