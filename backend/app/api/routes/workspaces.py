@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db
 from app.db.models import CreatorMemory, User, Workspace, WorkspaceMembership
 from app.db.session import engine
-from app.services.entitlements import plan_for_user
+from app.services.entitlements import expire_plan_if_needed, plan_for_user
 from app.services.profile_scope import SCOPED_MODELS
 
 _workspace_schema_ready = False
@@ -116,6 +116,7 @@ def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db))
     if not name:
         raise HTTPException(status_code=400, detail="Creator profile name is required")
 
+    expire_plan_if_needed(db, user, commit=False)
     plan = plan_for_user(user)
     if plan.creator_profiles <= 0:
         db.rollback()
@@ -180,6 +181,13 @@ def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db))
 
 @router.get("/", response_model=list)
 def list_workspaces(user_id: int, db: Session = Depends(get_db)) -> list:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    expire_plan_if_needed(db, user)
+    if plan_for_user(user).creator_profiles <= 0:
+        return []
+
     rows = list(
         db.scalars(
             select(Workspace)
@@ -196,6 +204,7 @@ def workspace_summary(user_id: int, db: Session = Depends(get_db)) -> dict:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    expire_plan_if_needed(db, user)
     plan = plan_for_user(user)
     items = list_workspaces(user_id, db)
     return {
@@ -214,6 +223,12 @@ def update_workspace(
     user_id: int,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    expire_plan_if_needed(db, user)
+    if plan_for_user(user).creator_profiles <= 0:
+        raise HTTPException(status_code=404, detail="Creator profile not found")
     workspace = _owned_workspace(db, user_id, workspace_id)
     if "name" in payload:
         name = str(payload.get("name") or "").strip()
@@ -232,6 +247,12 @@ def update_workspace(
 
 @router.delete("/{workspace_id}", response_model=dict)
 def delete_workspace(workspace_id: int, user_id: int, db: Session = Depends(get_db)) -> dict:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    expire_plan_if_needed(db, user)
+    if plan_for_user(user).creator_profiles <= 0:
+        raise HTTPException(status_code=404, detail="Creator profile not found")
     workspace = _owned_workspace(db, user_id, workspace_id)
     # Preserve the creator's work by moving profile-owned records back to the main account.
     for model in SCOPED_MODELS:
