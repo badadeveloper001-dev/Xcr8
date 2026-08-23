@@ -224,7 +224,8 @@ def test_managed_creator_profiles_require_pro_or_business():
             params={"user_id": free_user.id},
             json={"name": "Free Brand"},
         )
-        assert blocked.status_code == 429
+        assert blocked.status_code == 403
+        assert blocked.json()["detail"]["code"] == "feature_not_in_plan"
         assert blocked.json()["detail"]["resource"] == "creator_profiles"
         assert blocked.json()["detail"]["limit"] == 0
 
