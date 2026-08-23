@@ -154,7 +154,10 @@ export default function ManagedProfilePage() {
               <Link
                 key={action.href}
                 href={action.href}
-                onClick={() => setActiveCreatorId(`workspace:${workspaceId}`)}
+                onClick={() => {
+                  setActiveCreatorId(`workspace:${workspaceId}`);
+                  void queryClient.invalidateQueries();
+                }}
                 className="surface-soft rounded-xl px-3 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 light:text-slate-700"
               >
                 {action.label}
