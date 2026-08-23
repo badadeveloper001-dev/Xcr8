@@ -69,6 +69,16 @@ def create_chat_completion(client, **kwargs):
             )
             deepseek_kwargs = dict(kwargs)
             deepseek_kwargs["model"] = str(settings.deepseek_model or "deepseek-v4-flash").strip()
+
+            # Caption adaptation and other structured responses do not need the
+            # provider's default thinking mode. Disabling it reduces latency and
+            # keeps reasoning text out of user-facing JSON.
+            if deepseek_kwargs.get("response_format") == {"type": "json_object"}:
+                extra_body = dict(deepseek_kwargs.get("extra_body") or {})
+                extra_body["thinking"] = {"type": "disabled"}
+                deepseek_kwargs["extra_body"] = extra_body
+                deepseek_kwargs.setdefault("max_tokens", 1200)
+
             logger.info("Using DeepSeek after OpenAI was unavailable or failed.")
             return deepseek_client.chat.completions.create(**deepseek_kwargs)
         except Exception as exc:

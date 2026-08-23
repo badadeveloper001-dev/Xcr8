@@ -77,10 +77,21 @@ def create_distribution_draft(
             .limit(6)
         )
     )
+    volatile_memory_keys = {
+        "last_master_caption",
+        "last_caption",
+        "last_prompt",
+        "last_assistant_reply",
+        "conversation_history",
+        "session_history",
+    }
     memory_facts = [
         f"{memory.memory_key}: {memory.memory_value}"
         for memory in recent_memories
-        if memory.memory_key and memory.memory_value
+        if memory.memory_key
+        and memory.memory_value
+        and memory.memory_key.strip().lower().replace(" ", "_") not in volatile_memory_keys
+        and not memory.memory_key.strip().lower().startswith(("last_", "recent_"))
     ]
 
     creator_memory = {
