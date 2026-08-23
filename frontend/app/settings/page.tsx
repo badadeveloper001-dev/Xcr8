@@ -141,7 +141,8 @@ export default function SettingsPage() {
   const profileCompleteness = Math.round((filledProfileFields / 2) * 100);
   const currentPlanName =
     planUsage?.plan.name || (plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "Free");
-  const canManageCreatorProfiles = (planUsage?.plan.creator_profiles ?? 0) > 0;
+  const canManageCreatorProfiles =
+    (planUsage?.plan.creator_profiles ?? (plan === "pro" || plan === "business" ? 1 : 0)) > 0;
 
   const createWorkspaceMutation = useMutation({
     mutationFn: () =>
