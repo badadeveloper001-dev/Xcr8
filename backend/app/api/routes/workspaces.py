@@ -3,13 +3,14 @@ from __future__ import annotations
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
-from app.db.models import User, Workspace, WorkspaceMembership
+from app.db.models import CreatorMemory, User, Workspace, WorkspaceMembership
 from app.db.session import engine
 from app.services.entitlements import plan_for_user
+from app.services.profile_scope import SCOPED_MODELS
 
 _workspace_schema_ready = False
 
@@ -41,6 +42,38 @@ def _workspace_payload(workspace: Workspace) -> dict:
         "slug": workspace.slug,
         "description": workspace.description,
     }
+
+
+def _sync_workspace_memory(db: Session, user_id: int, workspace: Workspace) -> None:
+    memory = db.scalar(
+        select(CreatorMemory)
+        .where(
+            CreatorMemory.user_id == user_id,
+            CreatorMemory.workspace_id == workspace.id,
+            CreatorMemory.memory_type == "profile_identity",
+            CreatorMemory.memory_key == "managed_profile_context",
+        )
+        .execution_options(skip_profile_scope=True)
+    )
+    value = (
+        f"Managed profile: {workspace.name}. "
+        f"{workspace.description or 'Use this profile as a distinct brand or client context.'}"
+    ).strip()
+    if memory:
+        memory.memory_value = value
+        memory.confidence_score = 0.98
+        db.add(memory)
+        return
+    db.add(
+        CreatorMemory(
+            user_id=user_id,
+            workspace_id=workspace.id,
+            memory_type="profile_identity",
+            memory_key="managed_profile_context",
+            memory_value=value,
+            confidence_score=0.98,
+        )
+    )
 
 
 def _owned_workspace(db: Session, user_id: int, workspace_id: int) -> Workspace:
@@ -134,6 +167,7 @@ def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db))
             is_owner=True,
         )
     )
+    _sync_workspace_memory(db, user.id, workspace)
     db.commit()
     db.refresh(workspace)
     return {
@@ -190,6 +224,7 @@ def update_workspace(
     if "description" in payload:
         workspace.description = str(payload.get("description") or "").strip()[:2000] or None
     db.add(workspace)
+    _sync_workspace_memory(db, user_id, workspace)
     db.commit()
     db.refresh(workspace)
     return _workspace_payload(workspace)
@@ -198,6 +233,15 @@ def update_workspace(
 @router.delete("/{workspace_id}", response_model=dict)
 def delete_workspace(workspace_id: int, user_id: int, db: Session = Depends(get_db)) -> dict:
     workspace = _owned_workspace(db, user_id, workspace_id)
+    # Preserve the creator's work by moving profile-owned records back to the main account.
+    for model in SCOPED_MODELS:
+        db.execute(
+            update(model)
+            .where(model.workspace_id == workspace.id)
+            .values(workspace_id=None)
+            .execution_options(skip_profile_scope=True)
+        )
+
     memberships = list(
         db.scalars(select(WorkspaceMembership).where(WorkspaceMembership.workspace_id == workspace.id))
     )

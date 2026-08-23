@@ -558,6 +558,12 @@ export default function SettingsPage() {
                               Switch
                             </button>
                           )}
+                          <Link
+                            href={`/settings/profiles/${workspace.id}`}
+                            className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-2 py-1 text-[10px] font-semibold text-fuchsia-200 light:text-fuchsia-700"
+                          >
+                            Manage
+                          </Link>
                           <button
                             type="button"
                             aria-label={`Delete ${workspace.name}`}
@@ -731,10 +737,12 @@ export default function SettingsPage() {
           transition={{ duration: 0.32, delay: 0.08 }}
           className="xcr8-panel rounded-2xl p-4"
         >
-          <p className="xcr8-eyebrow mb-2 flex items-center gap-1.5">
-            <Globe2 size={12} />
-            Connected Platforms
-          </p>
+          <div id="connected-platforms" className="scroll-mt-6">
+            <p className="xcr8-eyebrow mb-2 flex items-center gap-1.5">
+              <Globe2 size={12} />
+              Connected Platforms
+            </p>
+          </div>
 
           <p className="mb-3 text-xs text-slate-500">
             Platforms with <span className="font-medium text-violet-400">Connect via OAuth</span>{" "}

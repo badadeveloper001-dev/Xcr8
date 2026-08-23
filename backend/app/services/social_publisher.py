@@ -26,8 +26,15 @@ def _state_secret() -> str:
     return settings.oauth_state_secret or settings.supabase_jwt_secret
 
 
-def build_oauth_state(user_id: int, platform: str, code_verifier: str | None = None) -> str:
-    payload = json.dumps({"u": user_id, "p": platform, "t": int(time()), "cv": code_verifier})
+def build_oauth_state(
+    user_id: int,
+    platform: str,
+    code_verifier: str | None = None,
+    workspace_id: int | None = None,
+) -> str:
+    payload = json.dumps(
+        {"u": user_id, "p": platform, "t": int(time()), "cv": code_verifier, "w": workspace_id}
+    )
     encoded = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
     sig = hmac.new(_state_secret().encode(), encoded.encode(), hashlib.sha256).hexdigest()[:16]
     return f"{encoded}.{sig}"
@@ -162,7 +169,12 @@ def configured_platforms() -> list[str]:
 # OAuth URL builder
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_oauth_authorize_url(platform: str, user_id: int, redirect_uri: str) -> str | None:
+def get_oauth_authorize_url(
+    platform: str,
+    user_id: int,
+    redirect_uri: str,
+    workspace_id: int | None = None,
+) -> str | None:
     cfg = _PLATFORM_OAUTH.get(platform)
     if not cfg:
         return None
@@ -177,7 +189,7 @@ def get_oauth_authorize_url(platform: str, user_id: int, redirect_uri: str) -> s
         digest = hashlib.sha256(code_verifier.encode()).digest()
         code_challenge = base64.urlsafe_b64encode(digest).decode().rstrip("=")
 
-    state = build_oauth_state(user_id, platform, code_verifier)
+    state = build_oauth_state(user_id, platform, code_verifier, workspace_id)
 
     client_id_param = str(cfg.get("client_id_param") or "client_id")
 

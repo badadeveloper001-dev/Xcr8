@@ -1,14 +1,18 @@
-import axios from "axios";
+import axios, { type AxiosInstance } from "axios";
 
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 const useDirectApi = process.env.NEXT_PUBLIC_USE_DIRECT_API === "true";
 
-// Default to same-origin proxy to avoid calling protected upstream URLs from the browser.
-const apiBaseUrl = useDirectApi && configuredApiUrl ? configuredApiUrl : "/";
+// Vercel mounts the FastAPI service here. Same-origin requests keep profile context
+// headers private to Xcr8 and avoid CORS failures across deployment aliases.
+const apiBaseUrl =
+  process.env.NODE_ENV === "development" && useDirectApi && configuredApiUrl
+    ? configuredApiUrl
+    : "/_/backend";
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,
-  timeout: 10_000,
+  timeout: 30_000,
 });
 
 // Managed profiles always use the same deployed backend service. Keeping this path
@@ -17,6 +21,37 @@ const workspaceApiClient = axios.create({
   baseURL: "/_/backend",
   timeout: 30_000,
 });
+
+function readCreatorContext(): { userId: number; workspaceId: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const persisted = JSON.parse(localStorage.getItem("xcr8-creator-store") || "{}") as {
+      state?: { userId?: number | null; activeCreatorId?: string | null };
+    };
+    const userId = Number(persisted.state?.userId || 0);
+    if (!userId) return null;
+    const activeCreatorId = String(persisted.state?.activeCreatorId || "");
+    const workspaceId = activeCreatorId.startsWith("workspace:")
+      ? activeCreatorId.slice("workspace:".length)
+      : "main";
+    return { userId, workspaceId: /^\d+$/.test(workspaceId) ? workspaceId : "main" };
+  } catch {
+    return null;
+  }
+}
+
+function attachCreatorContext(client: AxiosInstance, forceMain = false) {
+  client.interceptors.request.use((config) => {
+    const context = readCreatorContext();
+    if (!context) return config;
+    config.headers.set("X-Xcr8-User-Id", String(context.userId));
+    config.headers.set("X-Xcr8-Workspace-Id", forceMain ? "main" : context.workspaceId);
+    return config;
+  });
+}
+
+attachCreatorContext(apiClient);
+attachCreatorContext(workspaceApiClient, true);
 
 function meteredRequestConfig(timeout?: number) {
   const randomPart =
