@@ -80,12 +80,14 @@ export default function ComposePage() {
           setCaption(saved.master_caption || "");
           setSelectedPlatforms(saved.selected_platforms || []);
           setMediaItems(
-            (saved.media_urls || [saved.media_url]).filter(Boolean).map((url, index) => ({
+            (saved.media_urls || [saved.media_url])
+              .filter(Boolean)
+              .map<UploadedMediaItem>((url, index) => ({
               url,
               mediaType:
                 saved.media_types?.[index] === "video" ? "video" : "image",
-              name: url.split("/").pop()?.split("?")[0] || `Saved media ${index + 1}`,
-            })),
+                name: url.split("/").pop()?.split("?")[0] || `Saved media ${index + 1}`,
+              })),
           );
           setResumedPostId(saved.post_id);
           setDistributionDraft({
