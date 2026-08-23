@@ -11,6 +11,13 @@ export const apiClient = axios.create({
   timeout: 10_000,
 });
 
+// Managed profiles always use the same deployed backend service. Keeping this path
+// same-origin avoids CORS and stale NEXT_PUBLIC_API_URL values on Vercel aliases/previews.
+const workspaceApiClient = axios.create({
+  baseURL: "/_/backend",
+  timeout: 30_000,
+});
+
 function meteredRequestConfig(timeout?: number) {
   const randomPart =
     globalThis.crypto?.randomUUID?.() ??
@@ -1202,7 +1209,7 @@ export async function getPlanUsage(userId: number): Promise<PlanUsageResponse> {
 }
 
 export async function getCreatorWorkspaces(userId: number): Promise<CreatorWorkspaceSummary> {
-  const { data } = await apiClient.get<CreatorWorkspaceSummary>("/api/v1/workspaces/summary", {
+  const { data } = await workspaceApiClient.get<CreatorWorkspaceSummary>("/api/v1/workspaces/summary", {
     params: { user_id: userId },
   });
   return data;
@@ -1212,7 +1219,7 @@ export async function createCreatorWorkspace(
   userId: number,
   payload: { name: string; description?: string | null },
 ): Promise<CreatorWorkspace & { limit: number; remaining: number; plan: string }> {
-  const { data } = await apiClient.post("/api/v1/workspaces/", payload, {
+  const { data } = await workspaceApiClient.post("/api/v1/workspaces/", payload, {
     params: { user_id: userId },
   });
   return data;
@@ -1223,14 +1230,14 @@ export async function updateCreatorWorkspace(
   workspaceId: number,
   payload: { name?: string; description?: string | null },
 ): Promise<CreatorWorkspace> {
-  const { data } = await apiClient.patch(`/api/v1/workspaces/${workspaceId}`, payload, {
+  const { data } = await workspaceApiClient.patch(`/api/v1/workspaces/${workspaceId}`, payload, {
     params: { user_id: userId },
   });
   return data;
 }
 
 export async function deleteCreatorWorkspace(userId: number, workspaceId: number): Promise<void> {
-  await apiClient.delete(`/api/v1/workspaces/${workspaceId}`, {
+  await workspaceApiClient.delete(`/api/v1/workspaces/${workspaceId}`, {
     params: { user_id: userId },
   });
 }
