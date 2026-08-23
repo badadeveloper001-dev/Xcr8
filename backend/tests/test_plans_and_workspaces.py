@@ -12,11 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
 from app.db import models
-from app.db.models import ContentPost, PlanTier, UsageLedger, UsagePeriod, User, Workspace, WorkspaceMembership
+from app.db.models import ContentPost, IntelligenceNotification, PlanTier, PulseNotification, UsageLedger, UsagePeriod, User, Workspace, WorkspaceMembership
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.services.entitlements import consume_usage, refund_usage
 from app.services.profile_scope import reset_profile_scope, set_profile_scope
+from app.services.pulse import record_pulse_event, resolve_pulse_incident
 
 
 # Ensure test database has current schema
@@ -385,5 +386,69 @@ def test_managed_profile_context_isolates_creator_content():
             assert main_titles == ["Main account post"]
         finally:
             reset_profile_scope(main_token)
+    finally:
+        db.close()
+
+
+def test_pulse_delivers_deduplicated_in_app_issue_and_resolution_notifications(monkeypatch):
+    monkeypatch.setattr(settings, "pulse_user_email_enabled", False)
+    db = SessionLocal()
+    try:
+        user = User(email="pulse-in-app@test.local", display_name="Pulse Creator")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        payload = {
+            "event_type": "error",
+            "route": "/api/v1/ai/image/generate",
+            "method": "POST",
+            "http_status": 503,
+            "detail": "OpenAI unavailable token=private-token pulse-in-app@test.local",
+            "user_id": user.id,
+            "request_id": "pulse-test-request",
+        }
+        first_event = record_pulse_event(db, payload)
+        second_event = record_pulse_event(db, payload)
+        assert first_event.incident_id == second_event.incident_id
+        assert "private-token" not in first_event.detail
+        assert "pulse-in-app@test.local" not in first_event.detail
+
+        issue_notifications = (
+            db.query(IntelligenceNotification)
+            .filter(
+                IntelligenceNotification.user_id == user.id,
+                IntelligenceNotification.related_topic == f"Pulse incident #{first_event.incident_id}",
+            )
+            .all()
+        )
+        assert len(issue_notifications) == 1
+        assert issue_notifications[0].is_read is False
+        assert "detected a problem" in issue_notifications[0].body
+
+        issue_ledger = (
+            db.query(PulseNotification)
+            .filter(
+                PulseNotification.incident_id == first_event.incident_id,
+                PulseNotification.channel == "in_app",
+                PulseNotification.notification_type == "user_issue",
+            )
+            .all()
+        )
+        assert len(issue_ledger) == 1
+
+        resolved = resolve_pulse_incident(db, first_event.incident_id, "Provider recovered.")
+        assert resolved is not None
+        notifications = (
+            db.query(IntelligenceNotification)
+            .filter(
+                IntelligenceNotification.user_id == user.id,
+                IntelligenceNotification.related_topic == f"Pulse incident #{first_event.incident_id}",
+            )
+            .order_by(IntelligenceNotification.id)
+            .all()
+        )
+        assert len(notifications) == 2
+        assert "working normally again" in notifications[-1].body
     finally:
         db.close()
