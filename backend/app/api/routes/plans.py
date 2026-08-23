@@ -5,7 +5,7 @@ import hmac
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,8 +20,17 @@ PAID_WEBHOOK_STATUSES = {"paid", "succeeded", "active", "completed"}
 
 
 @router.get("/", response_model=list)
-def list_plans() -> list:
-    return [serialize_plan(PLAN_CONFIG[plan_id]) for plan_id in ("free", "starter", "pro", "business")]
+def list_plans(request: Request, response: Response) -> list:
+    # Vercel supplies an ISO country code derived from the request IP. This is
+    # appropriate for regional display; payment activation still requires a
+    # verified provider webhook and must validate the charged currency/amount.
+    country_code = str(request.headers.get("x-vercel-ip-country") or "").strip().upper()[:2]
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "X-Vercel-IP-Country"
+    return [
+        serialize_plan(PLAN_CONFIG[plan_id], country_code=country_code)
+        for plan_id in ("free", "starter", "pro", "business")
+    ]
 
 
 @router.get("/{user_id}/usage", response_model=dict)
