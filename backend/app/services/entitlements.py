@@ -35,7 +35,10 @@ GIBIBYTE = 1024 * MEBIBYTE
 class PlanConfig:
     id: str
     name: str
-    price_cents: int | None
+    price_cents: int
+    annual_price_cents: int
+    ngn_price_kobo: int
+    ngn_annual_price_kobo: int
     monthly_credits: int
     text_generations: int
     image_generations: int
@@ -56,6 +59,9 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         id="free",
         name="Free",
         price_cents=0,
+        annual_price_cents=0,
+        ngn_price_kobo=0,
+        ngn_annual_price_kobo=0,
         monthly_credits=500,
         text_generations=50,
         image_generations=0,
@@ -69,7 +75,10 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "starter": PlanConfig(
         id="starter",
         name="Starter",
-        price_cents=None,
+        price_cents=900,
+        annual_price_cents=9_000,
+        ngn_price_kobo=750_000,
+        ngn_annual_price_kobo=7_500_000,
         monthly_credits=5_000,
         text_generations=500,
         image_generations=25,
@@ -83,7 +92,10 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "pro": PlanConfig(
         id="pro",
         name="Pro",
-        price_cents=None,
+        price_cents=2_900,
+        annual_price_cents=29_000,
+        ngn_price_kobo=2_000_000,
+        ngn_annual_price_kobo=20_000_000,
         monthly_credits=15_000,
         text_generations=2_500,
         image_generations=100,
@@ -97,11 +109,14 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "business": PlanConfig(
         id="business",
         name="Business",
-        price_cents=None,
+        price_cents=9_900,
+        annual_price_cents=99_000,
+        ngn_price_kobo=5_000_000,
+        ngn_annual_price_kobo=50_000_000,
         monthly_credits=50_000,
         text_generations=10_000,
         image_generations=300,
-        high_quality_images=300,
+        high_quality_images=50,
         voiceovers=200,
         creator_profiles=5,
         social_accounts=20,
@@ -154,11 +169,35 @@ def plan_for_user(user: User) -> PlanConfig:
     return PLAN_CONFIG[effective_plan_id(user)]
 
 
-def serialize_plan(plan: PlanConfig) -> dict:
+def _format_price(currency: str, amount_minor: int) -> str:
+    symbol = "₦" if currency == "NGN" else "$"
+    whole, fraction = divmod(max(0, int(amount_minor)), 100)
+    return f"{symbol}{whole:,}" if fraction == 0 else f"{symbol}{whole:,}.{fraction:02d}"
+
+
+def serialize_plan(plan: PlanConfig, country_code: str | None = None) -> dict:
     payload = asdict(plan)
+    normalized_country = str(country_code or "").strip().upper()[:2]
+    is_nigeria = normalized_country == "NG"
+    currency = "NGN" if is_nigeria else "USD"
+    monthly_amount_minor = plan.ngn_price_kobo if is_nigeria else plan.price_cents
+    annual_amount_minor = (
+        plan.ngn_annual_price_kobo if is_nigeria else plan.annual_price_cents
+    )
+
     payload["high_quality_allowed"] = plan.high_quality_allowed
     payload["storage_megabytes"] = plan.storage_bytes // MEBIBYTE
     payload["credit_costs"] = dict(CREDIT_COSTS)
+    payload["pricing"] = {
+        "region": "nigeria" if is_nigeria else "global",
+        "country_code": normalized_country or None,
+        "currency": currency,
+        "monthly_amount_minor": monthly_amount_minor,
+        "annual_amount_minor": annual_amount_minor,
+        "monthly_formatted": _format_price(currency, monthly_amount_minor),
+        "annual_formatted": _format_price(currency, annual_amount_minor),
+        "annual_savings_months": 2 if monthly_amount_minor > 0 else 0,
+    }
     return payload
 
 
