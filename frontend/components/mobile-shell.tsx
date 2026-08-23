@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { NotificationBellButton } from "@/components/notification-bell-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/mobile-nav";
+import { CreatorProfileSwitcher } from "@/components/creator-profile-switcher";
 
 type MobileShellProps = {
   children: ReactNode;
@@ -25,7 +26,7 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
       <div className="mx-auto w-full max-w-[460px] lg:max-w-[1120px]">
         {!hideHeader ? (
           <header
-            className="xcr8-panel mb-6 flex items-start justify-between rounded-2xl p-3 backdrop-blur-sm"
+            className="xcr8-panel mb-6 flex flex-col gap-3 rounded-2xl p-3 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between"
             aria-label="Page header"
           >
             <div className="pr-3">
@@ -40,7 +41,8 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
                 </p>
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+              <CreatorProfileSwitcher />
               <NotificationBellButton />
               <ThemeToggle />
             </div>
