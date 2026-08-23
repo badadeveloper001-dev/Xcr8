@@ -58,8 +58,10 @@ def health_provider() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "ai-services",
-        "provider_configured": bool(settings.openai_api_key),
-        "model": settings.openai_model,
+        "provider_configured": bool(settings.openai_api_key or settings.deepseek_api_key),
+        "openai_configured": bool(settings.openai_api_key),
+        "deepseek_configured": bool(settings.deepseek_api_key),
+        "model": settings.openai_model if settings.openai_api_key else settings.deepseek_model,
         "image_model": settings.openai_image_model,
         "tts_model": settings.openai_tts_model,
     }
