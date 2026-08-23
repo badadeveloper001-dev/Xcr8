@@ -113,6 +113,12 @@ def create_distribution_draft(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    existing_post = (
+        _owned_draft(db, payload.user_id, payload.post_id)
+        if payload.post_id is not None
+        else None
+    )
+
     consume_usage(
         db,
         payload.user_id,
@@ -125,8 +131,8 @@ def create_distribution_draft(
     language_detection = detect_caption_language(payload.master_caption)
     detected_language = str(language_detection.get("language", "english"))
 
-    if payload.post_id is not None:
-        post = _owned_draft(db, payload.user_id, payload.post_id)
+    if existing_post is not None:
+        post = existing_post
         db.execute(delete(PostVariant).where(PostVariant.post_id == post.id))
         db.execute(delete(AIGeneration).where(AIGeneration.post_id == post.id))
         post.title = payload.title
