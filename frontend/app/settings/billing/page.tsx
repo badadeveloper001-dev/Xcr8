@@ -53,7 +53,7 @@ const GLOBAL_FALLBACK_PRICES: Record<string, { monthly: number; annual: number }
 };
 
 function fallbackPricing(planId: string): RegionalPricing {
-  const price = GLOBAL_FALLBACK_PRICES[planId] || GLOBAL_FALLBACK_PRICES.free;
+  const price = GLOBAL_FALLBACK_PRICES[planId] ?? { monthly: 0, annual: 0 };
   const format = (amount: number) =>
     new Intl.NumberFormat("en-US", {
       style: "currency",
