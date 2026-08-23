@@ -107,6 +107,7 @@ class ConnectedPlatform(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     platform: Mapped[Platform] = mapped_column(SqlEnum(Platform), index=True)
     account_handle: Mapped[str] = mapped_column(String(120))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -121,6 +122,7 @@ class ContentPost(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(180), default="Untitled Post")
     media_type: Mapped[str] = mapped_column(String(32), default="image")
     media_url: Mapped[str] = mapped_column(Text)
@@ -162,6 +164,7 @@ class ScheduledPost(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("content_posts.id"), index=True)
     platform: Mapped[Platform] = mapped_column(SqlEnum(Platform), index=True)
     scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
@@ -193,6 +196,7 @@ class CreatorMemory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     memory_type: Mapped[str] = mapped_column(String(64), default="style")
     memory_key: Mapped[str] = mapped_column(String(120), index=True)
     memory_value: Mapped[str] = mapped_column(Text)
@@ -209,6 +213,7 @@ class AnalyticsSnapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     platform: Mapped[Platform] = mapped_column(SqlEnum(Platform), index=True)
     metric_window: Mapped[str] = mapped_column(String(32), default="7d")
     followers_delta: Mapped[int] = mapped_column(Integer, default=0)
@@ -227,6 +232,7 @@ class TrendSignalEvent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     topic: Mapped[str] = mapped_column(String(180), default="creator intelligence")
     platform: Mapped[str] = mapped_column(String(40), default="all", index=True)
     title: Mapped[str] = mapped_column(String(220))
@@ -287,6 +293,7 @@ class IntelligenceFeedback(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     trend_signal_id: Mapped[int] = mapped_column(ForeignKey("trend_signal_events.id"), index=True)
     action: Mapped[str] = mapped_column(String(32), index=True)
     weight: Mapped[float] = mapped_column(Float, default=0.5)
@@ -301,6 +308,7 @@ class IntelligenceNotification(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(220))
     body: Mapped[str] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(String(24), default="info")
