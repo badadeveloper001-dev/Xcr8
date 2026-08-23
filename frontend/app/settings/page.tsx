@@ -27,6 +27,7 @@ import { useCreatorStore } from "@/lib/store";
 import { updateAvatarUrl } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 const platforms = [
   { id: "instagram", label: "Instagram", cls: "badge-ig" },
@@ -54,6 +55,7 @@ export default function SettingsPage() {
   const setSession = useCreatorStore((s) => s.setSession);
   const avatarUrl = useCreatorStore((s) => s.avatarUrl);
   const setAvatarUrl = useCreatorStore((s) => s.setAvatarUrl);
+  const { activeName, ownerName, isManaged, activeProfile } = useActiveCreatorIdentity();
 
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -349,12 +351,16 @@ export default function SettingsPage() {
             </div>
             <div>
               <p className="text-lg font-semibold text-white light:text-slate-900">
-                {displayName ?? "Creator"}
+                {activeName}
               </p>
               <p className="text-xs text-slate-500">
-                Keep this profile synced with your creator identity and publishing connections.
+                {isManaged
+                  ? `Managed profile under ${ownerName}. Connections and work below belong to this profile.`
+                  : "Keep this profile synced with your creator identity and publishing connections."}
               </p>
-              <p className="text-sm text-slate-500">{email ?? "user@xcr8.app"}</p>
+              <p className="text-sm text-slate-500">
+                {isManaged ? `Owner: ${email ?? ownerName}` : email ?? "user@xcr8.app"}
+              </p>
             </div>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -440,34 +446,51 @@ export default function SettingsPage() {
           transition={{ duration: 0.32, delay: 0.04 }}
           className="xcr8-panel rounded-2xl border-2 border-indigo-300/25 p-4"
         >
-          <p className="xcr8-eyebrow mb-3">Profile</p>
-          <p className="mb-3 text-xs text-slate-500">
-            Username and phone are editable here. Display name stays read-only.
-          </p>
-          <div className="space-y-2.5">
-            <input
-              value={profileUsername}
-              onChange={(event) => setProfileUsername(event.target.value)}
-              className="xcr8-input"
-              placeholder="Username"
-            />
-            <input
-              value={profilePhone}
-              onChange={(event) => setProfilePhone(event.target.value)}
-              className="xcr8-input"
-              placeholder="Phone number"
-              inputMode="tel"
-              autoComplete="tel"
-            />
-            <button
-              type="button"
-              disabled={savingProfile}
-              onClick={() => void handleProfileSave()}
-              className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
-            >
-              {savingProfile ? "Saving..." : "Save profile"}
-            </button>
-          </div>
+          <p className="xcr8-eyebrow mb-3">{isManaged ? "Active profile" : "Main account profile"}</p>
+          {isManaged && activeProfile ? (
+            <div className="surface-soft rounded-xl p-4">
+              <p className="text-base font-semibold text-white light:text-slate-900">{activeName}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Edit this profile’s identity, niche, audience, and brand voice from its control page.
+              </p>
+              <Link
+                href={`/settings/profiles/${activeProfile.id}`}
+                className="mt-3 inline-flex rounded-xl bg-fuchsia-600 px-4 py-2 text-xs font-semibold text-white"
+              >
+                Manage {activeName}
+              </Link>
+            </div>
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-slate-500">
+                Username and phone belong to the main account. Display name stays read-only.
+              </p>
+              <div className="space-y-2.5">
+                <input
+                  value={profileUsername}
+                  onChange={(event) => setProfileUsername(event.target.value)}
+                  className="xcr8-input"
+                  placeholder="Username"
+                />
+                <input
+                  value={profilePhone}
+                  onChange={(event) => setProfilePhone(event.target.value)}
+                  className="xcr8-input"
+                  placeholder="Phone number"
+                  inputMode="tel"
+                  autoComplete="tel"
+                />
+                <button
+                  type="button"
+                  disabled={savingProfile}
+                  onClick={() => void handleProfileSave()}
+                  className="rounded-full border border-cyan-300/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 light:border-cyan-300 light:bg-cyan-50 light:text-cyan-700"
+                >
+                  {savingProfile ? "Saving..." : "Save main account"}
+                </button>
+              </div>
+            </>
+          )}
         </motion.section>
 
         <motion.section

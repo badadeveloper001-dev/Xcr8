@@ -19,6 +19,7 @@ import { Logo } from "@/components/logo";
 import { MobileShell } from "@/components/mobile-shell";
 import { getDashboardOverview, type DashboardOverviewPayload } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 12 },
@@ -30,7 +31,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
-  const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
+  const { activeName, ownerName, isManaged } = useActiveCreatorIdentity();
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -127,8 +128,11 @@ export default function DashboardPage() {
               </Link>
             </div>
             <p className="mt-2 text-sm font-medium text-slate-300 light:text-slate-700">
-              Welcome back, {displayName}
+              Welcome back, {data?.creator_name || activeName}
             </p>
+            {isManaged ? (
+              <p className="mt-1 text-xs text-slate-500">Managed profile under {ownerName}</p>
+            ) : null}
           </div>
 
           <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-4">

@@ -7,6 +7,7 @@ import { ArrowRight, TrendingUp } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { generateAiTrendMap, getApiErrorMessage, type AiTrendMapperResponse } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 const platformOptions = [
   { id: "all", label: "All platforms" },
@@ -29,7 +30,7 @@ export default function TrendMapperPage() {
   const router = useRouter();
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const userId = useCreatorStore((state) => state.userId);
-  const displayName = useCreatorStore((state) => state.displayName) ?? "Creator";
+  const { activeName } = useActiveCreatorIdentity();
 
   const [topic, setTopic] = useState("creator growth ideas");
   const [platform, setPlatform] = useState("all");
@@ -84,7 +85,7 @@ export default function TrendMapperPage() {
         <section className="ai-stage p-5">
           <h2 className="flex items-center gap-2 text-xl font-semibold text-white light:text-slate-900">
             <TrendingUp size={18} className="text-cyan-300" />
-            {displayName}
+            {activeName}
           </h2>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">

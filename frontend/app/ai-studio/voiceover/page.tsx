@@ -5,6 +5,7 @@ import { Download, Mic, SendHorizontal, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { generateAiVoiceoverAudio, getApiErrorMessage } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 const platformOptions = ["instagram", "facebook", "youtube_shorts", "threads"];
 const languageOptions = ["english", "nigerian_pidgin", "yoruba", "code_switch"];
@@ -16,14 +17,14 @@ const durationOptions = [30, 45, 60, 90, 120];
 
 export default function VoiceoverPage() {
   const userId = useCreatorStore((state) => state.userId);
-  const displayName = useCreatorStore((state) => state.displayName);
+  const { activeName } = useActiveCreatorIdentity();
 
   const defaultPrompt = useMemo(
     () =>
-      displayName
-        ? `Consistency compounds. ${displayName} keeps showing up, learning fast, and building real momentum.`
+      activeName
+        ? `Consistency compounds. ${activeName} keeps showing up, learning fast, and building real momentum.`
         : "Consistency compounds. I keep showing up, learning fast, and building real momentum.",
-    [displayName],
+    [activeName],
   );
 
   const [topic, setTopic] = useState(defaultPrompt);

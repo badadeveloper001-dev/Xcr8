@@ -8,6 +8,7 @@ import { ArrowRight, BarChart3, Clock3, Download, RefreshCw, Sparkles, Target, W
 import { MobileShell } from "@/components/mobile-shell";
 import { apiClient } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 type EngagementItem = {
   platform: string;
@@ -88,7 +89,7 @@ export default function AnalyticsPage() {
   const router = useRouter();
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
-  const displayName = useCreatorStore((s) => s.displayName) ?? "Creator";
+  const { activeName } = useActiveCreatorIdentity();
 
   const [analyticsWindow, setAnalyticsWindow] = useState<"7d" | "30d" | "90d">("30d");
   const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
@@ -145,7 +146,7 @@ export default function AnalyticsPage() {
   const exportSnapshot = () => {
     const lines = [
       `XCR8 ANALYTICS SNAPSHOT (${analyticsWindow})`,
-      `Creator: ${displayName}`,
+      `Creator: ${activeName}`,
       `Total Reach: ${totalReach.toLocaleString()}`,
       `Audience Growth: +${audienceGrowth}`,
       `Avg Engagement: ${avgEngagement.toFixed(1)}%`,
