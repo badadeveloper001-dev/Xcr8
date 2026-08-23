@@ -144,7 +144,7 @@ export default function SettingsPage() {
   const currentPlanName =
     planUsage?.plan.name || (plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "Free");
   const canManageCreatorProfiles =
-    (planUsage?.plan.creator_profiles ?? (plan === "pro" || plan === "business" ? 1 : 0)) > 0;
+    (planUsage?.plan.creator_profiles ?? (plan === "business" ? 1 : 0)) > 0;
 
   const createWorkspaceMutation = useMutation({
     mutationFn: () =>
@@ -641,18 +641,18 @@ export default function SettingsPage() {
               <div>
                 <p className="xcr8-eyebrow">Creator profiles</p>
                 <p className="mt-1 text-sm font-semibold text-white light:text-slate-900">
-                  Manage multiple brands and clients with Pro
+                  Manage multiple brands and clients with Business
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   Your main account profile stays active. Creating and switching managed profiles
-                  starts on the Pro plan.
+                  is available on the Business plan.
                 </p>
               </div>
               <Link
                 href="/settings/billing"
                 className="shrink-0 rounded-xl bg-fuchsia-600 px-4 py-2 text-center text-xs font-semibold text-white transition hover:bg-fuchsia-500"
               >
-                Upgrade to Pro
+                Upgrade to Business
               </Link>
             </div>
           )}
