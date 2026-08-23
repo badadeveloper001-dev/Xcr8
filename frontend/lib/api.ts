@@ -234,6 +234,7 @@ export type OnboardingPayload = {
 
 export type DistributionDraftPayload = {
   user_id: number;
+  post_id?: number;
   title: string;
   media_url: string;
   media_urls?: string[];
@@ -280,7 +281,7 @@ export type DashboardOverviewPayload = {
   };
 };
 
-type DistributionDraftResponse = {
+export type DistributionDraftResponse = {
   post_id: number;
   status: string;
   variants: Array<{
@@ -291,6 +292,18 @@ type DistributionDraftResponse = {
     hook: string;
     approved: boolean;
   }>;
+};
+
+export type SavedDistributionDraft = DistributionDraftResponse & {
+  title: string;
+  master_caption: string;
+  media_url: string;
+  media_urls: string[];
+  media_type: string;
+  media_types: string[];
+  primary_language: string;
+  selected_platforms: string[];
+  updated_at?: string | null;
 };
 
 type ApproveDistributionResponse = {
@@ -798,6 +811,27 @@ export async function createDistributionDraft(
     "/api/v1/distribution/draft",
     payload,
     meteredRequestConfig(60_000),
+  );
+  return data;
+}
+
+export async function getDistributionDraft(
+  userId: number,
+  postId: number,
+): Promise<SavedDistributionDraft> {
+  const { data } = await apiClient.get<SavedDistributionDraft>(
+    `/api/v1/distribution/drafts/${postId}`,
+    { params: { user_id: userId } },
+  );
+  return data;
+}
+
+export async function listDistributionDrafts(
+  userId: number,
+): Promise<SavedDistributionDraft[]> {
+  const { data } = await apiClient.get<SavedDistributionDraft[]>(
+    "/api/v1/distribution/drafts",
+    { params: { user_id: userId } },
   );
   return data;
 }
