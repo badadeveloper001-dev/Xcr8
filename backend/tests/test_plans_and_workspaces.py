@@ -26,7 +26,11 @@ models.Base.metadata.create_all(bind=engine)
 def test_create_and_list_workspace():
     db = SessionLocal()
     try:
-        user = User(email="workspace@test.local", display_name="Workspace Tester")
+        user = User(
+            email="workspace@test.local",
+            display_name="Workspace Tester",
+            plan_tier=PlanTier.pro,
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
