@@ -13,6 +13,7 @@ import {
   submitIntelligenceFeedback,
 } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
+import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
 export default function IntelligenceEnginePage() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function IntelligenceEnginePage() {
 
   const userId = useCreatorStore((state) => state.userId);
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
-  const displayName = useCreatorStore((state) => state.displayName) ?? "Creator";
+  const { activeName } = useActiveCreatorIdentity();
 
   const [platform, setPlatform] = useState("all");
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export default function IntelligenceEnginePage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-white light:text-slate-900">
-                {displayName}, your opportunity radar is live
+                {activeName}, your opportunity radar is live
               </h2>
               <p className="mt-1 text-sm text-slate-300 light:text-slate-700">
                 Detect trends, research why they work, and convert them into publish-ready angles.
