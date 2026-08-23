@@ -17,7 +17,7 @@ export function NotificationBellButton() {
     queryFn: () => getIntelligenceFeed(userId as number, { limit: 12 }),
     enabled: Boolean(hasHydrated && userId && pathname !== "/notifications"),
     staleTime: 60_000,
-    refetchInterval: 180_000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 
