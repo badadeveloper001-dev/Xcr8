@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, ContentPost, Platform, PostVariant, User
 from app.services.entitlements import ensure_social_account_capacity
+from app.services.profile_scope import current_profile_id
 from app.services.social_publisher import (
     configured_platforms,
     exchange_code_for_token,
@@ -227,7 +228,7 @@ def oauth_start(platform: str, user_id: int, db: Session = Depends(get_db)) -> d
             detail="Frontend URL is not configured. Set FRONTEND_URL in environment variables.",
         )
 
-    auth_url = get_oauth_authorize_url(platform, user_id, redirect_uri)
+    auth_url = get_oauth_authorize_url(platform, user_id, redirect_uri, current_profile_id())
     if not auth_url:
         raise HTTPException(status_code=500, detail="Failed to build authorization URL.")
 
@@ -250,6 +251,8 @@ def _oauth_callback_impl(
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state.")
 
     user_id = int(state_data["u"])
+    raw_workspace_id = state_data.get("w")
+    workspace_id = int(raw_workspace_id) if raw_workspace_id not in {None, "", 0, "0"} else None
     state_platform = str(state_data["p"])
     if state_platform != platform:
         raise HTTPException(status_code=400, detail="State platform mismatch.")
@@ -429,6 +432,7 @@ def _oauth_callback_impl(
         select(ConnectedPlatform).where(
             ConnectedPlatform.user_id == user_id,
             ConnectedPlatform.platform == platform_enum,
+            ConnectedPlatform.workspace_id == workspace_id,
         )
     )
     if existing:
@@ -441,6 +445,7 @@ def _oauth_callback_impl(
     else:
         row = ConnectedPlatform(
             user_id=user_id,
+            workspace_id=workspace_id,
             platform=platform_enum,
             account_handle=handle,
             is_active=True,
@@ -542,6 +547,7 @@ def publish_post(
         for row in db.scalars(
             select(ConnectedPlatform).where(
                 ConnectedPlatform.user_id == payload.user_id,
+                ConnectedPlatform.workspace_id == post.workspace_id,
                 ConnectedPlatform.is_active == True,  # noqa: E712
             )
         )
