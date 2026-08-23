@@ -71,11 +71,41 @@ def test_direct_upgrade_is_blocked_and_verified_webhook_upgrades(monkeypatch):
         assert upgrade_resp.json()["detail"]["code"] == "verified_payment_required"
 
         monkeypatch.setattr(settings, "billing_webhook_secret", "test-billing-secret")
+
+        underpaid_payload = {
+            "event_id": "evt_underpaid_business",
+            "user_id": user_id,
+            "plan": "business",
+            "status": "paid",
+            "currency": "NGN",
+            "billing_cycle": "monthly",
+            "amount_minor": 100,
+        }
+        underpaid_raw = json.dumps(underpaid_payload, separators=(",", ":")).encode()
+        underpaid_signature = hmac.new(
+            b"test-billing-secret",
+            underpaid_raw,
+            hashlib.sha256,
+        ).hexdigest()
+        underpaid_response = client.post(
+            "/api/v1/plans/webhook/test-provider",
+            content=underpaid_raw,
+            headers={
+                "Content-Type": "application/json",
+                "X-Xcr8-Signature": underpaid_signature,
+            },
+        )
+        assert underpaid_response.status_code == 400
+        assert underpaid_response.json()["detail"]["code"] == "payment_amount_mismatch"
+
         payload = {
             "event_id": "evt_test_plan_1",
             "user_id": user_id,
             "plan": "starter",
             "status": "paid",
+            "currency": "USD",
+            "billing_cycle": "monthly",
+            "amount_minor": 900,
             "customer_id": "cus_test",
         }
         raw = json.dumps(payload, separators=(",", ":")).encode()
