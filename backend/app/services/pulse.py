@@ -300,7 +300,12 @@ def notify_founders(db: Session, incident: PulseIncident) -> None:
             continue
         attempted_delivery = True
         try:
-            response = httpx.post(target, json=webhook_payload, timeout=10.0)
+            channel_payload = (
+                {"content": webhook_payload["text"]}
+                if channel == "discord"
+                else webhook_payload
+            )
+            response = httpx.post(target, json=channel_payload, timeout=10.0)
             response.raise_for_status()
             _record_notification(db, incident.id, channel, "founder_alert", target, "sent", {"status": response.status_code})
         except Exception as exc:
@@ -338,14 +343,15 @@ def notify_founders_fallback(
         _send_email(subject, body, founder_emails)
 
     payload = {"text": f"{subject}\nFeature: {feature}\nRequest: {request_id or 'N/A'}\n{safe_detail}"}
-    for target in [
-        str(getattr(settings, "pulse_slack_webhook_url", "") or "").strip(),
-        str(getattr(settings, "pulse_discord_webhook_url", "") or "").strip(),
+    for channel, target in [
+        ("slack", str(getattr(settings, "pulse_slack_webhook_url", "") or "").strip()),
+        ("discord", str(getattr(settings, "pulse_discord_webhook_url", "") or "").strip()),
     ]:
         if not target:
             continue
         try:
-            response = httpx.post(target, json=payload, timeout=8.0)
+            channel_payload = {"content": payload["text"]} if channel == "discord" else payload
+            response = httpx.post(target, json=channel_payload, timeout=8.0)
             response.raise_for_status()
         except Exception:
             continue
