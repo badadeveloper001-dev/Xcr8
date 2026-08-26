@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import re
+from urllib.parse import quote_plus
 from xml.etree import ElementTree
 
 import httpx
@@ -39,22 +41,71 @@ def _as_iso(value: datetime | None) -> str:
     return (value or datetime.now(tz=UTC)).isoformat()
 
 
+_NICHE_STOPWORDS = {
+    "and", "the", "for", "with", "from", "into", "your", "content", "creator",
+    "creators", "creation", "social", "media", "online", "digital", "general",
+}
+
+
+def _clean_niches(values: object) -> list[str]:
+    if isinstance(values, str):
+        candidates = [values]
+    elif isinstance(values, list):
+        candidates = [str(item) for item in values]
+    else:
+        candidates = []
+
+    cleaned: list[str] = []
+    for candidate in candidates:
+        niche = re.sub(r"\s+", " ", candidate.strip().lower())
+        if len(niche) < 2 or niche in cleaned:
+            continue
+        cleaned.append(niche)
+    return cleaned[:6]
+
+
 def _profile_interests(profile: CreatorProfile | None) -> list[str]:
+    """Return only niches the user explicitly selected or saved."""
     if not profile:
-        return ["creator growth", "content strategy"]
+        return []
 
     preferences = profile.preferences if isinstance(profile.preferences, dict) else {}
-    explicit = preferences.get("content_niche")
-    if isinstance(explicit, list) and explicit:
-        cleaned = [str(item).strip().lower() for item in explicit if str(item).strip()]
-        if cleaned:
-            return cleaned[:6]
+    niches = _clean_niches(preferences.get("content_niche"))
+    saved_niche = _clean_niches(profile.niche)
+    for niche in saved_niche:
+        if niche not in niches:
+            niches.append(niche)
+    return niches[:6]
 
-    niche = str(profile.niche or "creator growth").strip().lower()
-    if not niche:
-        niche = "creator growth"
-    return [niche, "creator economy"]
 
+def _niche_tokens(interests: list[str]) -> set[str]:
+    tokens: set[str] = set()
+    for interest in interests:
+        for token in re.findall(r"[a-z0-9]+", interest.lower()):
+            if len(token) >= 3 and token not in _NICHE_STOPWORDS:
+                tokens.add(token)
+    return tokens
+
+
+def _matches_niche(text: str, interests: list[str]) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+    if not normalized or not interests:
+        return False
+
+    for interest in interests:
+        phrase = re.sub(r"[^a-z0-9]+", " ", interest.lower()).strip()
+        if phrase and phrase in normalized:
+            return True
+
+    words = set(normalized.split())
+    return bool(words.intersection(_niche_tokens(interests)))
+
+
+def _matched_niche(text: str, interests: list[str]) -> str:
+    for interest in interests:
+        if _matches_niche(text, [interest]):
+            return interest
+    return ""
 
 def _safe_platform(value: str | None) -> str:
     cleaned = str(value or "all").strip().lower()
