@@ -50,6 +50,7 @@
 - `OAUTH_STATE_SECRET`: random signing secret for OAuth state.
 - `BILLING_WEBHOOK_SECRET`: HMAC secret required to activate paid plans through the verified billing webhook.
 - `AI_INTERNAL_TOKEN`: shared high-entropy secret used by the backend to call costly internal AI routes.
+- `META_GRAPH_API_VERSION`: supported Meta Graph API version used for Facebook and Instagram (default `v22.0`).
 - `META_APP_ID` / `META_APP_SECRET`: Meta OAuth credentials.
 - `THREADS_APP_ID` / `THREADS_APP_SECRET`: Threads OAuth credentials. The Meta app must allow `https://your-domain/auth/platform-callback`.
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: Google/YouTube OAuth credentials.
