@@ -64,8 +64,44 @@ h4,
 
 html,
 body {
+  width: 100%;
   max-width: 100%;
+  min-height: 100%;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Keep media and long controls inside the viewport on narrow Android screens. */
+img,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  /* Android browsers can zoom and hide a focused field when text is too small. */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  .xcr8-input {
+    min-height: 48px;
+  }
 }
 
 @media (max-width: 640px) {
