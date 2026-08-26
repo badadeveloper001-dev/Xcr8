@@ -20,6 +20,7 @@ from app.services.social_publisher import (
     configured_platforms,
     exchange_code_for_token,
     fetch_facebook_page_connection,
+    fetch_meta_granted_permissions,
     fetch_instagram_business_connection,
     fetch_platform_user_info,
     get_oauth_authorize_url,
@@ -322,56 +323,46 @@ def _oauth_callback_impl(
             handle = page_name
 
     if platform == "instagram":
-        ig_info = fetch_instagram_business_connection(source_user_access_token)
+        granular_target_ids: list[str] = []
+        granular_scopes = token_data.get("granular_scopes")
+        if isinstance(granular_scopes, list):
+            for scope_entry in granular_scopes:
+                if not isinstance(scope_entry, dict):
+                    continue
+                target_ids = scope_entry.get("target_ids")
+                if not isinstance(target_ids, list):
+                    continue
+                for target_id in target_ids:
+                    candidate = str(target_id or "").strip()
+                    if candidate and candidate not in granular_target_ids:
+                        granular_target_ids.append(candidate)
+
+        ig_info = fetch_instagram_business_connection(
+            source_user_access_token,
+            granular_target_ids,
+        )
         if not ig_info:
-            token_diag = {
-                "keys": sorted([str(k) for k in token_data.keys()]),
-                "user_id": token_data.get("user_id"),
-                "profile_id": token_data.get("profile_id"),
-                "granular_scopes": token_data.get("granular_scopes"),
-                "granted_scopes": token_data.get("granted_scopes"),
-                "scope": token_data.get("scope"),
+            granted_permissions = fetch_meta_granted_permissions(source_user_access_token)
+            required_permissions = {
+                "instagram_basic",
+                "instagram_content_publish",
+                "pages_show_list",
+                "pages_read_engagement",
             }
-            print(f"instagram_oauth_token_diag={token_diag}")
-
-            # Business Login can return selected IG asset IDs in granular_scopes
-            # even when /me/accounts does not include linked IG account objects.
-            granular_scopes = token_data.get("granular_scopes")
-            target_ig_id = ""
-            if isinstance(granular_scopes, list):
-                for scope_entry in granular_scopes:
-                    if not isinstance(scope_entry, dict):
-                        continue
-                    scope_name = str(scope_entry.get("scope") or "").strip()
-                    if not scope_name.startswith("instagram_"):
-                        continue
-                    target_ids = scope_entry.get("target_ids")
-                    if not isinstance(target_ids, list):
-                        continue
-                    for target_id in target_ids:
-                        candidate = str(target_id or "").strip()
-                        if candidate:
-                            target_ig_id = candidate
-                            break
-                    if target_ig_id:
-                        break
-
-            if target_ig_id:
-                ig_info = {
-                    "ig_user_id": target_ig_id,
-                    "ig_username": "",
-                    "page_id": "",
-                    "page_name": "",
-                    "page_access_token": "",
-                }
-
-        if not ig_info:
+            missing_permissions = sorted(required_permissions - granted_permissions)
+            permission_hint = (
+                f" Missing or declined permissions: {', '.join(missing_permissions)}."
+                if missing_permissions
+                else ""
+            )
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Instagram connected, but no publishable Instagram professional account was resolved. "
-                    "Ensure the account is Professional (Business or Creator), linked to the app, "
-                    "and if using Facebook Login, connected to a Facebook Page."
+                    "Instagram authorization completed, but Meta did not return a publishable "
+                    "Professional account. Reconnect and choose every Facebook Page/Instagram "
+                    "asset when Meta asks for access. Confirm the Instagram account is Business "
+                    "or Creator and is linked to a Facebook Page you manage."
+                    f"{permission_hint}"
                 ),
             )
 
@@ -382,7 +373,7 @@ def _oauth_callback_impl(
         if not ig_user_id:
             raise HTTPException(
                 status_code=400,
-                detail="Instagram business account ID is missing. Reconnect after linking IG to a Facebook Page.",
+                detail="Meta returned the Instagram asset without its professional account ID. Reconnect Instagram and grant access to all requested assets.",
             )
 
         if page_token:
@@ -425,7 +416,14 @@ def _oauth_callback_impl(
             }
         )
     if platform == "instagram":
-        auth_meta["source_user_access_token"] = source_user_access_token
+        auth_meta.update(
+            {
+                "source_user_access_token": source_user_access_token,
+                "page_id": ig_info.get("page_id") or None,
+                "page_name": ig_info.get("page_name") or None,
+                "resolution_source": ig_info.get("resolution_source") or "meta-assets",
+            }
+        )
 
     ensure_social_account_capacity(db, user_id, platform)
 
@@ -484,7 +482,7 @@ def oauth_callback(
                 status_code=502,
                 detail=(
                     "Threads authorization succeeded, but Xcr8 could not save the connection "
-                    f"({error_type}). Check the Vercel function logs for the matching error."
+                    f"({error_type}). Check the deployment function logs for the matching error."
                 ),
             ) from exc
         raise
