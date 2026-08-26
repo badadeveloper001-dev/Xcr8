@@ -500,18 +500,14 @@ def fetch_instagram_business_connection(
     retries each candidate with both Page and user tokens, and inspects any
     granular-scope asset IDs returned by Meta Business Login.
     """
+    # Keep the primary query to Meta's documented Page fields. Optional
+    # Instagram edges are queried separately so one unsupported edge cannot
+    # invalidate the entire account lookup.
     page_fields = (
         "id,name,access_token,tasks,"
-        "instagram_business_account{id,username},"
-        "connected_instagram_account{id,username},"
-        "instagram_accounts{id,username}"
+        "instagram_business_account{id,username}"
     )
-    node_fields = (
-        "id,name,access_token,"
-        "instagram_business_account{id,username},"
-        "connected_instagram_account{id,username},"
-        "instagram_accounts{id,username}"
-    )
+    node_fields = "id,name,access_token,instagram_business_account{id,username}"
     pages_by_id: dict[str, dict[str, Any]] = {}
 
     def remember_pages(items: object) -> None:
@@ -630,6 +626,57 @@ def fetch_instagram_business_connection(
                     if ig:
                         effective_token = str(pdata.get("access_token") or page_token or candidate_token).strip()
                         return resolved(merged_page, ig, effective_token, "asset-detail")
+
+                    connected_response = client.get(
+                        f"{META_GRAPH_BASE}/{page_id}",
+                        params={
+                            "access_token": candidate_token,
+                            "fields": "id,name,access_token,connected_instagram_account{id,username}",
+                        },
+                    )
+                    if connected_response.status_code < 400:
+                        connected_data = (
+                            connected_response.json()
+                            if connected_response.headers.get("content-type", "").startswith("application/json")
+                            else {}
+                        )
+                        if isinstance(connected_data, dict):
+                            connected_page = {**page, **connected_data}
+                            connected_ig = _extract_ig_from_node(connected_page)
+                            if connected_ig:
+                                effective_token = str(
+                                    connected_data.get("access_token") or page_token or candidate_token
+                                ).strip()
+                                return resolved(
+                                    connected_page,
+                                    connected_ig,
+                                    effective_token,
+                                    "connected-instagram-account",
+                                )
+
+                    edge_response = client.get(
+                        f"{META_GRAPH_BASE}/{page_id}/instagram_accounts",
+                        params={
+                            "access_token": candidate_token,
+                            "fields": "id,username",
+                            "limit": 25,
+                        },
+                    )
+                    if edge_response.status_code < 400:
+                        edge_data = (
+                            edge_response.json()
+                            if edge_response.headers.get("content-type", "").startswith("application/json")
+                            else {}
+                        )
+                        edge_items = edge_data.get("data", []) if isinstance(edge_data, dict) else []
+                        edge_ig = _extract_ig_from_node({"instagram_accounts": edge_items})
+                        if edge_ig:
+                            return resolved(
+                                page,
+                                edge_ig,
+                                page_token or candidate_token,
+                                "instagram-accounts-edge",
+                            )
 
                     # A granular-scope target can already be the IG professional
                     # account instead of its Facebook Page.
