@@ -17,8 +17,8 @@ export function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-3 left-1/2 z-50 w-[min(96%,1120px)] -translate-x-1/2 rounded-[30px] border border-indigo-300/20 bg-[#0a1022]/92 px-2.5 py-2 backdrop-blur-2xl dark:bg-[#0a1022]/92 light:border-slate-200 light:bg-white/95 light:shadow-[0_14px_32px_rgba(17,24,39,0.12)]">
-      <ul className="flex items-center justify-between">
+    <nav className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-[min(96%,1120px)] -translate-x-1/2 rounded-[30px] border border-indigo-300/20 bg-[#0a1022]/92 px-1.5 py-1.5 backdrop-blur-2xl dark:bg-[#0a1022]/92 light:border-slate-200 light:bg-white/95 light:shadow-[0_14px_32px_rgba(17,24,39,0.12)]">
+      <ul className="grid grid-cols-6 items-stretch gap-1">
         {navItems.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
