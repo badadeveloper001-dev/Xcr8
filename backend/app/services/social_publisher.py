@@ -803,7 +803,7 @@ def _post_instagram(
             children: list[str] = []
             for url in urls:
                 child_resp = client.post(
-                    f"https://graph.facebook.com/v19.0/{ig_user_id}/media",
+                    f"{META_GRAPH_BASE}/{ig_user_id}/media",
                     params={"image_url": url, "is_carousel_item": "true", "access_token": access_token},
                 )
                 if child_resp.status_code >= 400:
@@ -815,7 +815,7 @@ def _post_instagram(
                 children.append(child_id)
 
             container_resp = client.post(
-                f"https://graph.facebook.com/v19.0/{ig_user_id}/media",
+                f"{META_GRAPH_BASE}/{ig_user_id}/media",
                 params={
                     "media_type": "CAROUSEL",
                     "children": ",".join(children),
@@ -831,7 +831,7 @@ def _post_instagram(
                 return {"success": False, "post_id": None, "post_url": None, "error": "Instagram did not return a carousel container ID."}
 
             publish_resp = client.post(
-                f"https://graph.facebook.com/v19.0/{ig_user_id}/media_publish",
+                f"{META_GRAPH_BASE}/{ig_user_id}/media_publish",
                 params={"creation_id": creation_id, "access_token": access_token},
             )
             if publish_resp.status_code >= 400:
@@ -858,7 +858,7 @@ def _post_instagram(
             container_params.update({"image_url": image_url})
 
         container_resp = client.post(
-            f"https://graph.facebook.com/v19.0/{ig_user_id}/media",
+            f"{META_GRAPH_BASE}/{ig_user_id}/media",
             params=container_params,
         )
         if container_resp.status_code >= 400:
@@ -870,7 +870,7 @@ def _post_instagram(
             return {"success": False, "post_id": None, "post_url": None, "error": "Instagram did not return a container ID."}
 
         publish_resp = client.post(
-            f"https://graph.facebook.com/v19.0/{ig_user_id}/media_publish",
+            f"{META_GRAPH_BASE}/{ig_user_id}/media_publish",
             params={"creation_id": creation_id, "access_token": access_token},
         )
         if publish_resp.status_code >= 400:
@@ -916,7 +916,7 @@ def _post_facebook(
             attached_media: list[dict[str, str]] = []
             for url in urls:
                 upload_resp = client.post(
-                    f"https://graph.facebook.com/v19.0/{page_id}/photos",
+                    f"{META_GRAPH_BASE}/{page_id}/photos",
                     data={"url": url, "published": "false", "access_token": access_token},
                 )
                 if upload_resp.status_code >= 400:
@@ -930,7 +930,7 @@ def _post_facebook(
             feed_params: dict[str, str] = {"message": message, "access_token": access_token, "published": "true"}
             for index, item in enumerate(attached_media):
                 feed_params[f"attached_media[{index}]"] = json.dumps(item)
-            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/feed", data=feed_params)
+            response = client.post(f"{META_GRAPH_BASE}/{page_id}/feed", data=feed_params)
 
         if response.status_code in (200, 201):
             post_id = str(response.json().get("id") or "")
@@ -948,7 +948,7 @@ def _post_facebook(
     if is_video and media_url:
         video_params = {"description": message, "file_url": media_url, "published": "true", "access_token": access_token}
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/videos", data=video_params)
+            response = client.post(f"{META_GRAPH_BASE}/{page_id}/videos", data=video_params)
         if response.status_code in (200, 201):
             post_id = response.json().get("id", "")
             return {"success": True, "post_id": post_id, "post_url": f"https://www.facebook.com/{page_id}/videos/{post_id}" if post_id else f"https://www.facebook.com/{page_id}", "error": None}
@@ -958,7 +958,7 @@ def _post_facebook(
     is_image = bool(media_url) and str(media_url).lower().split("?")[0].endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
     if is_image and media_url:
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/photos", data={"caption": message, "url": media_url, "published": "true", "access_token": access_token})
+            response = client.post(f"{META_GRAPH_BASE}/{page_id}/photos", data={"caption": message, "url": media_url, "published": "true", "access_token": access_token})
         if response.status_code in (200, 201):
             post_id = response.json().get("post_id") or response.json().get("id", "")
             page_post_url = f"https://www.facebook.com/permalink.php?story_fbid={post_id.split('_')[1]}&id={page_id}" if isinstance(post_id, str) and "_" in post_id else f"https://www.facebook.com/{page_id}"
@@ -968,7 +968,7 @@ def _post_facebook(
     if media_url and not any(domain in media_url for domain in ["xcr8-creator-os", "vercel.app", "localhost", "127.0.0.1"]):
         params["link"] = media_url
     with httpx.Client(timeout=20.0) as client:
-        response = client.post(f"https://graph.facebook.com/v19.0/{page_id}/feed", data=params)
+        response = client.post(f"{META_GRAPH_BASE}/{page_id}/feed", data=params)
     if response.status_code in (200, 201):
         post_id = response.json().get("id", "")
         page_post_url = f"https://www.facebook.com/permalink.php?story_fbid={post_id.split('_')[1]}&id={page_id}" if "_" in post_id else f"https://www.facebook.com/{page_id}/posts/"
