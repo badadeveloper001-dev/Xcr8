@@ -23,7 +23,7 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 rounded-[34px] bg-gradient-to-b from-indigo-500/24 via-cyan-500/10 to-transparent blur-2xl light:from-indigo-200/55" />
       <div className="pointer-events-none absolute -right-12 top-24 -z-10 h-52 w-52 rounded-full bg-cyan-400/16 blur-3xl light:bg-cyan-200/35" />
       <div className="pointer-events-none absolute left-[-48px] top-[38%] -z-10 h-44 w-44 rounded-full bg-rose-400/12 blur-3xl light:bg-rose-200/30" />
-      <div className="mx-auto w-full max-w-[460px] lg:max-w-[1120px]">
+      <div className="mx-auto min-w-0 w-full max-w-[460px] lg:max-w-[1120px]">
         {!hideHeader ? (
           <header
             className="xcr8-panel mb-6 flex flex-col gap-3 rounded-2xl p-3 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between"
@@ -54,7 +54,7 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
             <ThemeToggle />
           </div>
         )}
-        <main id="main-content" className="relative">
+        <main id="main-content" className="relative min-w-0">
           <div className="pointer-events-none absolute inset-x-0 -top-2 -z-10 h-8 rounded-full bg-violet-500/8 blur-xl" />
           {children}
         </main>
