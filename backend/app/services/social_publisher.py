@@ -644,6 +644,37 @@ def fetch_instagram_business_connection(
                             "granular-instagram-asset",
                         )
 
+        for target_id in target_ids or []:
+            clean_id = str(target_id or "").strip()
+            if not clean_id:
+                continue
+            direct_response = client.get(
+                f"{META_GRAPH_BASE}/{clean_id}",
+                params={
+                    "access_token": user_access_token,
+                    "fields": "id,username,account_type",
+                },
+            )
+            if direct_response.status_code >= 400:
+                continue
+            direct_data = (
+                direct_response.json()
+                if direct_response.headers.get("content-type", "").startswith("application/json")
+                else {}
+            )
+            if not isinstance(direct_data, dict):
+                continue
+            direct_id = str(direct_data.get("id") or "").strip()
+            direct_username = str(direct_data.get("username") or "").strip()
+            account_type = str(direct_data.get("account_type") or "").strip().upper()
+            if direct_id and direct_username and account_type in {"BUSINESS", "CREATOR"}:
+                return resolved(
+                    {"id": "", "name": ""},
+                    {"id": direct_id, "username": direct_username},
+                    user_access_token,
+                    "granular-instagram-asset",
+                )
+
         logger.warning(
             "No publishable Instagram Professional account resolved from %d Meta asset(s).",
             len(pages_by_id),
