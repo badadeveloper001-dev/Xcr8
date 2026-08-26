@@ -41,6 +41,8 @@ def _as_iso(value: datetime | None) -> str:
     return (value or datetime.now(tz=UTC)).isoformat()
 
 
+_SHORT_NICHE_TOKENS = {"ai", "ar", "vr", "ui", "ux", "hr"}
+
 _NICHE_STOPWORDS = {
     "and", "the", "for", "with", "from", "into", "your", "content", "creator",
     "creators", "creation", "social", "media", "online", "digital", "general",
@@ -82,7 +84,7 @@ def _niche_tokens(interests: list[str]) -> set[str]:
     tokens: set[str] = set()
     for interest in interests:
         for token in re.findall(r"[a-z0-9]+", interest.lower()):
-            if len(token) >= 3 and token not in _NICHE_STOPWORDS:
+            if (len(token) >= 3 or token in _SHORT_NICHE_TOKENS) and token not in _NICHE_STOPWORDS:
                 tokens.add(token)
     return tokens
 
