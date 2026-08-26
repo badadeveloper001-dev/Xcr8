@@ -1256,7 +1256,7 @@ export type PlanUsageResponse = {
     image_generations: number;
     high_quality_images: number;
     voiceovers: number;
-    social_accounts: number;
+    social_accounts: number | null;
     scheduled_posts: number;
     storage_megabytes: number;
   };
