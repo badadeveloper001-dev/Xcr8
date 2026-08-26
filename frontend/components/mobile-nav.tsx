@@ -26,14 +26,14 @@ export function MobileNav() {
             <li key={item.href}>
               <Link
                 href={item.href}
-                className={`flex min-w-[62px] flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition-all lg:min-w-[120px] lg:flex-row lg:justify-center lg:gap-2 lg:text-sm ${
+                className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] transition-all sm:px-2 sm:text-[11px] lg:min-w-[120px] lg:flex-row lg:justify-center lg:gap-2 lg:text-sm ${
                   active
                     ? "bg-gradient-to-r from-indigo-500/22 to-cyan-500/18 text-cyan-100 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.35)] light:bg-gradient-to-r light:from-indigo-100 light:to-cyan-100 light:text-indigo-700"
                     : "text-slate-400 hover:bg-white/5 hover:text-slate-100 light:text-slate-500 light:hover:bg-slate-100 light:hover:text-slate-800"
                 }`}
               >
                 <Icon size={18} />
-                <span>{item.label}</span>
+                <span className="max-w-full truncate leading-tight">{item.label}</span>
               </Link>
             </li>
           );
