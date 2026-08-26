@@ -448,7 +448,9 @@ def refresh_intelligence(payload: IntelligenceRefreshRequest, db: Session = Depe
         raise HTTPException(status_code=404, detail="User not found")
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
-    interests = payload.interests or _profile_interests(profile)
+    # Refresh is always anchored to the saved creator niche. Client-supplied
+    # interests cannot inject unrelated dashboard trends.
+    interests = _profile_interests(profile)
     created = _refresh_live_signals(db, user, interests, _safe_platform(payload.platform))
     return {
         "created": created,
@@ -476,10 +478,18 @@ def intelligence_feed(
     if platform_filter != "all":
         signal_query = signal_query.where(TrendSignalEvent.platform == platform_filter)
 
-    signals = list(db.scalars(signal_query.order_by(desc(TrendSignalEvent.created_at)).limit(limit)))
-    if len(signals) < 3:
+    def load_matching_signals() -> list[TrendSignalEvent]:
+        recent = list(
+            db.scalars(
+                signal_query.order_by(desc(TrendSignalEvent.created_at)).limit(max(100, limit * 8))
+            )
+        )
+        return [item for item in recent if _signal_matches_interests(item, interests)][:limit]
+
+    signals = load_matching_signals()
+    if interests and len(signals) < 3:
         _refresh_live_signals(db, user, interests, platform_filter)
-        signals = list(db.scalars(signal_query.order_by(desc(TrendSignalEvent.created_at)).limit(limit)))
+        signals = load_matching_signals()
 
     signal_ids = [item.id for item in signals]
     briefs = list(
@@ -505,14 +515,22 @@ def intelligence_feed(
     for item in recommendations:
         rec_by_signal.setdefault(item.trend_signal_id, []).append(item)
 
-    notifications = list(
+    recent_notifications = list(
         db.scalars(
             select(IntelligenceNotification)
             .where(IntelligenceNotification.user_id == user_id)
             .order_by(desc(IntelligenceNotification.created_at))
-            .limit(12)
+            .limit(100)
         )
     )
+    notifications = [
+        item
+        for item in recent_notifications
+        if _matches_niche(
+            f"{item.related_topic} {item.title} {item.body}",
+            interests,
+        )
+    ][:12]
 
     notification_items = [
         IntelligenceNotificationItem(
@@ -535,14 +553,18 @@ def intelligence_feed(
     return IntelligenceFeedResponse(
         user_id=user_id,
         generated_at=_as_iso(None),
-        summary="Cr8or Intelligence shows sourced live trend signals when the live source is available. It does not invent trends.",
+        summary=(
+            "Cr8or Intelligence is showing current, sourced signals matched to your saved niche."
+            if interests
+            else "Choose a content niche in your creator profile to receive relevant trend updates."
+        ),
         interests=interests,
         signals=serialized,
         notifications=notification_items,
         source_stats={
             "signals": len(serialized),
             "notifications": len(notification_items),
-            "mode": "live-google-trends",
+            "mode": "live-niche-intelligence",
         },
     )
 
