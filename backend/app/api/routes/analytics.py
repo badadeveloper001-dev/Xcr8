@@ -405,7 +405,7 @@ def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
     try:
         with httpx.Client(timeout=12.0) as client:
             page_resp = client.get(
-                f"https://graph.facebook.com/v19.0/{page_id}",
+                f"https://graph.facebook.com/v22.0/{page_id}",
                 params={
                     "fields": "id,name,fan_count,followers_count",
                     "access_token": page_token,
@@ -427,7 +427,7 @@ def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
             }
 
             posts_resp = client.get(
-                f"https://graph.facebook.com/v19.0/{page_id}/posts",
+                f"https://graph.facebook.com/v22.0/{page_id}/posts",
                 params={
                     "fields": "id,message,created_time,likes.summary(true),comments.summary(true)",
                     "limit": 10,
@@ -454,7 +454,7 @@ def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
             else:
                 # Fallback: try summary counts when /posts edge is unavailable for this token.
                 fallback_posts = client.get(
-                    f"https://graph.facebook.com/v19.0/{page_id}",
+                    f"https://graph.facebook.com/v22.0/{page_id}",
                     params={
                         "fields": "posts.limit(1).summary(true)",
                         "access_token": page_token,
@@ -484,7 +484,7 @@ def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
         with httpx.Client(timeout=12.0) as client:
             # Profile metrics
             profile_resp = client.get(
-                f"https://graph.facebook.com/v19.0/{ig_user_id}",
+                f"https://graph.facebook.com/v22.0/{ig_user_id}",
                 params={
                     "fields": "username,followers_count,media_count,profile_views",
                     "access_token": page_token,
@@ -497,7 +497,7 @@ def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
 
             # Account-level insights (reach, impressions)
             insights_resp = client.get(
-                f"https://graph.facebook.com/v19.0/{ig_user_id}/insights",
+                f"https://graph.facebook.com/v22.0/{ig_user_id}/insights",
                 params={
                     "metric": "reach,impressions,profile_views,follower_count",
                     "period": "day",
@@ -522,7 +522,7 @@ def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
 
             # Recent media engagement
             media_resp = client.get(
-                f"https://graph.facebook.com/v19.0/{ig_user_id}/media",
+                f"https://graph.facebook.com/v22.0/{ig_user_id}/media",
                 params={
                     "fields": "id,caption,timestamp,like_count,comments_count,media_type",
                     "access_token": page_token,

@@ -6,10 +6,10 @@ The backend is the source of truth for plans, quotas, credits, and entitlements.
 
 | Plan | Credits | Text | Images | High quality | Voiceovers | Creator profiles | Social accounts | Scheduled posts | Storage |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Free | 500 | 50 | 0 | 0 | 0 | 0 | 1 | 10 | 200 MiB |
-| Starter | 5,000 | 500 | 25 | 0 | 10 | 0 | 3 | 100 | 2 GiB |
-| Pro | 15,000 | 2,500 | 100 | 10 | 50 | 0 | 7 | 500 | 10 GiB |
-| Business | 50,000 | 10,000 | 300 | 50 | 200 | 5 | 20 | 2,000 | 50 GiB |
+| Free | 500 | 50 | 0 | 0 | 0 | 0 | Unlimited | 10 | 200 MiB |
+| Starter | 5,000 | 500 | 25 | 0 | 10 | 0 | Unlimited | 100 | 2 GiB |
+| Pro | 15,000 | 2,500 | 100 | 10 | 50 | 0 | Unlimited | 500 | 10 GiB |
+| Business | 50,000 | 10,000 | 300 | 50 | 200 | 5 | Unlimited | 2,000 | 50 GiB |
 
 Pro's high-quality allowance is 10 per month and Business is capped at 50 per month to protect unit economics.
 

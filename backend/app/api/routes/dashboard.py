@@ -17,7 +17,7 @@ from app.db.models import (
     User,
     Workspace,
 )
-from app.api.routes.intelligence import _profile_interests, _refresh_live_signals
+from app.api.routes.intelligence import _profile_interests, _refresh_live_signals, _signal_matches_interests
 from app.schemas.mvp import Cr8orAIAlert, DashboardOverview, PlatformConnection
 from app.services.profile_scope import current_profile_id
 
@@ -177,19 +177,25 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user_id))
     preferences = profile.preferences if profile and isinstance(profile.preferences, dict) else {}
-    niche_values = _clean_list(preferences.get("niches"))
+    niche_values = _clean_list(preferences.get("content_niche"))
     personality_values = _clean_list(preferences.get("personality"))
     niche_label = niche_values[0] if niche_values else (profile.niche if profile else "creator")
     personality_label = personality_values[0] if personality_values else (profile.tone if profile else "conversational")
 
-    trend_signal_rows = list(
-        db.scalars(
-            select(TrendSignalEvent)
-            .where(TrendSignalEvent.user_id == user_id, TrendSignalEvent.status != "dismissed")
-            .order_by(TrendSignalEvent.created_at.desc())
-            .limit(3)
+    interests = _profile_interests(profile)
+
+    def load_niche_trends() -> list[TrendSignalEvent]:
+        recent = list(
+            db.scalars(
+                select(TrendSignalEvent)
+                .where(TrendSignalEvent.user_id == user_id, TrendSignalEvent.status != "dismissed")
+                .order_by(TrendSignalEvent.created_at.desc())
+                .limit(100)
+            )
         )
-    )
+        return [row for row in recent if _signal_matches_interests(row, interests)][:3]
+
+    trend_signal_rows = load_niche_trends()
 
     total_posts = db.scalar(select(func.count(ContentPost.id)).where(ContentPost.user_id == user_id)) or 0
     analytics_snapshots = (
@@ -225,16 +231,8 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         or (datetime.now(tz=UTC) - latest_signal_time).total_seconds() >= 12 * 60 * 60
     )
     if should_refresh_trends:
-        interests = _profile_interests(profile)
         _refresh_live_signals(db, user, interests, "all")
-        trend_signal_rows = list(
-            db.scalars(
-                select(TrendSignalEvent)
-                .where(TrendSignalEvent.user_id == user_id, TrendSignalEvent.status != "dismissed")
-                .order_by(TrendSignalEvent.created_at.desc())
-                .limit(3)
-            )
-        )
+        trend_signal_rows = load_niche_trends()
 
     trend_titles = [row.title for row in trend_signal_rows if row.title.strip()][:3]
     if not has_trend_signal_readiness:
@@ -243,7 +241,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     user_language = str(user.language or "english").strip().lower()
 
     platforms = db.scalars(
-        select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id).limit(8)
+        select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id)
     )
 
     ai_rows = list(
@@ -335,7 +333,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
                 is_active=platform.is_active,
             )
             for platform in db.scalars(
-                select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id).limit(8)
+                select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id)
             )
         ],
         cr8or_ai_alert=cr8or_ai_alert,

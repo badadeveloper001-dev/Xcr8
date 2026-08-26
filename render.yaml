@@ -66,6 +66,8 @@ services:
         sync: false
       - key: PINECONE_API_KEY
         sync: false
+      - key: META_GRAPH_API_VERSION
+        value: v22.0
       - key: META_APP_ID
         sync: false
       - key: META_APP_SECRET

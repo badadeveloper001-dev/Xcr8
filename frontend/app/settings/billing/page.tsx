@@ -27,7 +27,7 @@ type PlanItem = {
   high_quality_images: number;
   voiceovers: number;
   creator_profiles: number;
-  social_accounts: number;
+  social_accounts: number | null;
   scheduled_posts: number;
   storage_megabytes: number;
   pricing: RegionalPricing;
@@ -53,10 +53,10 @@ const GLOBAL_FALLBACK_PRICES: Record<string, { monthly: number; annual: number }
 };
 
 const FALLBACK_PLAN_LIMITS: PlanItemApi[] = [
-  { id: "free", name: "Free", price_cents: 0, monthly_credits: 500, text_generations: 50, image_generations: 0, high_quality_images: 0, voiceovers: 0, creator_profiles: 0, social_accounts: 1, scheduled_posts: 10, storage_megabytes: 200 },
-  { id: "starter", name: "Starter", price_cents: 900, monthly_credits: 5000, text_generations: 500, image_generations: 25, high_quality_images: 0, voiceovers: 10, creator_profiles: 0, social_accounts: 3, scheduled_posts: 100, storage_megabytes: 2048 },
-  { id: "pro", name: "Pro", price_cents: 2900, monthly_credits: 15000, text_generations: 2500, image_generations: 100, high_quality_images: 10, voiceovers: 50, creator_profiles: 0, social_accounts: 7, scheduled_posts: 500, storage_megabytes: 10240 },
-  { id: "business", name: "Business", price_cents: 9900, monthly_credits: 50000, text_generations: 10000, image_generations: 300, high_quality_images: 50, voiceovers: 200, creator_profiles: 5, social_accounts: 20, scheduled_posts: 2000, storage_megabytes: 51200 },
+  { id: "free", name: "Free", price_cents: 0, monthly_credits: 500, text_generations: 50, image_generations: 0, high_quality_images: 0, voiceovers: 0, creator_profiles: 0, social_accounts: null, scheduled_posts: 10, storage_megabytes: 200 },
+  { id: "starter", name: "Starter", price_cents: 900, monthly_credits: 5000, text_generations: 500, image_generations: 25, high_quality_images: 0, voiceovers: 10, creator_profiles: 0, social_accounts: null, scheduled_posts: 100, storage_megabytes: 2048 },
+  { id: "pro", name: "Pro", price_cents: 2900, monthly_credits: 15000, text_generations: 2500, image_generations: 100, high_quality_images: 10, voiceovers: 50, creator_profiles: 0, social_accounts: null, scheduled_posts: 500, storage_megabytes: 10240 },
+  { id: "business", name: "Business", price_cents: 9900, monthly_credits: 50000, text_generations: 10000, image_generations: 300, high_quality_images: 50, voiceovers: 200, creator_profiles: 5, social_accounts: null, scheduled_posts: 2000, storage_megabytes: 51200 },
 ];
 
 function fallbackPricing(planId: string): RegionalPricing {
@@ -265,7 +265,7 @@ export default function BillingPage() {
                   </div>
                   <div>
                     <dt className="text-gray-500">Social accounts</dt>
-                    <dd className="font-medium">{plan.social_accounts.toLocaleString()}</dd>
+                    <dd className="font-medium">{plan.social_accounts == null ? "Unlimited" : plan.social_accounts.toLocaleString()}</dd>
                   </div>
                   <div>
                     <dt className="text-gray-500">Scheduled posts</dt>

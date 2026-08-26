@@ -5,12 +5,11 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import (
-    ConnectedPlatform,
     PlanTier,
     UsageAccount,
     UsageLedger,
@@ -45,7 +44,7 @@ class PlanConfig:
     high_quality_images: int
     voiceovers: int
     creator_profiles: int
-    social_accounts: int
+    social_accounts: int | None
     scheduled_posts: int
     storage_bytes: int
 
@@ -68,7 +67,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         high_quality_images=0,
         voiceovers=0,
         creator_profiles=0,
-        social_accounts=1,
+        social_accounts=None,
         scheduled_posts=10,
         storage_bytes=200 * MEBIBYTE,
     ),
@@ -85,7 +84,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         high_quality_images=0,
         voiceovers=10,
         creator_profiles=0,
-        social_accounts=3,
+        social_accounts=None,
         scheduled_posts=100,
         storage_bytes=2 * GIBIBYTE,
     ),
@@ -102,7 +101,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         high_quality_images=10,
         voiceovers=50,
         creator_profiles=0,
-        social_accounts=7,
+        social_accounts=None,
         scheduled_posts=500,
         storage_bytes=10 * GIBIBYTE,
     ),
@@ -119,7 +118,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
         high_quality_images=50,
         voiceovers=200,
         creator_profiles=5,
-        social_accounts=20,
+        social_accounts=None,
         scheduled_posts=2_000,
         storage_bytes=50 * GIBIBYTE,
     ),
@@ -514,38 +513,11 @@ def refund_usage(
     return refund
 
 def ensure_social_account_capacity(db: Session, user_id: int, platform: str) -> PlanConfig:
+    """Validate the user while allowing unlimited social connections on every plan."""
+    _ = platform
     user = _lock_user(db, user_id)
     expire_plan_if_needed(db, user, commit=False)
-    plan = plan_for_user(user)
-    normalized_platform = str(platform or "").strip().lower()
-
-    existing = db.scalar(
-        select(ConnectedPlatform)
-        .where(
-            ConnectedPlatform.user_id == user.id,
-            ConnectedPlatform.platform == normalized_platform,
-        )
-        .execution_options(skip_profile_scope=True)
-    )
-    if existing and existing.is_active:
-        return plan
-
-    active_count = int(
-        db.scalar(
-            select(func.count(ConnectedPlatform.id))
-            .where(
-                ConnectedPlatform.user_id == user.id,
-                ConnectedPlatform.is_active.is_(True),
-            )
-            .execution_options(skip_profile_scope=True)
-        )
-        or 0
-    )
-    if active_count >= plan.social_accounts:
-        db.rollback()
-        raise _quota_error(plan, "social_accounts", plan.social_accounts)
-    return plan
-
+    return plan_for_user(user)
 
 def reserve_storage(
     db: Session,
