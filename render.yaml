@@ -1,0 +1,174 @@
+# Render Blueprint for Xcr8.
+# Data remains in the existing production Postgres/Supabase services.
+envVarGroups:
+  - name: xcr8-generated-secrets
+    envVars:
+      - key: AI_INTERNAL_TOKEN
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: OAUTH_STATE_SECRET
+        generateValue: true
+      - key: PULSE_INTERNAL_TOKEN
+        generateValue: true
+
+services:
+  - type: web
+    name: xcr8-creator-os-api
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt -r ai-services/requirements.txt
+    startCommand: bash scripts/render-start-platform.sh
+    healthCheckPath: /
+    maxShutdownDelaySeconds: 120
+    buildFilter:
+      paths:
+        - backend/**
+        - ai-services/**
+        - scripts/render-start-platform.sh
+        - render.yaml
+    envVars:
+      - fromGroup: xcr8-generated-secrets
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: AI_SERVICE_URL
+        value: http://127.0.0.1:8100
+      - key: AI_SERVICE_PORT
+        value: "8100"
+      - key: TIKTOKEN_CACHE_DIR
+        value: /tmp/tiktoken
+      - key: DEFAULT_TIMEZONE
+        value: Africa/Lagos
+      - key: GOOGLE_OAUTH_ENABLED
+        value: "true"
+      - key: PULSE_USER_EMAIL_ENABLED
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: THREADS_APP_ID
+        sync: false
+      - key: THREADS_APP_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: s3
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: STORAGE_REGION
+        sync: false
+      - key: STORAGE_ACCESS_KEY_ID
+        sync: false
+      - key: STORAGE_SECRET_ACCESS_KEY
+        sync: false
+      - key: STORAGE_ENDPOINT_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: XCR8
+      - key: ADMIN_ACCESS_CODE
+        sync: false
+      - key: BILLING_WEBHOOK_SECRET
+        sync: false
+      - key: FOUNDER_ALERT_EMAILS
+        sync: false
+      - key: PULSE_SLACK_WEBHOOK_URL
+        sync: false
+      - key: PULSE_DISCORD_WEBHOOK_URL
+        sync: false
+
+  - type: web
+    name: xcr8-creator-os-web
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: corepack enable && corepack prepare pnpm@10.11.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @xcr8/frontend build
+    startCommand: pnpm --filter @xcr8/frontend exec next start -p $PORT
+    healthCheckPath: /
+    maxShutdownDelaySeconds: 60
+    buildFilter:
+      paths:
+        - frontend/**
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - render.yaml
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: NEXT_PUBLIC_API_URL
+        value: /
+      - key: NEXT_PUBLIC_USE_DIRECT_API
+        value: "false"
+      - key: BACKEND_API_URL
+        fromService:
+          type: web
+          name: xcr8-creator-os-api
+          property: hostport
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+  - type: cron
+    name: xcr8-scheduled-post-dispatch
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    schedule: "* * * * *"
+    buildCommand: echo "No additional scheduler dependencies"
+    startCommand: python scripts/render_dispatch_due.py
+    buildFilter:
+      paths:
+        - scripts/render_dispatch_due.py
+        - render.yaml
+    envVars:
+      - fromGroup: xcr8-generated-secrets
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: BACKEND_API_URL
+        fromService:
+          type: web
+          name: xcr8-creator-os-api
+          property: hostport
