@@ -196,7 +196,7 @@ def test_plan_catalog_matches_entitlements():
     assert plans["starter"]["creator_profiles"] == 0
     assert plans["pro"]["creator_profiles"] == 0
     assert plans["business"]["creator_profiles"] == 5
-    assert plans["starter"]["social_accounts"] == 3
+    assert all(plan["social_accounts"] is None for plan in plans.values())
     assert plans["starter"]["price_cents"] == 900
     assert plans["starter"]["pricing"]["currency"] == "USD"
     assert plans["starter"]["pricing"]["monthly_formatted"] == "$9"
@@ -214,7 +214,7 @@ def test_plan_catalog_uses_nigerian_regional_prices_from_vercel_country_header()
     )
     assert response.status_code == 200
     assert response.headers["cache-control"] == "private, no-store"
-    assert response.headers["vary"] == "X-Vercel-IP-Country"
+    assert response.headers["vary"] == "CF-IPCountry, X-Country-Code, X-Vercel-IP-Country"
 
     plans = {row["id"]: row for row in response.json()}
     assert plans["starter"]["pricing"]["region"] == "nigeria"
