@@ -22,7 +22,7 @@ Pro's high-quality allowance is 10 per month and Business is capped at 50 per mo
 | Pro | $29 | $290 | ₦20,000 | ₦200,000 |
 | Business | $99 | $990 | ₦50,000 | ₦500,000 |
 
-Vercel's `X-Vercel-IP-Country` header selects the display catalog. Nigerian requests receive NGN pricing; other requests receive USD pricing. Regional display is not a payment security boundary: the verified webhook must match the exact configured amount, currency, and billing cycle.
+The deployment edge country header selects the display catalog (`CF-IPCountry` on Render/Cloudflare, with legacy Vercel fallback during migration). Nigerian requests receive NGN pricing; other requests receive USD pricing. Regional display is not a payment security boundary: the verified webhook must match the exact configured amount, currency, and billing cycle.
 
 Credit costs are also centralized:
 

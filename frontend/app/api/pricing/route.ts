@@ -28,7 +28,14 @@ function formatPrice(amountMinor: number, currency: "USD" | "NGN"): string {
 }
 
 export function GET(request: Request) {
-  const countryCode = request.headers.get("x-vercel-ip-country")?.trim().toUpperCase() || "";
+  const countryCode = (
+    request.headers.get("cf-ipcountry") ||
+    request.headers.get("x-country-code") ||
+    request.headers.get("x-vercel-ip-country") ||
+    ""
+  )
+    .trim()
+    .toUpperCase();
   const isNigeria = countryCode === "NG";
   const currency = isNigeria ? "NGN" : "USD";
   const region = isNigeria ? "nigeria" : "global";
@@ -55,7 +62,7 @@ export function GET(request: Request) {
     {
       headers: {
         "Cache-Control": "private, no-store",
-        Vary: "X-Vercel-IP-Country",
+        Vary: "CF-IPCountry, X-Country-Code, X-Vercel-IP-Country",
       },
     },
   );

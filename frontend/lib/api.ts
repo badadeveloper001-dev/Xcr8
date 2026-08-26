@@ -3,12 +3,12 @@ import axios, { type AxiosInstance } from "axios";
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 const useDirectApi = process.env.NEXT_PUBLIC_USE_DIRECT_API === "true";
 
-// Vercel mounts the FastAPI service here. Same-origin requests keep profile context
-// headers private to Xcr8 and avoid CORS failures across deployment aliases.
+// Production browser traffic stays same-origin and flows through the Next.js
+// /api/v1 proxy. This works on Render, Vercel and local development without CORS.
 const apiBaseUrl =
   process.env.NODE_ENV === "development" && useDirectApi && configuredApiUrl
     ? configuredApiUrl
-    : "/_/backend";
+    : "/";
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,
@@ -22,10 +22,10 @@ const adminClient = axios.create({
   timeout: 30_000,
 });
 
-// Managed profiles always use the same deployed backend service. Keeping this path
-// same-origin avoids CORS and stale NEXT_PUBLIC_API_URL values on Vercel aliases/previews.
+// Managed profiles use the same same-origin proxy and force the main-account
+// context only for profile management requests.
 const workspaceApiClient = axios.create({
-  baseURL: "/_/backend",
+  baseURL: "/",
   timeout: 30_000,
 });
 

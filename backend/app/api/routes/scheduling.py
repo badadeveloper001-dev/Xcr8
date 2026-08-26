@@ -108,7 +108,7 @@ def dispatch_due_posts(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Secure, idempotent Vercel Cron target that publishes every due schedule once."""
+    """Secure, idempotent scheduler target that publishes every due schedule once."""
     _authorize_cron(authorization)
     now = datetime.now(tz=UTC)
     stale_before = now - _STALE_PROCESSING_AFTER

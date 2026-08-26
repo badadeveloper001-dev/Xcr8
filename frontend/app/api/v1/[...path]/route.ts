@@ -1,13 +1,19 @@
 import { NextRequest } from "next/server";
 
-// Allow this route up to 60 s on Vercel Pro (uploads, long AI calls, etc.).
+// Keep compatibility with platforms that support per-route duration hints.
 export const maxDuration = 60;
 
 const BACKEND_API_URL =
   process.env.BACKEND_API_URL ?? process.env.BACKEND_INTERNAL_URL ?? process.env.BACKEND_URL;
 
+function normalizeBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, "");
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+}
+
 function buildTargetUrl(baseUrl: string, path: string[], searchParams: URLSearchParams): URL {
-  const base = baseUrl.replace(/\/$/, "");
+  const base = normalizeBaseUrl(baseUrl);
   const suffix = path.join("/");
   const url = new URL(`${base}/api/v1/${suffix}`);
   const search = searchParams.toString();
@@ -26,16 +32,18 @@ function getTargetCandidates(request: NextRequest, path: string[]): URL[] {
     candidates.push(buildTargetUrl(BACKEND_API_URL, path, request.nextUrl.searchParams));
   }
 
-  // On Vercel services deployments, backend is commonly exposed at this route prefix.
-  const sameOriginBackendBase = `${request.nextUrl.origin}/_/backend`;
-  const sameOriginCandidate = buildTargetUrl(
-    sameOriginBackendBase,
-    path,
-    request.nextUrl.searchParams,
-  );
+  // Keep the old Vercel service mount only during the migration window.
+  if (process.env.VERCEL) {
+    const sameOriginBackendBase = `${request.nextUrl.origin}/_/backend`;
+    const sameOriginCandidate = buildTargetUrl(
+      sameOriginBackendBase,
+      path,
+      request.nextUrl.searchParams,
+    );
 
-  if (!candidates.some((url) => url.toString() === sameOriginCandidate.toString())) {
-    candidates.push(sameOriginCandidate);
+    if (!candidates.some((url) => url.toString() === sameOriginCandidate.toString())) {
+      candidates.push(sameOriginCandidate);
+    }
   }
 
   return candidates;
@@ -48,7 +56,7 @@ async function proxy(request: NextRequest, path: string[]) {
     return Response.json(
       {
         detail:
-          "Backend API is not configured. Set BACKEND_API_URL or use the injected BACKEND_URL service variable.",
+          "Backend API is not configured. Set BACKEND_API_URL to the Render backend service address.",
       },
       { status: 503 },
     );
@@ -104,7 +112,7 @@ async function proxy(request: NextRequest, path: string[]) {
     return Response.json(
       {
         detail:
-          "Backend API routing failed. Verify BACKEND_API_URL or use deployment route /_/backend.",
+          "Backend API routing failed. Verify the Render BACKEND_API_URL service reference.",
       },
       { status: 502 },
     );

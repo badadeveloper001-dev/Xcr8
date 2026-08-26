@@ -21,7 +21,7 @@ async function fetchBackendImage(
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    return await fetch(`${origin}/_/backend/api/v1/ai/image/generate`, {
+    return await fetch(`${origin}/api/v1/ai/image/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

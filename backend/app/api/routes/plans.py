@@ -21,12 +21,16 @@ PAID_WEBHOOK_STATUSES = {"paid", "succeeded", "active", "completed"}
 
 @router.get("/", response_model=list)
 def list_plans(request: Request, response: Response) -> list:
-    # Vercel supplies an ISO country code derived from the request IP. This is
-    # appropriate for regional display; payment activation still requires a
-    # verified provider webhook and must validate the charged currency/amount.
-    country_code = str(request.headers.get("x-vercel-ip-country") or "").strip().upper()[:2]
+    # Render traffic passes through Cloudflare; keep the former Vercel header as
+    # a migration fallback. Payment activation still validates currency/amount.
+    country_code = str(
+        request.headers.get("cf-ipcountry")
+        or request.headers.get("x-country-code")
+        or request.headers.get("x-vercel-ip-country")
+        or ""
+    ).strip().upper()[:2]
     response.headers["Cache-Control"] = "private, no-store"
-    response.headers["Vary"] = "X-Vercel-IP-Country"
+    response.headers["Vary"] = "CF-IPCountry, X-Country-Code, X-Vercel-IP-Country"
     return [
         serialize_plan(PLAN_CONFIG[plan_id], country_code=country_code)
         for plan_id in ("free", "starter", "pro", "business")
