@@ -17,6 +17,11 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+META_GRAPH_VERSION = str(os.getenv("META_GRAPH_API_VERSION", "v22.0") or "v22.0").strip()
+if not META_GRAPH_VERSION.startswith("v"):
+    META_GRAPH_VERSION = f"v{META_GRAPH_VERSION}"
+META_GRAPH_BASE = f"https://graph.facebook.com/{META_GRAPH_VERSION}"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OAuth state helpers
@@ -64,9 +69,10 @@ def verify_oauth_state(state: str) -> dict | None:
 
 _PLATFORM_OAUTH: dict[str, dict[str, Any]] = {
     "instagram": {
-        "auth_url": "https://www.facebook.com/v19.0/dialog/oauth",
-        "token_url": "https://graph.facebook.com/v19.0/oauth/access_token",
+        "auth_url": f"https://www.facebook.com/{META_GRAPH_VERSION}/dialog/oauth",
+        "token_url": f"{META_GRAPH_BASE}/oauth/access_token",
         "scopes": "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement",
+        "extra_auth_params": {"auth_type": "rerequest", "return_scopes": "true"},
         "cred_keys": ("meta_app_id", "meta_app_secret"),
     },
     "facebook": {
@@ -305,7 +311,7 @@ def fetch_platform_user_info(platform: str, access_token: str) -> dict[str, str]
         with httpx.Client(timeout=12.0) as client:
             if platform in ("instagram", "facebook"):
                 resp = client.get(
-                    "https://graph.facebook.com/v19.0/me",
+                    f"{META_GRAPH_BASE}/me",
                     params={"fields": "id,name", "access_token": access_token},
                 )
                 d = resp.json()
@@ -375,7 +381,7 @@ def fetch_facebook_page_connection(user_access_token: str) -> dict[str, str] | N
     try:
         with httpx.Client(timeout=12.0) as client:
             response = client.get(
-                "https://graph.facebook.com/v19.0/me/accounts",
+                f"{META_GRAPH_BASE}/me/accounts",
                 params={
                     "access_token": user_access_token,
                     "fields": "id,name,access_token,tasks",
@@ -460,105 +466,191 @@ def _extract_ig_from_node(node: dict) -> dict | None:
     return None
 
 
-def fetch_instagram_business_connection(user_access_token: str) -> dict[str, str] | None:
-    """Resolve an Instagram business account + page access token from a Meta user token.
+def fetch_meta_granted_permissions(access_token: str) -> set[str]:
+    """Return only permissions Meta reports as currently granted."""
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.get(
+                f"{META_GRAPH_BASE}/me/permissions",
+                params={"access_token": access_token},
+            )
+        if response.status_code >= 400:
+            return set()
+        payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+        rows = payload.get("data", []) if isinstance(payload, dict) else []
+        return {
+            str(item.get("permission") or "").strip()
+            for item in rows
+            if isinstance(item, dict)
+            and str(item.get("status") or "").strip().lower() == "granted"
+            and str(item.get("permission") or "").strip()
+        }
+    except Exception as exc:
+        logger.warning("Could not inspect Meta permissions: %s", exc)
+        return set()
 
-    Two-pass strategy:
-      Pass 1 – query /me/accounts with IG subfields using the user token.
-               Sufficient when instagram_basic is approved and IG is linked to a page.
-      Pass 2 – for each page returned, re-query /{page-id} with the PAGE access token.
-               Required by Meta when user-level IG fields are absent due to app
-               permissions or account-linking configuration.
+
+def fetch_instagram_business_connection(
+    user_access_token: str,
+    target_ids: list[str] | None = None,
+) -> dict[str, str] | None:
+    """Resolve a publishable Instagram Professional account from a Meta token.
+
+    The resolver follows every /me/accounts page, reads the nested accounts edge,
+    retries each candidate with both Page and user tokens, and inspects any
+    granular-scope asset IDs returned by Meta Business Login.
     """
-    _ig_fields = (
+    page_fields = (
+        "id,name,access_token,tasks,"
+        "instagram_business_account{id,username},"
+        "connected_instagram_account{id,username},"
+        "instagram_accounts{id,username}"
+    )
+    node_fields = (
         "id,name,access_token,"
         "instagram_business_account{id,username},"
         "connected_instagram_account{id,username},"
         "instagram_accounts{id,username}"
     )
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            accounts_resp = client.get(
-                "https://graph.facebook.com/v19.0/me/accounts",
-                params={"access_token": user_access_token, "fields": _ig_fields, "limit": 25},
-            )
+    pages_by_id: dict[str, dict[str, Any]] = {}
 
-        if accounts_resp.status_code >= 400:
-            logger.warning(
-                "Instagram /me/accounts failed: %s %s",
-                accounts_resp.status_code,
-                accounts_resp.text[:300],
-            )
-            return None
-
-        pages: list[dict] = accounts_resp.json().get("data") or []
-        logger.info("Instagram /me/accounts returned %d page(s).", len(pages))
-
-        # ── Pass 1: IG fields already embedded in the user-token response ──
-        for page in pages:
-            if not isinstance(page, dict):
+    def remember_pages(items: object) -> None:
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if not isinstance(item, dict):
                 continue
-            ig = _extract_ig_from_node(page)
-            if ig:
-                logger.info("Pass-1: IG %s found on page %s.", ig["id"], page.get("id"))
-                return {
-                    "ig_user_id": ig["id"],
-                    "ig_username": ig["username"],
-                    "page_id": str(page.get("id") or "").strip(),
-                    "page_name": str(page.get("name") or "").strip(),
-                    "page_access_token": str(page.get("access_token") or "").strip(),
-                }
+            page_id = str(item.get("id") or "").strip()
+            if not page_id:
+                continue
+            pages_by_id[page_id] = {**pages_by_id.get(page_id, {}), **item}
 
-        # ── Pass 2: re-query each page with its own page access token ──
-        with httpx.Client(timeout=15.0) as client:
+    def resolved(page: dict[str, Any], ig: dict, token: str, source: str) -> dict[str, str]:
+        return {
+            "ig_user_id": str(ig.get("id") or "").strip(),
+            "ig_username": str(ig.get("username") or "").strip(),
+            "page_id": str(page.get("id") or "").strip(),
+            "page_name": str(page.get("name") or "").strip(),
+            "page_access_token": token,
+            "resolution_source": source,
+        }
+
+    try:
+        with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+            next_url: str | None = f"{META_GRAPH_BASE}/me/accounts"
+            next_params: dict[str, object] | None = {
+                "access_token": user_access_token,
+                "fields": page_fields,
+                "limit": 100,
+            }
+            for _ in range(5):
+                if not next_url:
+                    break
+                response = client.get(next_url, params=next_params)
+                next_params = None
+                if response.status_code >= 400:
+                    logger.warning(
+                        "Instagram account edge failed: %s %s",
+                        response.status_code,
+                        response.text[:300],
+                    )
+                    break
+                payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+                remember_pages(payload.get("data", []) if isinstance(payload, dict) else [])
+                paging = payload.get("paging", {}) if isinstance(payload, dict) else {}
+                next_url = str(paging.get("next") or "").strip() or None
+
+            # New Page Experience sometimes returns assets only through the
+            # nested accounts field, even when /me/accounts is empty.
+            nested_response = client.get(
+                f"{META_GRAPH_BASE}/me",
+                params={
+                    "access_token": user_access_token,
+                    "fields": f"accounts.limit(100){{{page_fields}}}",
+                },
+            )
+            if nested_response.status_code < 400:
+                nested_payload = (
+                    nested_response.json()
+                    if nested_response.headers.get("content-type", "").startswith("application/json")
+                    else {}
+                )
+                nested_accounts = nested_payload.get("accounts", {}) if isinstance(nested_payload, dict) else {}
+                if isinstance(nested_accounts, dict):
+                    remember_pages(nested_accounts.get("data", []))
+
+            for target_id in target_ids or []:
+                clean_id = str(target_id or "").strip()
+                if clean_id:
+                    pages_by_id.setdefault(clean_id, {"id": clean_id})
+
+            pages = list(pages_by_id.values())
+            logger.info("Instagram resolver discovered %d Meta asset(s).", len(pages))
+
             for page in pages:
-                if not isinstance(page, dict):
+                ig = _extract_ig_from_node(page)
+                page_token = str(page.get("access_token") or "").strip()
+                if ig and page_token:
+                    return resolved(page, ig, page_token, "accounts-edge")
+                if ig:
+                    return resolved(page, ig, user_access_token, "accounts-edge-user-token")
+
+            for page in pages:
+                page_id = str(page.get("id") or "").strip()
+                if not page_id:
                     continue
                 page_token = str(page.get("access_token") or "").strip()
-                page_id = str(page.get("id") or "").strip()
-                if not page_token or not page_id:
-                    continue
-
-                page_resp = client.get(
-                    f"https://graph.facebook.com/v19.0/{page_id}",
-                    params={
-                        "access_token": page_token,
-                        "fields": (
-                            "id,name,"
-                            "instagram_business_account{id,username},"
-                            "connected_instagram_account{id,username},"
-                            "instagram_accounts{id,username}"
-                        ),
-                    },
-                )
-                if page_resp.status_code >= 400:
-                    logger.warning(
-                        "Pass-2 page query failed for %s: %s %s",
-                        page_id, page_resp.status_code, page_resp.text[:200],
+                candidate_tokens = [token for token in (page_token, user_access_token) if token]
+                seen_tokens: set[str] = set()
+                for candidate_token in candidate_tokens:
+                    if candidate_token in seen_tokens:
+                        continue
+                    seen_tokens.add(candidate_token)
+                    page_response = client.get(
+                        f"{META_GRAPH_BASE}/{page_id}",
+                        params={"access_token": candidate_token, "fields": node_fields},
                     )
-                    continue
+                    if page_response.status_code >= 400:
+                        logger.warning(
+                            "Instagram asset query failed for %s: %s %s",
+                            page_id,
+                            page_response.status_code,
+                            page_response.text[:240],
+                        )
+                        continue
+                    pdata = (
+                        page_response.json()
+                        if page_response.headers.get("content-type", "").startswith("application/json")
+                        else {}
+                    )
+                    if not isinstance(pdata, dict):
+                        continue
+                    merged_page = {**page, **pdata}
+                    ig = _extract_ig_from_node(merged_page)
+                    if ig:
+                        effective_token = str(pdata.get("access_token") or page_token or candidate_token).strip()
+                        return resolved(merged_page, ig, effective_token, "asset-detail")
 
-                pdata = page_resp.json() if page_resp.headers.get("content-type", "").startswith("application/json") else {}
-                ig = _extract_ig_from_node(pdata)
-                if ig:
-                    logger.info("Pass-2: IG %s found on page %s via page token.", ig["id"], page_id)
-                    return {
-                        "ig_user_id": ig["id"],
-                        "ig_username": ig["username"],
-                        "page_id": page_id,
-                        "page_name": str(pdata.get("name") or page.get("name") or "").strip(),
-                        "page_access_token": page_token,
-                    }
+                    # A granular-scope target can already be the IG professional
+                    # account instead of its Facebook Page.
+                    direct_id = str(pdata.get("id") or "").strip()
+                    direct_username = str(pdata.get("username") or "").strip()
+                    account_type = str(pdata.get("account_type") or "").strip().upper()
+                    if direct_id and direct_username and account_type in {"BUSINESS", "CREATOR"}:
+                        return resolved(
+                            {"id": "", "name": ""},
+                            {"id": direct_id, "username": direct_username},
+                            candidate_token,
+                            "granular-instagram-asset",
+                        )
 
         logger.warning(
-            "No Instagram business account found across %d page(s). "
-            "Ensure the IG account is Professional (Business or Creator) and linked to "
-            "a Facebook Page via Page Settings → Instagram in Meta Business Suite.",
-            len(pages),
+            "No publishable Instagram Professional account resolved from %d Meta asset(s).",
+            len(pages_by_id),
         )
         return None
     except Exception as exc:
-        logger.warning("Could not resolve Instagram business connection: %s", exc)
+        logger.warning("Could not resolve Instagram professional connection: %s", exc)
         return None
 
 
