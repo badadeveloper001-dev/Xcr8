@@ -201,42 +201,122 @@ def _materialize_signal(db: Session, user_id: int, topic: str, platform: str, mo
 
 
 def _fetch_live_google_trends() -> list[dict[str, str]]:
-    """Read Google's public trending-searches RSS feed; never manufacture a trend on failure."""
+    """Read Google's public trending-searches RSS feed."""
+    source_url = "https://trends.google.com/trending/rss?geo=NG"
     try:
         with httpx.Client(timeout=8.0, follow_redirects=True) as client:
-            response = client.get("https://trends.google.com/trending/rss?geo=NG")
+            response = client.get(source_url)
         if response.status_code >= 400:
             return []
         root = ElementTree.fromstring(response.content)
         entries: list[dict[str, str]] = []
-        for item in root.findall(".//item")[:30]:
+        for item in root.findall(".//item")[:40]:
             title = str(item.findtext("title") or "").strip()
             published = str(item.findtext("pubDate") or "").strip()
+            description = str(item.findtext("description") or "").strip()
             traffic = ""
             for child in list(item):
                 if child.tag.endswith("approx_traffic"):
                     traffic = str(child.text or "").strip()
                     break
             if title:
-                entries.append({"topic": title, "published_at": published, "traffic": traffic})
+                entries.append(
+                    {
+                        "topic": title,
+                        "description": description,
+                        "published_at": published,
+                        "traffic": traffic,
+                        "source_label": "Google Trends (live)",
+                        "source_url": source_url,
+                        "matched_niche": "",
+                    }
+                )
         return entries
     except Exception:
         return []
 
 
+def _fetch_live_niche_news(interests: list[str]) -> list[dict[str, str]]:
+    """Fetch current stories for the user's niches instead of unrelated headlines."""
+    entries: list[dict[str, str]] = []
+    try:
+        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+            for niche in interests[:3]:
+                query = quote_plus(f'"{niche}" when:7d')
+                source_url = (
+                    f"https://news.google.com/rss/search?q={query}"
+                    "&hl=en-NG&gl=NG&ceid=NG:en"
+                )
+                response = client.get(source_url)
+                if response.status_code >= 400:
+                    continue
+                root = ElementTree.fromstring(response.content)
+                for item in root.findall(".//item")[:12]:
+                    title = str(item.findtext("title") or "").strip()
+                    description = str(item.findtext("description") or "").strip()
+                    published = str(item.findtext("pubDate") or "").strip()
+                    link = str(item.findtext("link") or "").strip()
+                    searchable = f"{title} {description}"
+                    if not title or not _matches_niche(searchable, [niche]):
+                        continue
+                    entries.append(
+                        {
+                            "topic": title,
+                            "description": description,
+                            "published_at": published,
+                            "traffic": "",
+                            "source_label": "Google News (live niche search)",
+                            "source_url": link or source_url,
+                            "matched_niche": niche,
+                        }
+                    )
+    except Exception:
+        return entries
+    return entries
+
+
+def _live_niche_candidates(interests: list[str]) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    for item in _fetch_live_google_trends():
+        searchable = f"{item.get('topic', '')} {item.get('description', '')}"
+        niche = _matched_niche(searchable, interests)
+        if not niche:
+            continue
+        candidates.append({**item, "matched_niche": niche})
+
+    candidates.extend(_fetch_live_niche_news(interests))
+
+    deduped: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in candidates:
+        key = re.sub(r"[^a-z0-9]+", " ", item["topic"].lower()).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped[:12]
+
+
+def _signal_matches_interests(signal: TrendSignalEvent, interests: list[str]) -> bool:
+    if not interests:
+        return False
+    meta = signal.signal_meta if isinstance(signal.signal_meta, dict) else {}
+    matched = str(meta.get("matched_niche") or "").strip().lower()
+    if matched and matched in interests:
+        return True
+    return _matches_niche(
+        f"{signal.topic} {signal.title} {signal.summary}",
+        interests,
+    )
+
+
 def _refresh_live_signals(db: Session, user: User, interests: list[str], platform: str) -> int:
-    live_trends = _fetch_live_google_trends()
-    if not live_trends:
+    if not interests:
         return 0
 
-    interest_terms = " ".join(interests).lower()
-    ranked = sorted(
-        live_trends,
-        key=lambda item: (
-            0 if any(token and token in item["topic"].lower() for token in interest_terms.split()) else 1,
-            item["topic"].lower(),
-        ),
-    )[:8]
+    live_trends = _live_niche_candidates(interests)
+    if not live_trends:
+        return 0
 
     existing_topics = {
         item.topic.lower()
@@ -244,59 +324,77 @@ def _refresh_live_signals(db: Session, user: User, interests: list[str], platfor
             select(TrendSignalEvent)
             .where(TrendSignalEvent.user_id == user.id)
             .order_by(desc(TrendSignalEvent.created_at))
-            .limit(80)
+            .limit(120)
         )
     }
 
     created = 0
-    for item in ranked:
+    for item in live_trends[:8]:
         topic = item["topic"]
         if topic.lower() in existing_topics:
             continue
+        matched_niche = item["matched_niche"]
         traffic_note = f" with {item['traffic']} searches" if item["traffic"] else ""
+        source_label = item["source_label"]
         signal = TrendSignalEvent(
             user_id=user.id,
             topic=topic,
             platform=platform,
-            title=f"{topic} is trending now",
+            title=f"{topic} — relevant to {matched_niche}",
             summary=(
-                f"Live Google Trends signal{traffic_note}."
-                "Check the source and map only a genuinely relevant angle to your audience."
+                f"Current {source_label} signal{traffic_note}, selected because it matches "
+                f"your {matched_niche} niche."
             ),
-            source_label="Google Trends (live)",
-            confidence_score=0.72,
+            source_label=source_label,
+            confidence_score=0.76,
             momentum_score=0.70,
-            relevance_score=0.78 if any(token and token in topic.lower() for token in interest_terms.split()) else 0.45,
-            opportunity_score=0.66,
-            risk_score=0.35,
+            relevance_score=0.90,
+            opportunity_score=0.72,
+            risk_score=0.30,
             status="new",
             signal_meta={
-                "mode": "live-google-trends",
-                "source_url": "https://trends.google.com/trending/rss?geo=NG",
+                "mode": "live-niche-intelligence",
+                "matched_niche": matched_niche,
+                "source_url": item["source_url"],
                 "source_published_at": item["published_at"],
                 "fetched_at": _as_iso(None),
             },
         )
         db.add(signal)
         db.flush()
-        db.add(TrendResearchBrief(
-            trend_signal_id=signal.id,
-            what_is_happening=f"{topic} is appearing in Google's current Nigeria trending-search feed.",
-            why_it_matters="It is a real current-interest signal, not a prediction of performance for every creator.",
-            who_is_using_it="Audience interest is broad; evaluate fit against your niche before posting.",
-            why_it_performs="Timely, useful, original context can earn attention when it genuinely serves your audience.",
-            potential_risks="Newsjacking or forcing an unrelated topic can damage audience trust.",
-            opportunities=f"Use a niche-relevant angle on {topic}, cite the source, and publish only if you have a useful point of view.",
-        ))
-        db.add(TrendRecommendation(
-            trend_signal_id=signal.id,
-            recommendation_type="content_angle",
-            content_angle=f"Add your expert perspective to {topic}; do not repeat the headline.",
-            story_framework="Current signal -> your audience context -> useful interpretation -> one practical action",
-            brainstorm_seed=f"Find a niche-relevant, responsible content angle around {topic}.",
-            composer_seed=f"Write a concise, source-aware post about {topic} for {platform}.",
-            score=signal.opportunity_score,
-        ))
+        db.add(
+            TrendResearchBrief(
+                trend_signal_id=signal.id,
+                what_is_happening=f"{topic} is receiving current attention in live sources.",
+                why_it_matters=f"It directly overlaps with the user's {matched_niche} niche.",
+                who_is_using_it=f"People currently publishing or searching within {matched_niche}.",
+                why_it_performs="Timely, useful interpretation can earn attention when it serves the established audience.",
+                potential_risks="Copying a headline without original expertise can reduce audience trust.",
+                opportunities=f"Explain what {topic} means specifically for a {matched_niche} audience.",
+            )
+        )
+        db.add(
+            TrendRecommendation(
+                trend_signal_id=signal.id,
+                recommendation_type="content_angle",
+                content_angle=f"Give a practical {matched_niche} perspective on {topic}.",
+                story_framework="Live signal -> niche context -> original insight -> practical action",
+                brainstorm_seed=f"Create niche-specific content angles about {topic} for a {matched_niche} audience.",
+                composer_seed=f"Write a concise, source-aware {matched_niche} post about {topic} for {platform}.",
+                score=signal.opportunity_score,
+            )
+        )
+        db.add(
+            IntelligenceNotification(
+                user_id=user.id,
+                title=f"New {matched_niche} trend",
+                body=f"{topic} matches your niche and is receiving current attention.",
+                severity="info",
+                related_topic=topic,
+                is_read=False,
+            )
+        )
+        existing_topics.add(topic.lower())
         created += 1
 
     db.commit()
