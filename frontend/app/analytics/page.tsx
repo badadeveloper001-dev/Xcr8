@@ -201,7 +201,7 @@ export default function AnalyticsPage() {
             <select
               value={selectedPlatform}
               onChange={(event) => setSelectedPlatform(event.target.value)}
-              className="xcr8-input !w-auto min-w-[170px] py-2 text-xs"
+              className="xcr8-input w-full min-w-0 py-2 text-xs sm:w-auto sm:min-w-[150px]"
             >
               <option value="all">All platforms</option>
               {platformOptions.map((platform) => (
