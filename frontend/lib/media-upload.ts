@@ -38,7 +38,7 @@ export async function uploadMediaFile(userId: number, file: File): Promise<Uploa
   let presignResponse: Response | null = null;
 
   try {
-    presignResponse = await fetch("/_/backend/api/v1/upload/presign", {
+    presignResponse = await fetch("/api/v1/upload/presign", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -92,7 +92,7 @@ export async function uploadMediaFile(userId: number, file: File): Promise<Uploa
   formData.append("file", file);
   formData.append("user_id", String(userId));
 
-  const fallbackResponse = await fetch("/_/backend/api/v1/upload", {
+  const fallbackResponse = await fetch("/api/v1/upload", {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
     body: formData,
