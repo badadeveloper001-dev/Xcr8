@@ -811,6 +811,113 @@ def _post_twitter(access_token: str, text: str, media_url: str | None) -> PostRe
     return {"success": False, "post_id": None, "post_url": None, "error": f"X/Twitter error: {error_detail}"}
 
 
+def _instagram_response_data(response: httpx.Response) -> dict[str, Any]:
+    try:
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _instagram_error_message(response: httpx.Response) -> str:
+    data = _instagram_response_data(response)
+    error = data.get("error")
+    if isinstance(error, dict):
+        message = str(error.get("message") or "").strip()
+        if message:
+            return message
+    return response.text[:300] or f"HTTP {response.status_code}"
+
+
+def _wait_for_instagram_containers(
+    client: httpx.Client,
+    container_ids: list[str],
+    access_token: str,
+    *,
+    attempts: int = 10,
+    interval_seconds: float = 1.0,
+) -> str | None:
+    """Wait until Meta finishes processing every Instagram media container."""
+    pending = {str(container_id).strip() for container_id in container_ids if str(container_id).strip()}
+    if not pending:
+        return "Instagram did not return a media container ID."
+
+    last_statuses: dict[str, str] = {}
+    for attempt in range(attempts):
+        for container_id in list(pending):
+            status_resp = client.get(
+                f"{META_GRAPH_BASE}/{container_id}",
+                params={
+                    "fields": "status_code,status",
+                    "access_token": access_token,
+                },
+            )
+            if status_resp.status_code >= 400:
+                return f"Instagram media status error: {_instagram_error_message(status_resp)}"
+
+            status_data = _instagram_response_data(status_resp)
+            status_code = str(status_data.get("status_code") or "").strip().upper()
+            status_text = str(status_data.get("status") or "").strip()
+            last_statuses[container_id] = status_code or status_text or "UNKNOWN"
+
+            if status_code == "FINISHED":
+                pending.discard(container_id)
+            elif status_code in {"ERROR", "EXPIRED"}:
+                detail = status_text or "Meta could not process the uploaded media."
+                return f"Instagram media processing failed ({status_code}): {detail}"
+
+        if not pending:
+            return None
+        if attempt < attempts - 1:
+            sleep(interval_seconds)
+
+    statuses = ", ".join(sorted(set(last_statuses.get(item, "UNKNOWN") for item in pending)))
+    return (
+        "Instagram is still processing the uploaded media "
+        f"(status: {statuses or 'UNKNOWN'}). Please try publishing again shortly."
+    )
+
+
+def _publish_instagram_container(
+    client: httpx.Client,
+    ig_user_id: str,
+    creation_id: str,
+    access_token: str,
+) -> tuple[str | None, str | None]:
+    """Publish a ready container, retrying Meta's short eventual-consistency window."""
+    last_error = ""
+    for attempt in range(3):
+        publish_resp = client.post(
+            f"{META_GRAPH_BASE}/{ig_user_id}/media_publish",
+            params={"creation_id": creation_id, "access_token": access_token},
+        )
+        publish_data = _instagram_response_data(publish_resp)
+        if publish_resp.status_code < 400:
+            post_id = str(publish_data.get("id") or "").strip()
+            if post_id:
+                return post_id, None
+            last_error = "Instagram accepted the publish request but did not return a media ID."
+        else:
+            last_error = _instagram_error_message(publish_resp)
+
+        is_not_ready = "media id is not available" in last_error.lower()
+        if not is_not_ready or attempt == 2:
+            break
+
+        readiness_error = _wait_for_instagram_containers(
+            client,
+            [creation_id],
+            access_token,
+            attempts=3,
+            interval_seconds=1.0,
+        )
+        if readiness_error and "still processing" not in readiness_error.lower():
+            return None, readiness_error
+        sleep(1.0)
+
+    return None, last_error or "Instagram could not publish the media container."
+
+
 def _post_instagram(
     access_token: str,
     caption: str,
@@ -854,12 +961,20 @@ def _post_instagram(
                     params={"image_url": url, "is_carousel_item": "true", "access_token": access_token},
                 )
                 if child_resp.status_code >= 400:
-                    err = (child_resp.json().get("error") or {}).get("message", child_resp.text[:200])
-                    return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram carousel item error: {err}"}
-                child_id = str(child_resp.json().get("id") or "").strip()
+                    return {
+                        "success": False,
+                        "post_id": None,
+                        "post_url": None,
+                        "error": f"Instagram carousel item error: {_instagram_error_message(child_resp)}",
+                    }
+                child_id = str(_instagram_response_data(child_resp).get("id") or "").strip()
                 if not child_id:
                     return {"success": False, "post_id": None, "post_url": None, "error": "Instagram did not return a carousel item ID."}
                 children.append(child_id)
+
+            child_error = _wait_for_instagram_containers(client, children, access_token)
+            if child_error:
+                return {"success": False, "post_id": None, "post_url": None, "error": child_error}
 
             container_resp = client.post(
                 f"{META_GRAPH_BASE}/{ig_user_id}/media",
@@ -871,21 +986,34 @@ def _post_instagram(
                 },
             )
             if container_resp.status_code >= 400:
-                err = (container_resp.json().get("error") or {}).get("message", container_resp.text[:200])
-                return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram carousel error: {err}"}
-            creation_id = str(container_resp.json().get("id") or "").strip()
+                return {
+                    "success": False,
+                    "post_id": None,
+                    "post_url": None,
+                    "error": f"Instagram carousel error: {_instagram_error_message(container_resp)}",
+                }
+            creation_id = str(_instagram_response_data(container_resp).get("id") or "").strip()
             if not creation_id:
                 return {"success": False, "post_id": None, "post_url": None, "error": "Instagram did not return a carousel container ID."}
 
-            publish_resp = client.post(
-                f"{META_GRAPH_BASE}/{ig_user_id}/media_publish",
-                params={"creation_id": creation_id, "access_token": access_token},
-            )
-            if publish_resp.status_code >= 400:
-                err = (publish_resp.json().get("error") or {}).get("message", publish_resp.text[:200])
-                return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram carousel publish error: {err}"}
+            parent_error = _wait_for_instagram_containers(client, [creation_id], access_token)
+            if parent_error:
+                return {"success": False, "post_id": None, "post_url": None, "error": parent_error}
 
-        post_id = str(publish_resp.json().get("id") or "")
+            post_id, publish_error = _publish_instagram_container(
+                client,
+                ig_user_id,
+                creation_id,
+                access_token,
+            )
+            if publish_error:
+                return {
+                    "success": False,
+                    "post_id": None,
+                    "post_url": None,
+                    "error": f"Instagram carousel publish error: {publish_error}",
+                }
+
         return {
             "success": True,
             "post_id": post_id,
@@ -897,7 +1025,7 @@ def _post_instagram(
     selected_type = types[0] if types else media_type
     is_video = selected_type.startswith("video") or image_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
 
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=45.0) as client:
         container_params = {"caption": caption, "access_token": access_token}
         if is_video:
             container_params.update({"media_type": "REELS", "video_url": image_url})
@@ -909,22 +1037,35 @@ def _post_instagram(
             params=container_params,
         )
         if container_resp.status_code >= 400:
-            err = (container_resp.json().get("error") or {}).get("message", container_resp.text[:200])
-            return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram container error: {err}"}
+            return {
+                "success": False,
+                "post_id": None,
+                "post_url": None,
+                "error": f"Instagram container error: {_instagram_error_message(container_resp)}",
+            }
 
-        creation_id = container_resp.json().get("id")
+        creation_id = str(_instagram_response_data(container_resp).get("id") or "").strip()
         if not creation_id:
             return {"success": False, "post_id": None, "post_url": None, "error": "Instagram did not return a container ID."}
 
-        publish_resp = client.post(
-            f"{META_GRAPH_BASE}/{ig_user_id}/media_publish",
-            params={"creation_id": creation_id, "access_token": access_token},
-        )
-        if publish_resp.status_code >= 400:
-            err = (publish_resp.json().get("error") or {}).get("message", publish_resp.text[:200])
-            return {"success": False, "post_id": None, "post_url": None, "error": f"Instagram publish error: {err}"}
+        readiness_error = _wait_for_instagram_containers(client, [creation_id], access_token)
+        if readiness_error:
+            return {"success": False, "post_id": None, "post_url": None, "error": readiness_error}
 
-    post_id = publish_resp.json().get("id", "")
+        post_id, publish_error = _publish_instagram_container(
+            client,
+            ig_user_id,
+            creation_id,
+            access_token,
+        )
+        if publish_error:
+            return {
+                "success": False,
+                "post_id": None,
+                "post_url": None,
+                "error": f"Instagram publish error: {publish_error}",
+            }
+
     return {
         "success": True,
         "post_id": post_id,
