@@ -108,3 +108,72 @@ def test_profile_interests_are_saved_niches_only():
     assert _matches_niche("Mortgage rates and personal finance changes", _profile_interests(profile))
     assert not _matches_niche("Premier League transfer news", _profile_interests(profile))
     assert _profile_interests(None) == []
+
+
+
+class _FakeInstagramPublishClient:
+    def __init__(self, *args, **kwargs):
+        self.status_reads = 0
+        self.publish_status_reads: list[int] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def get(self, url: str, params=None):
+        self.status_reads += 1
+        status = "IN_PROGRESS" if self.status_reads == 1 else "FINISHED"
+        return _FakeResponse({"id": "container-1", "status_code": status})
+
+    def post(self, url: str, params=None):
+        if url.endswith("/media_publish"):
+            self.publish_status_reads.append(self.status_reads)
+            return _FakeResponse({"id": "published-media-1"})
+        if url.endswith("/media"):
+            return _FakeResponse({"id": "container-1"})
+        return _FakeResponse({}, status_code=404)
+
+
+def test_instagram_publish_waits_until_media_is_finished(monkeypatch):
+    client = _FakeInstagramPublishClient()
+    monkeypatch.setattr(social_publisher.httpx, "Client", lambda *args, **kwargs: client)
+    monkeypatch.setattr(social_publisher, "sleep", lambda *_args: None)
+
+    result = social_publisher._post_instagram(
+        "access-token",
+        "A useful caption",
+        "https://cdn.example/photo.jpg",
+        "ig-user-1",
+        "image",
+    )
+
+    assert result["success"] is True
+    assert result["post_id"] == "published-media-1"
+    assert client.status_reads == 2
+    assert client.publish_status_reads == [2]
+
+
+class _FakeNeverReadyClient(_FakeInstagramPublishClient):
+    def get(self, url: str, params=None):
+        self.status_reads += 1
+        return _FakeResponse({"id": "container-1", "status_code": "IN_PROGRESS"})
+
+
+def test_instagram_publish_does_not_publish_an_unready_container(monkeypatch):
+    client = _FakeNeverReadyClient()
+    monkeypatch.setattr(social_publisher.httpx, "Client", lambda *args, **kwargs: client)
+    monkeypatch.setattr(social_publisher, "sleep", lambda *_args: None)
+
+    result = social_publisher._post_instagram(
+        "access-token",
+        "A useful caption",
+        "https://cdn.example/photo.jpg",
+        "ig-user-1",
+        "image",
+    )
+
+    assert result["success"] is False
+    assert "still processing" in result["error"].lower()
+    assert client.publish_status_reads == []
