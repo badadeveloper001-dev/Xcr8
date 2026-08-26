@@ -521,7 +521,7 @@ export default function AssistantPage() {
             <div>
               <h2 className="xcr8-title-lg text-white light:text-slate-900">Cr8or AI Workspace</h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <Link
                 href="/ai-studio/assistant/history"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-medium text-violet-300 transition hover:bg-violet-500/20"
@@ -532,7 +532,7 @@ export default function AssistantPage() {
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="xcr8-input !w-auto min-w-[170px] py-2 text-xs"
+                className="xcr8-input w-full min-w-0 py-2 text-xs sm:w-auto sm:min-w-[150px]"
               >
                 {languageOptions.map((item) => (
                   <option key={item} value={item}>
@@ -561,7 +561,7 @@ export default function AssistantPage() {
 
             <div
               ref={messageListRef}
-              className="ai-chat-log mb-3 h-[50dvh] min-h-[320px] max-h-[580px] space-y-3 overflow-x-hidden overflow-y-auto p-3 md:h-[450px]"
+              className="ai-chat-log mb-3 h-[46dvh] min-h-[260px] max-h-[580px] space-y-3 overflow-x-hidden overflow-y-auto p-3 md:h-[450px] md:min-h-[320px]"
             >
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="flex w-full">
