@@ -1284,6 +1284,43 @@ export async function getPlanUsage(userId: number): Promise<PlanUsageResponse> {
   return data;
 }
 
+
+export type PaystackCheckoutResponse = {
+  provider: "paystack";
+  test_mode: boolean;
+  plan: string;
+  billing_cycle: "monthly" | "annual";
+  currency: "NGN" | "USD";
+  amount_minor: number;
+  authorization_url: string;
+  access_code?: string | null;
+  reference: string;
+};
+
+export async function initializePaystackCheckout(
+  userId: number,
+  plan: string,
+  billingCycle: "monthly" | "annual",
+): Promise<PaystackCheckoutResponse> {
+  const { data } = await apiClient.post<PaystackCheckoutResponse>(
+    "/api/v1/plans/checkout",
+    { plan, billing_cycle: billingCycle },
+    { params: { user_id: userId } },
+  );
+  return data;
+}
+
+export async function verifyPaystackPayment(
+  userId: number,
+  reference: string,
+): Promise<{ processed: boolean; duplicate: boolean; plan: string; verified: boolean }> {
+  const { data } = await apiClient.post(
+    "/api/v1/plans/paystack/verify",
+    { user_id: userId, reference },
+  );
+  return data;
+}
+
 export async function getCreatorWorkspaces(userId: number): Promise<CreatorWorkspaceSummary> {
   const { data } = await workspaceApiClient.get<CreatorWorkspaceSummary>("/api/v1/workspaces/summary", {
     params: { user_id: userId },
