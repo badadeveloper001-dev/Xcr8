@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -168,6 +169,12 @@ class PulseStatusUpdateRequest(BaseModel):
 
 class PlanUpgradeRequest(BaseModel):
     plan: str = Field(pattern=r"^(free|starter|plus|pro|business|agency)$")
+    billing_cycle: Literal["monthly", "annual"] = "monthly"
+
+
+class PaystackVerifyRequest(BaseModel):
+    user_id: int
+    reference: str = Field(min_length=8, max_length=120)
 
 class PlanResponse(BaseModel):
     user_id: int
