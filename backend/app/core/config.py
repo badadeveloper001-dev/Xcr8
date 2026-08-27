@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     oauth_state_secret: str = ""
     ai_internal_token: str = ""
     billing_webhook_secret: str = ""
+    # Paystack stays in test mode until explicitly switched off for live payments.
+    paystack_secret_key: str = ""
+    paystack_currency: str = "NGN"
+    paystack_test_mode: bool = True
+    paystack_base_url: str = "https://api.paystack.co"
 
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"
