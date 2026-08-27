@@ -17,38 +17,9 @@ from app.db.deps import get_db
 from app.db.models import PaymentEvent, PlanTier, UsageLedger, User
 from app.schemas.mvp import PaystackVerifyRequest, PlanUpgradeRequest
 from app.services.entitlements import PLAN_CONFIG, normalize_plan_id, serialize_plan, usage_snapshot
-from app.services.email import send_plain_email
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 PAID_WEBHOOK_STATUSES = {"paid", "succeeded", "active", "completed"}
-
-def _send_plan_activation_email(
-    user: User,
-    *,
-    plan_id: str,
-    billing_cycle: str,
-    currency: str,
-    amount_minor: int,
-    expires_at: datetime,
-    reference: str,
-) -> None:
-    """Send a receipt after entitlements are committed; delivery is best-effort."""
-    amount = f"{amount_minor / 100:,.2f}"
-    subject = f"Your XCR8 {plan_id.title()} plan is active"
-    body = (
-        f"Hi {user.display_name or 'Creator'},\n\n"
-        f"Your XCR8 {plan_id.title()} plan is now active.\n\n"
-        f"Billing cycle: {billing_cycle}\n"
-        f"Amount: {currency} {amount}\n"
-        f"Reference: {reference}\n"
-        f"Access through: {expires_at.isoformat()}\n\n"
-        "Your plan benefits are available immediately in XCR8. "
-        "If you did not make this purchase, contact support with the reference above.\n\n"
-        "The XCR8 Team\n"
-    )
-    send_plain_email(subject, body, [user.email])
-
-
 
 
 @router.get("/", response_model=list)
@@ -202,15 +173,6 @@ def _activate_paystack_payment(
     )
     db.add(user)
     db.commit()
-    _send_plan_activation_email(
-        user,
-        plan_id=normalized_plan,
-        billing_cycle=billing_cycle,
-        currency=currency,
-        amount_minor=int(amount_minor),
-        expires_at=expires_at,
-        reference=event_id,
-    )
     return {"processed": True, "duplicate": False, "user_id": user.id, "plan": normalized_plan, "reference": event_id}
 
 
@@ -556,13 +518,4 @@ async def payment_webhook(
     )
     db.add(user)
     db.commit()
-    _send_plan_activation_email(
-        user,
-        plan_id=plan_id,
-        billing_cycle=billing_cycle,
-        currency=currency,
-        amount_minor=amount_minor,
-        expires_at=expires_at,
-        reference=event_id,
-    )
     return {"processed": True, "duplicate": False, "user_id": user.id, "plan": plan_id}
