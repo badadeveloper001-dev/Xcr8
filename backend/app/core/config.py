@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     billing_webhook_secret: str = ""
     # Paystack stays in test mode until explicitly switched off for live payments.
     paystack_secret_key: str = ""
-    paystack_currency: str = "NGN"
+    paystack_currency: str = "AUTO"
     paystack_test_mode: bool = True
     paystack_base_url: str = "https://api.paystack.co"
 
