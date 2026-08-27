@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from email.message import EmailMessage
 import hashlib
 import hmac
 import re
-import smtplib
 
 import httpx
 from sqlalchemy import desc, select
@@ -13,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.models import IntelligenceNotification, PulseAffectedUser, PulseEvent, PulseIncident, PulseNotification, User
+from app.services.email import send_plain_email
 
 FOUNDER_NOTIFY_COOLDOWN_MINUTES = 30
 AUTO_RESOLVE_MINUTES = 3
@@ -194,42 +193,11 @@ def build_fingerprint(feature: str, error_type: str, provider: str | None, http_
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:40]
 
 
-def _send_email(subject: str, body: str, recipients: list[str]) -> tuple[bool, str]:
-    host = str(settings.smtp_host or "").strip()
-    username = str(settings.smtp_username or "").strip()
-    password = str(settings.smtp_password or "").strip()
-    from_email = str(settings.smtp_from_email or "").strip()
-    if not host or not username or not password or not from_email or not recipients:
-        return False, "SMTP not configured"
+def _send_email(subject: str, body: str, recipients: ldef _send_email(subject: str, body: str, recipients: list[str]) -> tuple[bool, str]:
+    """Compatibility wrapper around the shared SMTP mailer."""
+    return send_plain_email(subject, body, recipients)
 
-    message = EmailMessage()
-    sender_name = str(settings.smtp_from_name or "XCR8").strip() or "XCR8"
-    message["Subject"] = subject
-    message["From"] = f"{sender_name} <{from_email}>"
-    message["To"] = ", ".join(recipients)
-    message.set_content(body)
-
-    try:
-        if settings.smtp_use_ssl:
-            with smtplib.SMTP_SSL(host, settings.smtp_port, timeout=15) as server:
-                server.login(username, password)
-                server.send_message(message)
-        else:
-            with smtplib.SMTP(host, settings.smtp_port, timeout=15) as server:
-                server.ehlo()
-                if settings.smtp_use_tls:
-                    server.starttls()
-                    server.ehlo()
-                server.login(username, password)
-                server.send_message(message)
-        return True, "sent"
-    except OSError as exc:
-        return False, str(exc)
-
-
-def _record_notification(
-    db: Session,
-    incident_id: int,
+t_id: int,
     channel: str,
     notification_type: str,
     target: str,
