@@ -19,7 +19,6 @@ import {
   getOAuthProviders,
   getPlanUsage,
   getPlatformConnections,
-  startPlatformOAuth,
   updateProfile,
   type PlatformConnectPayload,
 } from "@/lib/api";
@@ -64,7 +63,7 @@ export default function SettingsPage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [platformDraft, setPlatformDraft] = useState<PlatformConnectPayload | null>(null);
-  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
   const [profileUsername, setProfileUsername] = useState(username ?? "");
   const [profilePhone, setProfilePhone] = useState(phone ?? "");
   const [workspaceName, setWorkspaceName] = useState("");
@@ -75,10 +74,9 @@ export default function SettingsPage() {
   }, [hasHydrated, router, userId]);
 
   useEffect(() => {
-    const raw = localStorage.getItem("xcr8-settings-alerts");
-    if (!raw) return;
-
     try {
+      const raw = localStorage.getItem("xcr8-settings-alerts");
+      if (!raw) return;
       const parsed = JSON.parse(raw) as {
         postReminders?: boolean;
         securityAlerts?: boolean;
@@ -94,8 +92,22 @@ export default function SettingsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const message = url.searchParams.get("oauth_error");
+    if (message) {
+      setOauthError(message.slice(0,500));
+      url.searchParams.delete("oauth_error");
+      window.history.replaceState(window.history.state, "", url.toString());
+    }
+  }, []);
+
   const saveAlertSettings = (postReminders: boolean, securityAlerts: boolean) => {
-    localStorage.setItem("xcr8-settings-alerts", JSON.stringify({ postReminders, securityAlerts }));
+    try {
+      localStorage.setItem("xcr8-settings-alerts", JSON.stringify({ postReminders, securityAlerts }));
+    } catch {
+      setError("Your browser could not save these preferences. Check its storage settings.");
+    }
   };
 
   useEffect(() => {
@@ -210,25 +222,16 @@ export default function SettingsPage() {
 
   const activeDraftPlatform = platformDraft?.platform ?? null;
 
-  const handleOAuthConnect = async (platform: string) => {
-    setNotice(null);
-    setError(null);
-    setOauthLoading(platform);
-    try {
-      const response = await startPlatformOAuth(userId, platform);
-      // Redirect user to platform OAuth page
-      window.location.href = response.auth_url;
-    } catch (err) {
-      setOauthLoading(null);
-      // Fall back to manual form on error (e.g. not configured)
-      setError(
-        getApiErrorMessage(
-          err,
-          `Could not start ${platform} OAuth. Use the manual handle form below.`,
-        ),
-      );
-      openPlatformDraft(platform);
-    }
+  const oauthStartHref = (platform: string) => {
+    const workspaceId = activeCreatorId?.startsWith("workspace:")
+      ? activeCreatorId.slice("workspace:".length)
+      : "main";
+    const params = new URLSearchParams({
+      platform,
+      user_id: String(userId),
+      workspace_id: workspaceId,
+    });
+    return `/auth/platform-start?${params.toString()}`;
   };
 
   const openPlatformDraft = (platform: string) => {
@@ -780,18 +783,28 @@ export default function SettingsPage() {
             </div>
           ) : null}
 
+          {oauthError ? (
+            <p role="alert" className="mb-3 break-words rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-400">
+              {oauthError}
+            </p>
+          ) : null}
+          <p className="mb-3 text-xs text-slate-500">
+            Authorization opens in this tab. If another app’s built-in browser does not continue,
+            open Xcr8 in Chrome or your regular browser and connect there.
+          </p>
+
           <div className="space-y-2">
             {platforms.map((platform) => {
               const activeRow = connections?.find(
                 (item) => item.platform === platform.id && item.active,
               );
-              const isOAuthConfigured = oauthProviders?.configured.includes(platform.id) ?? false;
+              const isOAuthConfigured = oauthProviders?.configured.includes(platform.id) ?? true;
               const isOAuthMethod = activeRow?.connection_method === "oauth";
 
               return (
                 <div
                   key={platform.id}
-                  className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
+                  className="surface-soft flex flex-wrap items-center gap-3 rounded-xl px-3 py-3"
                 >
                   <span
                     className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${platform.cls}`}
@@ -819,36 +832,43 @@ export default function SettingsPage() {
                   </div>
 
                   {activeRow ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                      {!isOAuthMethod && isOAuthConfigured ? (
+                        <a href={oauthStartHref(platform.id)} target="_self" className="inline-flex min-h-11 items-center rounded-xl bg-violet-500/15 px-3 text-xs font-medium text-violet-300 light:text-violet-600">
+                          Connect via OAuth
+                        </a>
+                      ) : null}
                       <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
                         Connected
                       </span>
                       <button
                         type="button"
                         onClick={() => void disconnectMutation.mutate(activeRow.id)}
-                        className="text-[11px] font-medium text-rose-400 hover:underline"
+                        className="min-h-11 px-2 text-xs font-medium text-rose-400 hover:underline"
                       >
                         Disconnect
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                       {isOAuthConfigured ? (
-                        <button
-                          type="button"
-                          disabled={oauthLoading === platform.id || connectMutation.isPending}
-                          onClick={() => void handleOAuthConnect(platform.id)}
-                          className="rounded-full border border-violet-500/30 bg-violet-500/15 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-500/25 disabled:opacity-60 light:text-violet-600"
+                        <a
+                          href={oauthStartHref(platform.id)}
+                          target="_self"
+                          className="inline-flex min-h-11 items-center rounded-xl border border-violet-500/30 bg-violet-500/15 px-3 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/25 light:text-violet-600"
                         >
-                          {oauthLoading === platform.id ? "Redirecting…" : "Connect via OAuth"}
-                        </button>
-                      ) : null}
+                          Connect via OAuth
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-500">OAuth unavailable</span>
+                      )}
                       <button
                         type="button"
                         disabled={connectMutation.isPending}
                         onClick={() => openPlatformDraft(platform.id)}
                         title="Link handle manually (no direct publishing)"
-                        className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:bg-white/10 disabled:opacity-60 light:border-slate-200 light:bg-white/80 light:text-slate-500"
+                        aria-label={`Link ${platform.label} manually`}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:bg-white/10 disabled:opacity-60 light:border-slate-200 light:bg-white/80 light:text-slate-500"
                       >
                         <Link2 size={11} />
                       </button>
