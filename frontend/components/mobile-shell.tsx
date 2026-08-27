@@ -29,7 +29,7 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
             className="xcr8-panel mb-6 flex flex-col gap-3 rounded-2xl p-3 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between"
             aria-label="Page header"
           >
-            <div className="pr-3">
+            <div className="min-w-0 break-words pr-3">
               {title ? (
                 <h1 className="xcr8-title-xl text-white dark:text-white light:text-[#111827]">
                   {title}
@@ -41,14 +41,14 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
                 </p>
               ) : null}
             </div>
-            <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+            <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
               <CreatorProfileSwitcher />
               <NotificationBellButton />
               <ThemeToggle />
             </div>
           </header>
         ) : (
-          <div className="mb-4 flex items-start justify-end gap-2" aria-label="Active profile and account">
+          <div className="mb-4 flex min-w-0 flex-wrap items-start justify-end gap-2" aria-label="Active profile and account">
             <CreatorProfileSwitcher />
             <NotificationBellButton />
             <ThemeToggle />
