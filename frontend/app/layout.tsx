@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { DM_Sans, Poppins } from "next/font/google";
 import { Providers } from "@/components/providers";
@@ -17,6 +17,15 @@ export const metadata: Metadata = {
     "XCR8 helps creators plan content, generate visuals, publish across social platforms, and grow their audience from one workspace.",
 };
 
+// Let Next.js emit a single viewport tag; duplicate tags can override Android
+// keyboard resizing and safe-area settings.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -25,10 +34,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
-        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(() => {
