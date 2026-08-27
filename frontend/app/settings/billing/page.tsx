@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MobileShell } from "@/components/mobile-shell";
-import { apiClient } from "@/lib/api";
+import { apiClient, getApiErrorMessage, initializePaystackCheckout, verifyPaystackPayment } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 type RegionalPricing = {
@@ -87,12 +87,14 @@ function formatStorage(megabytes: number): string {
 
 export default function BillingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const storedPlan = useCreatorStore((state) => state.plan);
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [currentPlan, setCurrentPlan] = useState(storedPlan || "free");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [message, setMessage] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const userId = useCreatorStore((state) => state.userId);
   const setPlan = useCreatorStore((state) => state.setPlan);
 
@@ -145,7 +147,36 @@ export default function BillingPage() {
     }
   }, [hasHydrated, setPlan, storedPlan, userId]);
 
-  function showUpgradeStatus(plan: PlanItem) {
+  useEffect(() => {
+    const reference = searchParams.get("reference")?.trim();
+    if (!hasHydrated || !userId || !reference) return;
+
+    let cancelled = false;
+    setMessage("Confirming your Paystack payment securely…");
+    void verifyPaystackPayment(userId, reference)
+      .then((result) => {
+        if (cancelled) return;
+        setCurrentPlan(result.plan);
+        setPlan(result.plan);
+        setMessage(
+          result.duplicate
+            ? "This payment was already confirmed. Your plan is active."
+            : "Payment confirmed. Your Xcr8 plan is now active.",
+        );
+        router.replace("/settings/billing");
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setMessage(getApiErrorMessage(error, "We could not confirm this payment yet. Please retry shortly."));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasHydrated, router, searchParams, setPlan, userId]);
+
+  async function showUpgradeStatus(plan: PlanItem) {
     if (!userId) {
       setMessage("Sign in to upgrade your plan.");
       return;
@@ -154,9 +185,19 @@ export default function BillingPage() {
       billingCycle === "annual"
         ? plan.pricing.annual_formatted
         : plan.pricing.monthly_formatted;
-    setMessage(
-      `${plan.name} is ${quotedPrice}/${billingCycle === "annual" ? "year" : "month"}. Secure checkout is the remaining payment-provider step; no plan will activate without a verified payment webhook.`,
-    );
+    setCheckoutLoading(true);
+    setMessage("Preparing secure Paystack test checkout for " + plan.name + " at " + quotedPrice + "…");
+    try {
+      const checkout = await initializePaystackCheckout(userId, plan.id, billingCycle);
+      if (!checkout.authorization_url) {
+        throw new Error("Paystack did not return a checkout URL.");
+      }
+      window.location.assign(checkout.authorization_url);
+    } catch (error) {
+      setMessage(getApiErrorMessage(error, "Could not start Paystack checkout. Check the Paystack test key configuration."));
+    } finally {
+      setCheckoutLoading(false);
+    }
   }
 
   if (!hasHydrated || !userId) return null;
@@ -288,14 +329,14 @@ export default function BillingPage() {
                 <button
                   type="button"
                   className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-                  disabled={isCurrent}
+                  disabled={isCurrent || checkoutLoading}
                   onClick={() => showUpgradeStatus(plan)}
                 >
                   {isCurrent
                     ? "Your current plan"
                     : plan.id === "free"
                       ? "Free plan"
-                      : `Choose ${plan.name}`}
+                      : checkoutLoading ? "Opening checkout…" : `Choose ${plan.name}`}
                 </button>
               </section>
             );
