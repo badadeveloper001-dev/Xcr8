@@ -108,6 +108,14 @@ services:
         sync: false
       - key: BILLING_WEBHOOK_SECRET
         sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_CURRENCY
+        value: AUTO
+      - key: PAYSTACK_TEST_MODE
+        value: "true"
+      - key: PAYSTACK_BASE_URL
+        value: https://api.paystack.co
       - key: FOUNDER_ALERT_EMAILS
         sync: false
       - key: PULSE_SLACK_WEBHOOK_URL

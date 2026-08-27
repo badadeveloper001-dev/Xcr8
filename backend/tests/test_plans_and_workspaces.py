@@ -647,3 +647,85 @@ def test_saved_distribution_draft_can_be_reopened_and_updated(monkeypatch):
         assert posts[0].selected_platforms == ["threads"]
     finally:
         db.close()
+
+
+def test_paystack_webhook_verifies_signature_and_activates_plan(monkeypatch):
+    from app.api.routes import plans as plans_routes
+
+    db = SessionLocal()
+    try:
+        user = User(email="paystack@test.local", display_name="Paystack Tester")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        monkeypatch.setattr(settings, "paystack_secret_key", "sk_test_example")
+        verified = {
+            "reference": "xcr8_test_reference",
+            "status": "success",
+            "currency": "NGN",
+            "amount": 750_000,
+            "id": 12345,
+            "channel": "card",
+            "metadata": {
+                "user_id": user.id,
+                "plan": "starter",
+                "billing_cycle": "monthly",
+            },
+        }
+        monkeypatch.setattr(
+            plans_routes,
+            "_verify_paystack_reference",
+            lambda reference: verified if reference == "xcr8_test_reference" else {},
+        )
+
+        raw = json.dumps(
+            {"event": "charge.success", "data": {"reference": "xcr8_test_reference"}},
+            separators=(",", ":"),
+        ).encode()
+        signature = hmac.new(b"sk_test_example", raw, hashlib.sha512).hexdigest()
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/v1/plans/webhook/paystack",
+            content=raw,
+            headers={
+                "Content-Type": "application/json",
+                "x-paystack-signature": signature,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["plan"] == "starter"
+
+        duplicate = client.post(
+            "/api/v1/plans/webhook/paystack",
+            content=raw,
+            headers={
+                "Content-Type": "application/json",
+                "x-paystack-signature": signature,
+            },
+        )
+        assert duplicate.status_code == 200
+        assert duplicate.json()["duplicate"] is True
+    finally:
+        db.close()
+
+
+def test_paystack_checkout_requires_a_secret(monkeypatch):
+    db = SessionLocal()
+    try:
+        user = User(email="paystack-checkout@test.local", display_name="Paystack Checkout Tester")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        monkeypatch.setattr(settings, "paystack_secret_key", "")
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/plans/checkout",
+            params={"user_id": user.id},
+            json={"plan": "starter", "billing_cycle": "monthly"},
+        )
+        assert response.status_code == 503
+    finally:
+        db.close()

@@ -49,6 +49,10 @@
 - `CRON_SECRET`: random shared secret used by the scheduler cron to invoke the due-post dispatcher.
 - `OAUTH_STATE_SECRET`: random signing secret for OAuth state.
 - `BILLING_WEBHOOK_SECRET`: HMAC secret required to activate paid plans through the verified billing webhook.
+- `PAYSTACK_SECRET_KEY`: Paystack secret key (`sk_test_...` while test mode is enabled; never expose it to the frontend).
+- `PAYSTACK_CURRENCY`: `AUTO` (recommended for location-aware NGN/USD checkout), or explicitly `NGN`/`USD` if your Paystack account settles in one currency.
+- `PAYSTACK_TEST_MODE`: keep `true` with a test key; set `false` only when you intentionally switch to live keys.
+- `PAYSTACK_BASE_URL`: Paystack API base URL (default `https://api.paystack.co`).
 - `AI_INTERNAL_TOKEN`: shared high-entropy secret used by the backend to call costly internal AI routes.
 - `META_GRAPH_API_VERSION`: supported Meta Graph API version used for Facebook and Instagram (default `v22.0`).
 - `META_APP_ID` / `META_APP_SECRET`: Meta OAuth credentials.
