@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from email.message import EmailMessage
 import hashlib
 import hmac
 import secrets
-import smtplib
 
 import httpx
 
 from supabase import Client, create_client
 
 from app.core.config import settings
+from app.services.email import send_plain_email
 
 
 class SupabaseAuthError(ValueError):
@@ -311,70 +310,23 @@ def supabase_request_email_otp(email: str) -> None:
     raise SupabaseAuthError("Could not send verification code.", status_code=400)
 
 
-def _ensure_smtp_configured() -> None:
-    if (
-        not settings.smtp_host.strip()
-        or not settings.smtp_from_email.strip()
-        or not settings.smtp_username.strip()
-        or not settings.smtp_password.strip()
-    ):
-        raise SupabaseAuthError(
-            detail="Email service is not configured yet. Please set SMTP environment variables.",
-            status_code=503,
-        )
-
-
-def generate_signup_email_code() -> str:
-    return f"{secrets.randbelow(1_000_000):06d}"
-
-
-def hash_signup_email_code(email: str, code: str) -> str:
-    payload = f"{email.strip().lower()}:{code.strip()}".encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
-
-
-def verify_signup_email_code(email: str, code: str, code_hash: str) -> bool:
-    expected = hash_signup_email_code(email, code)
-    return hmac.compare_digest(expected, code_hash)
-
-
 def send_signup_email_code(email: str, code: str) -> None:
-    _ensure_smtp_configured()
-
-    message = EmailMessage()
-    message["Subject"] = "Your XCR8 verification code"
-    sender_name = settings.smtp_from_name.strip() or "XCR8"
-    message["From"] = f"{sender_name} <{settings.smtp_from_email.strip()}>"
-    message["To"] = email
-    message.set_content(
+    """Send signup verification through the shared, non-blocking SMTP mailer."""
+    sent, detail = send_plain_email(
+        "Your XCR8 verification code",
         (
             "Welcome to XCR8.\n\n"
             f"Your verification code is: {code}\n"
             f"This code expires in {max(1, int(settings.signup_code_ttl_minutes))} minutes.\n\n"
             "If you did not request this, you can ignore this email."
-        )
+        ),
+        [email],
     )
-
-    try:
-        if settings.smtp_use_ssl:
-            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as server:
-                server.login(settings.smtp_username, settings.smtp_password)
-                server.send_message(message)
-            return
-
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
-            server.ehlo()
-            if settings.smtp_use_tls:
-                server.starttls()
-                server.ehlo()
-            server.login(settings.smtp_username, settings.smtp_password)
-            server.send_message(message)
-    except OSError as exc:
+    if not sent:
         raise SupabaseAuthError(
             detail="Email service is temporarily unavailable. Please try again.",
             status_code=503,
-        ) from exc
-
+        )
 
 def signup_code_expiry() -> datetime:
     ttl = max(1, int(settings.signup_code_ttl_minutes or 10))
