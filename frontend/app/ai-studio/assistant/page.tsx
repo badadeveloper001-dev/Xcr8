@@ -229,6 +229,7 @@ export default function AssistantPage() {
     let cancelled = false;
 
     const loadChatSessions = async () => {
+      const version = conversationVersionRef.current;
       const storageKey = activeChatStorageKey(email);
       const sessionsKey = chatSessionsStorageKey(email);
 
@@ -264,7 +265,7 @@ export default function AssistantPage() {
 
       try {
         let sessions = await listAiAssistantChats(userId, email ?? undefined);
-        if (cancelled) {
+        if (cancelled || sendingRef.current || version !== conversationVersionRef.current) {
           return;
         }
 
@@ -283,7 +284,7 @@ export default function AssistantPage() {
               : (sessions[0]?.chat_id ?? null)));
         setActiveChatId(nextChatId);
       } catch {
-        if (!cancelled) {
+        if (!cancelled && !sendingRef.current && version === conversationVersionRef.current) {
           if (cachedSessions.length > 0) {
             setChatSessions(cachedSessions);
             const storedChatId = safeStorage.getItem(storageKey);
