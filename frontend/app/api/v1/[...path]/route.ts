@@ -63,7 +63,23 @@ async function proxy(request: NextRequest, path: string[]) {
   }
 
   const upstreamHeaders = new Headers(request.headers);
-  upstreamHeaders.delete("host");
+  // Browser transport and frontend routing metadata must not describe a new
+  // server-to-server request. Some Android browsers advertise encodings that
+  // the server fetch runtime cannot decode.
+  for (const name of Array.from(upstreamHeaders.keys())) {
+    if (["host", "connection", "content-length", "transfer-encoding", "accept-encoding",
+      "keep-alive", "te", "trailer", "upgrade", "x-deployment-id", "rsc",
+      "next-router-state-tree", "next-router-prefetch", "next-url"].includes(name)
+      || name.startsWith("sec-")) upstreamHeaders.delete(name);
+  }
+  const cookies = (upstreamHeaders.get("cookie") || "").split(";")
+    .filter((part) => part.trim() && part.trim().split("=")[0] !== "__vdpl").join(";");
+  if (cookies) upstreamHeaders.set("cookie", cookies);
+  else upstreamHeaders.delete("cookie");
+  upstreamHeaders.set("accept-encoding", "identity");
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `xcr8-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  upstreamHeaders.set("x-xcr8-request-id", requestId);
+  const retrySafe = request.method === "GET" || request.method === "HEAD";
 
   const init: RequestInit = {
     method: request.method,
@@ -88,7 +104,7 @@ async function proxy(request: NextRequest, path: string[]) {
       const response = await fetch(targetUrl, init);
 
       // Retry with the next candidate when the upstream gateway blocks this route.
-      if (response.status === 402) {
+      if (response.status === 402 && retrySafe) {
         upstreamResponse = response;
         continue;
       }
@@ -97,6 +113,8 @@ async function proxy(request: NextRequest, path: string[]) {
       break;
     } catch {
       sawNetworkFailure = true;
+      // A failed transport does not prove the server did not charge/publish.
+      if (!retrySafe || request.signal.aborted) break;
     }
   }
 
@@ -123,6 +141,15 @@ async function proxy(request: NextRequest, path: string[]) {
   const responseHeaders = new Headers(upstreamResponse.headers);
   responseHeaders.delete("content-encoding");
   responseHeaders.delete("transfer-encoding");
+  // fetch may decompress the body; the original length must not be forwarded.
+  responseHeaders.delete("content-length");
+  responseHeaders.delete("connection");
+  responseHeaders.set("Cache-Control", "private, no-store");
+  responseHeaders.set("X-Xcr8-Request-Id", requestId);
+  if (!upstreamResponse.ok) {
+    console.warn("xcr8_backend_response", { requestId, status: upstreamResponse.status,
+      route: path.slice(0, 3).join("/") });
+  }
 
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
