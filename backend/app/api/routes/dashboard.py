@@ -18,7 +18,7 @@ from app.db.models import (
     User,
     Workspace,
 )
-from app.api.routes.intelligence import _profile_interests, _refresh_live_signals, _signal_matches_interests
+from app.api.routes.intelligence import _profile_interests, _signal_matches_interests
 from app.schemas.mvp import Cr8orAIAlert, DashboardOverview, PlatformConnection
 from app.services.profile_scope import current_profile_id
 
@@ -235,23 +235,25 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         or not latest_signal_time
         or (datetime.now(tz=UTC) - latest_signal_time).total_seconds() >= 12 * 60 * 60
     )
-    if should_refresh_trends:
-        _refresh_live_signals(db, user, interests, "all")
-        trend_signal_rows = load_niche_trends()
+    # Return cached data immediately; the client refreshes trends separately.
 
     trend_titles = [row.title for row in trend_signal_rows if row.title.strip()][:3]
     if not has_trend_signal_readiness:
         trend_titles = []
 
     trend_explanations = []
+    briefs_by_signal = {}
+    if trend_signal_rows and has_trend_signal_readiness:
+        for brief_row in db.scalars(select(TrendResearchBrief).where(
+            TrendResearchBrief.trend_signal_id.in_([row.id for row in trend_signal_rows]),
+        ).order_by(TrendResearchBrief.created_at.desc())):
+            briefs_by_signal.setdefault(brief_row.trend_signal_id, brief_row)
     if has_trend_signal_readiness:
         for signal in trend_signal_rows:
             meta = signal.signal_meta if isinstance(signal.signal_meta, dict) else {}
             if meta.get("mode") != "live-niche-intelligence":
                 continue
-            brief = db.scalar(select(TrendResearchBrief).where(
-                TrendResearchBrief.trend_signal_id == signal.id,
-            ).order_by(TrendResearchBrief.created_at.desc()))
+            brief = briefs_by_signal.get(signal.id)
             niche = str(meta.get("matched_niche") or niche_label or "your niche")
             trend_explanations.append({
                 "id": signal.id,
@@ -270,9 +272,9 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
 
     user_language = str(user.language or "english").strip().lower()
 
-    platforms = db.scalars(
+    platforms = list(db.scalars(
         select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id)
-    )
+    ))
 
     ai_rows = list(
         db.scalars(
@@ -341,12 +343,13 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     return DashboardOverview(
         greeting="Good evening" if datetime.utcnow().hour >= 12 else "Good morning",
         creator_name=active_creator_name,
-        platforms_connected=sum(1 for _ in platforms),
+        platforms_connected=len(platforms),
         drafts=drafts or 0,
         scheduled=scheduled or 0,
         ai_suggestions=len(cr8or_ai_alert.trend_titles) if cr8or_ai_alert else 0,
         recent_posts=recent_posts,
         trend_explanations=trend_explanations,
+        trend_refresh_due=bool(interests and should_refresh_trends),
         ai_insights=[
             {"title": "Continue a draft", "description": f"You have {drafts or 0} drafts you can pick up without starting over."},
             {"title": "Review your publishing queue", "description": f"You have {scheduled or 0} upcoming scheduled posts."},
@@ -357,9 +360,7 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
                 account_handle=platform.account_handle,
                 is_active=platform.is_active,
             )
-            for platform in db.scalars(
-                select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id)
-            )
+            for platform in platforms
         ],
         cr8or_ai_alert=cr8or_ai_alert,
         ai_ops={
