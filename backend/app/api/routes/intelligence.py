@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import re
 from urllib.parse import quote_plus
 from xml.etree import ElementTree
@@ -11,9 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import (
     AnalyticsSnapshot,
+    ConnectedPlatform,
     ContentPost,
     CreatorProfile,
     IntelligenceFeedback,
@@ -277,7 +279,126 @@ def _fetch_live_niche_news(interests: list[str]) -> list[dict[str, str]]:
     return entries
 
 
-def _live_niche_candidates(interests: list[str]) -> list[dict[str, str]]:
+def _youtube_candidates_from_payload(payload: object, niche: str) -> list[dict[str, str]]:
+    """Convert YouTube search results into safe, niche-labelled trend candidates."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        return []
+    entries: list[dict[str, str]] = []
+    source_url = "https://www.youtube.com/results?search_query=" + quote_plus(niche)
+    for item in payload["items"][:10]:
+        if not isinstance(item, dict):
+            continue
+        video_id = item.get("id", {}).get("videoId") if isinstance(item.get("id"), dict) else ""
+        snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
+        title = str(snippet.get("title") or "").strip()
+        description = str(snippet.get("description") or "").strip()
+        published = str(snippet.get("publishedAt") or "").strip()
+        if not video_id or not title or not _matches_niche(f"{title} {description}", [niche]):
+            continue
+        entries.append({
+            "topic": title,
+            "description": description,
+            "published_at": published,
+            "traffic": "",
+            "source_label": "YouTube niche discovery (recent, view-ranked)",
+            "source_url": f"https://www.youtube.com/watch?v={video_id}",
+            "matched_niche": niche,
+        })
+    return entries
+
+
+def _threads_candidates_from_payload(payload: object, niche: str) -> list[dict[str, str]]:
+    """Convert authenticated Threads keyword results into safe trend candidates."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        return []
+    entries: list[dict[str, str]] = []
+    for item in payload["data"][:10]:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or item.get("title") or "").strip()
+        if not text or not _matches_niche(text, [niche]):
+            continue
+        entries.append({
+            "topic": text[:180],
+            "description": text,
+            "published_at": str(item.get("timestamp") or "").strip(),
+            "traffic": "",
+            "source_label": "Threads keyword discovery (live)",
+            "source_url": str(item.get("permalink") or item.get("url") or "https://www.threads.net/").strip(),
+            "matched_niche": niche,
+        })
+    return entries
+
+
+def _fetch_live_youtube_trends(interests: list[str]) -> list[dict[str, str]]:
+    """Use YouTube's recent, view-ranked search results as niche discovery signals."""
+    api_key = str(
+        getattr(settings, "youtube_api_key", "")
+        or getattr(settings, "google_api_key", "")
+        or getattr(settings, "youtube_data_api_key", "")
+    ).strip()
+    if not api_key:
+        return []
+    entries: list[dict[str, str]] = []
+    published_after = (datetime.now(tz=UTC) - timedelta(days=7)).isoformat().replace("+00:00", "Z")
+    try:
+        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+            for niche in interests[:3]:
+                response = client.get(
+                    "https://www.googleapis.com/youtube/v3/search",
+                    params={
+                        "part": "snippet", "q": niche, "type": "video", "order": "viewCount",
+                        "publishedAfter": published_after, "regionCode": "NG",
+                        "relevanceLanguage": "en", "maxResults": 10, "key": api_key,
+                    },
+                )
+                if response.status_code >= 400:
+                    continue
+                entries.extend(_youtube_candidates_from_payload(response.json(), niche))
+    except Exception:
+        return entries
+    return entries
+
+
+def _fetch_live_threads_trends(db: Session, user: User, interests: list[str]) -> list[dict[str, str]]:
+    """Use a connected Threads account for authenticated, niche keyword discovery."""
+    token = ""
+    for connection in db.scalars(
+        select(ConnectedPlatform)
+        .where(
+            ConnectedPlatform.user_id == user.id,
+            ConnectedPlatform.is_active.is_(True),
+            ConnectedPlatform.platform == "threads",
+        )
+        .order_by(desc(ConnectedPlatform.created_at))
+    ):
+        auth = connection.auth_meta if isinstance(connection.auth_meta, dict) else {}
+        token = str(auth.get("access_token") or "").strip()
+        if token:
+            break
+    if not token:
+        return []
+    entries: list[dict[str, str]] = []
+    try:
+        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+            for niche in interests[:3]:
+                response = client.get(
+                    "https://graph.threads.net/v1.0/keyword_search",
+                    params={
+                        "q": niche, "search_type": "TOP", "search_mode": "KEYWORD",
+                        "fields": "id,text,permalink,username,timestamp", "limit": 10,
+                        "access_token": token,
+                    },
+                )
+                if response.status_code >= 400:
+                    continue
+                entries.extend(_threads_candidates_from_payload(response.json(), niche))
+    except Exception:
+        return entries
+    return entries
+
+
+def _live_niche_candidates(db: Session, user: User, interests: list[str]) -> list[dict[str, str]]:
     candidates: list[dict[str, str]] = []
     for item in _fetch_live_google_trends():
         searchable = f"{item.get('topic', '')} {item.get('description', '')}"
@@ -287,6 +408,8 @@ def _live_niche_candidates(interests: list[str]) -> list[dict[str, str]]:
         candidates.append({**item, "matched_niche": niche})
 
     candidates.extend(_fetch_live_niche_news(interests))
+    candidates.extend(_fetch_live_youtube_trends(interests))
+    candidates.extend(_fetch_live_threads_trends(db, user, interests))
 
     deduped: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -296,7 +419,18 @@ def _live_niche_candidates(interests: list[str]) -> list[dict[str, str]]:
             continue
         seen.add(key)
         deduped.append(item)
-    return deduped[:12]
+    # Keep the compact dashboard useful by guaranteeing source diversity.
+    selected: list[dict[str, str]] = []
+    for prefix in ("YouTube", "Threads", "Google News", "Google Trends"):
+        selected.extend(item for item in deduped if item["source_label"].startswith(prefix) and item not in selected[:])
+        if len(selected) >= 12:
+            break
+    for item in deduped:
+        if item not in selected:
+            selected.append(item)
+        if len(selected) >= 12:
+            break
+    return selected[:12]
 
 
 def _signal_matches_interests(signal: TrendSignalEvent, interests: list[str]) -> bool:
@@ -316,7 +450,7 @@ def _refresh_live_signals(db: Session, user: User, interests: list[str], platfor
     if not interests:
         return 0
 
-    live_trends = _live_niche_candidates(interests)
+    live_trends = _live_niche_candidates(db, user, interests)
     if not live_trends:
         return 0
 
