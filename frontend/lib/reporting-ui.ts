@@ -27,6 +27,8 @@ export const platformMetrics: Record<string, Array<[string, string, string]>> = 
     ["followers_count", "Followers", "Current account total"],
     ["page_fans", "Page likes", "Current account total"],
     ["recent_posts_count", "Posts sampled", "Up to 10 recent posts"],
+    ["page_impressions_unique", "Reach", "Provider-reported period"],
+    ["page_engaged_users", "Engaged users", "Provider-reported period"],
     ["avg_likes", "Average likes", "Recent post sample"],
     ["avg_comments", "Average comments", "Recent post sample"],
   ],
