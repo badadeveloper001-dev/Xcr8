@@ -21,6 +21,21 @@ export default function PlatformCallbackPage() {
   const calledRef = useRef(false);
 
   useEffect(() => {
+    if (hasHydrated) return;
+    const timeout = window.setTimeout(() => {
+      setState("error");
+      setErrorMessage("Your browser could not restore your session. Open Xcr8 in the browser where you signed in and try connecting again.");
+    }, 10_000);
+    return () => window.clearTimeout(timeout);
+  }, [hasHydrated]);
+
+  useEffect(() => {
+    if (state !== "success") return;
+    const timeout = window.setTimeout(() => router.replace("/settings#connected-platforms"), 2500);
+    return () => window.clearTimeout(timeout);
+  }, [state, router]);
+
+  useEffect(() => {
     if (!hasHydrated) return;
     if (calledRef.current) return;
     calledRef.current = true;
@@ -52,6 +67,9 @@ export default function PlatformCallbackPage() {
         p?: string;
       };
       detectedPlatform = payload.p ?? "";
+      if (!["instagram", "facebook", "youtube_shorts", "threads"].includes(detectedPlatform)) {
+        throw new Error("Unsupported OAuth platform");
+      }
     } catch {
       setState("error");
       setErrorMessage("Could not read OAuth state. Please try connecting again.");
@@ -62,40 +80,46 @@ export default function PlatformCallbackPage() {
 
     if (!userId) {
       setState("error");
-      setErrorMessage("Your session expired. Please log in and try connecting again.");
+      setErrorMessage("Your session is not available in this browser. Open Xcr8 in the same browser where you signed in, then try connecting again.");
       return;
     }
 
-    // Exchange code with backend
+    // One exchange per page mount; authorization codes must not be blindly retried.
+    setState("pending");
     void (async () => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 60_000);
       try {
         const response = await fetch(`/api/v1/social/oauth/${detectedPlatform}/callback`, {
           method: "POST",
+          cache: "no-store",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code, state: stateParam }),
         });
 
-        const data = (await response.json()) as {
+        const data = (await response.json().catch(() => null)) as {
           success?: boolean;
           handle?: string;
-          detail?: string;
-        };
+          detail?: string | { message?: string };
+        } | null;
 
-        if (!response.ok) {
-          throw new Error(data.detail ?? `HTTP ${response.status}`);
+        if (!response.ok || !data || data.success !== true) {
+          const detail = typeof data?.detail === "string" ? data.detail : data?.detail?.message;
+          throw new Error(detail || `Connection could not be confirmed (HTTP ${response.status}). Check Settings before trying again.`);
         }
 
         setHandle(data.handle ?? detectedPlatform);
         setState("success");
 
-        // Redirect to settings after a short pause
-        setTimeout(() => {
-          router.push("/settings");
-        }, 2500);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = controller.signal.aborted
+          ? "Confirmation timed out. The connection may have completed; check Settings before reconnecting."
+          : err instanceof Error ? err.message : "Could not confirm the connection. Check your network and try connecting again.";
         setState("error");
         setErrorMessage(msg);
+      } finally {
+        window.clearTimeout(timeout);
       }
     })();
   }, [hasHydrated, userId, searchParams, router]);
@@ -111,7 +135,7 @@ export default function PlatformCallbackPage() {
       <div className="lux-orb-c" />
 
       <div className="relative w-full max-w-[420px]">
-        <div className="xcr8-panel rounded-[28px] p-7 text-center backdrop-blur-xl">
+        <div className="xcr8-panel rounded-[28px] p-5 text-center backdrop-blur-xl sm:p-7">
           {state === "pending" && (
             <>
               <Loader2 size={40} className="mx-auto mb-4 animate-spin text-violet-400" />
@@ -140,6 +164,7 @@ export default function PlatformCallbackPage() {
                 )}
               </p>
               <p className="mt-1 text-xs text-slate-500">Redirecting to Settings…</p>
+              <Link href="/settings#connected-platforms" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-violet-600 px-5 text-sm text-white">Continue to Settings</Link>
             </>
           )}
 
@@ -149,7 +174,7 @@ export default function PlatformCallbackPage() {
               <h1 className="text-lg font-semibold text-white light:text-slate-900">
                 Connection failed
               </h1>
-              <p className="mt-2 text-sm text-rose-400">{errorMessage}</p>
+              <p className="mt-2 break-words text-sm text-rose-400">{errorMessage}</p>
               <Link
                 href="/settings"
                 className="mt-5 inline-block rounded-2xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/10 light:border-slate-200 light:bg-white light:text-slate-700"

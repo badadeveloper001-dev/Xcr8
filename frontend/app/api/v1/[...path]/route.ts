@@ -69,6 +69,8 @@ async function proxy(request: NextRequest, path: string[]) {
     method: request.method,
     headers: upstreamHeaders,
     redirect: "manual",
+    cache: "no-store",
+    signal: request.signal,
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
