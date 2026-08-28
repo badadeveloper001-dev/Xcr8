@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const providerHosts: Record<string, string[]> = {
-  instagram: ["www.facebook.com", "facebook.com"],
+  instagram: ["www.facebook.com", "facebook.com", "www.instagram.com", "instagram.com"],
   facebook: ["www.facebook.com", "facebook.com"],
   youtube_shorts: ["accounts.google.com"],
   threads: ["threads.net", "www.threads.net", "threads.com", "www.threads.com"],
@@ -57,12 +57,13 @@ export async function GET(request: NextRequest) {
       { params: Promise.resolve({ path: ["social", "oauth", platform, "start"] }) },
     );
     if (!upstream.ok) {
+      const reference = upstream.headers.get("X-Xcr8-Request-Id");
       await upstream.body?.cancel();
       const message = upstream.status === 501
         ? "This platform is not configured for OAuth yet. Please contact support."
         : upstream.status === 403
           ? "This creator profile cannot connect right now. Check your active profile and plan."
-          : "Could not contact the connection service. Please try Connect via OAuth again.";
+          : `Connection service returned HTTP ${upstream.status}. Please retry.${reference ? " Reference: " + reference : ""}`;
       return returnToSettings(request, message);
     }
     const data: unknown = await upstream.json();

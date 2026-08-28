@@ -1019,7 +1019,13 @@ export async function chatWithAiAssistant(
     payload,
     meteredRequestConfig(60_000),
   );
-  return data;
+  if (!data || typeof data.assistant_message !== "string" || !data.assistant_message.trim()) {
+    throw new Error("Cr8or AI returned an incomplete response. Your message is still here; please retry.");
+  }
+  if (typeof data.model === "string" && /^(backend-local|offline|unavailable|local-fallback)/i.test(data.model)) {
+    throw new Error("Cr8or AI's provider is temporarily unavailable. Your message is still here; please retry shortly.");
+  }
+  return { ...data, suggested_actions: Array.isArray(data.suggested_actions) ? data.suggested_actions : [] };
 }
 
 export async function listAiAssistantChats(
