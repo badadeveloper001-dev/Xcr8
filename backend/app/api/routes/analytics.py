@@ -398,8 +398,16 @@ def _insight_values(payload: dict) -> dict:
     return result
 
 
+def _graph_error(response: httpx.Response, fallback: str) -> str:
+    try:
+        detail = response.json().get("error", {})
+        return str(detail.get("message") or fallback)[:180]
+    except Exception:
+        return fallback
+
+
 def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
-    """Return account totals and a labeled recent-post sample, never inferred reach."""
+    """Fetch page totals and try both supported page edges for recent content."""
     try:
         with httpx.Client(timeout=12.0) as client:
             page_resp = client.get(
@@ -407,7 +415,7 @@ def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
                 params={"fields": "id,name,fan_count,followers_count", "access_token": page_token},
             )
             if page_resp.status_code >= 400:
-                return {"error": "Facebook account statistics could not be retrieved. Check connection permissions."}
+                return {"error": "Facebook account statistics could not be retrieved. Check the Page access token permissions."}
             page = page_resp.json()
             result: dict = {
                 "page_name": page.get("name", ""),
@@ -415,43 +423,66 @@ def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
                 "followers_count": page.get("followers_count"),
                 "warnings": [],
             }
-            posts_resp = client.get(
-                f"https://graph.facebook.com/v22.0/{page_id}/posts",
-                params={
-                    "fields": "id,message,created_time,permalink_url,likes.summary(true),comments.summary(true)",
-                    "limit": 10, "access_token": page_token,
-                },
-            )
-            if posts_resp.status_code < 400:
-                posts = posts_resp.json().get("data", [])
-                recent = [{
-                    "id": post.get("id"), "caption": post.get("message", ""),
-                    "timestamp": post.get("created_time"), "permalink": post.get("permalink_url"),
-                    "like_count": (post.get("likes", {}).get("summary", {}).get("total_count")),
-                    "comments_count": (post.get("comments", {}).get("summary", {}).get("total_count")),
-                } for post in posts]
-                result["recent_posts"] = recent
-                result["recent_posts_count"] = len(recent)
-                for field, label in (("like_count", "avg_likes"), ("comments_count", "avg_comments")):
-                    counts = [post[field] for post in recent if isinstance(post[field], (int, float))]
-                    if counts:
-                        result[label] = round(sum(counts) / len(counts), 1)
-            else:
-                result["warnings"].append("Recent posts are unavailable. Account totals are still shown.")
+
+            # /posts is more restrictive for some Page tokens. /feed is a safe
+            # fallback and still returns the Page's own published content.
+            fields = "id,message,created_time,permalink_url,likes.summary(true),comments.summary(true)"
+            posts = []
+            last_error = ""
+            for edge in ("posts", "feed"):
+                response = client.get(
+                    f"https://graph.facebook.com/v22.0/{page_id}/{edge}",
+                    params={"fields": fields, "limit": 10, "access_token": page_token},
+                )
+                if response.status_code < 400:
+                    payload = response.json()
+                    posts = payload.get("data", []) if isinstance(payload, dict) else []
+                    if posts or edge == "feed":
+                        break
+                last_error = _graph_error(response, "Recent Page posts were not returned.")
+            recent = [{
+                "id": post.get("id"), "caption": post.get("message", ""),
+                "timestamp": post.get("created_time"), "permalink": post.get("permalink_url"),
+                "like_count": (post.get("likes", {}).get("summary", {}).get("total_count")),
+                "comments_count": (post.get("comments", {}).get("summary", {}).get("total_count")),
+            } for post in posts if isinstance(post, dict)]
+            result["recent_posts"] = recent
+            result["recent_posts_count"] = len(recent)
+            if last_error and not recent:
+                result["warnings"].append("Recent posts need Page content permissions. Reconnect Facebook and approve Page content access.")
+                result["provider_error"] = last_error
+            for field, label in (("like_count", "avg_likes"), ("comments_count", "avg_comments")):
+                counts = [post[field] for post in recent if isinstance(post[field], (int, float))]
+                if counts:
+                    result[label] = round(sum(counts) / len(counts), 1)
+
+            # Request each insight separately: one unavailable/deprecated metric
+            # must not hide the metrics that this Page token can still provide.
+            for metric, key in (
+                ("page_impressions_unique", "page_impressions_unique"),
+                ("page_post_engagements", "page_engaged_users"),
+            ):
+                response = client.get(
+                    f"https://graph.facebook.com/v22.0/{page_id}/insights",
+                    params={"metric": metric, "period": "day", "access_token": page_token},
+                )
+                if response.status_code < 400:
+                    parsed = _insight_values(response.json())
+                    if metric in parsed:
+                        result[key] = parsed[metric]
             return result
     except Exception:
         return {"error": "Facebook did not respond. Please try refreshing later."}
 
 
+
 def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
+    """Fetch Instagram profile, per-metric account insights and a post sample."""
     try:
         with httpx.Client(timeout=12.0) as client:
             profile_resp = client.get(
                 f"https://graph.facebook.com/v22.0/{ig_user_id}",
-                params={
-                    "fields": "username,followers_count,media_count",
-                    "access_token": page_token,
-                },
+                params={"fields": "username,followers_count,media_count", "access_token": page_token},
             )
             if profile_resp.status_code >= 400:
                 return {"error": "Instagram account statistics could not be retrieved. Check professional-account permissions."}
@@ -462,25 +493,25 @@ def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
                 "media_count": profile.get("media_count"),
                 "warnings": [],
             }
-            # Do not mix removed impressions/profile fields into one request:
-            # one unsupported metric would discard the whole response.
-            insights_resp = client.get(
-                f"https://graph.facebook.com/v22.0/{ig_user_id}/insights",
-                params={
-                    "metric": "reach,views", "period": "day", "metric_type": "total_value",
-                    "access_token": page_token,
-                },
-            )
-            if insights_resp.status_code < 400:
-                insights.update(_insight_values(insights_resp.json()))
-            else:
-                insights["warnings"].append("Account reach/views were not returned. Check insights permissions; account totals and recent posts remain available.")
+
+            # Fetch metrics independently. Meta may reject one metric (or a
+            # removed metric) while still allowing the others.
+            for metric in ("reach", "views", "accounts_engaged", "total_interactions"):
+                response = client.get(
+                    f"https://graph.facebook.com/v22.0/{ig_user_id}/insights",
+                    params={"metric": metric, "period": "day", "metric_type": "total_value", "access_token": page_token},
+                )
+                if response.status_code < 400:
+                    parsed = _insight_values(response.json())
+                    insights.update(parsed)
+                else:
+                    insights.setdefault("insight_errors", {})[metric] = _graph_error(response, "Metric unavailable")
+            if len(insights.get("insight_errors", {})) == 4:
+                insights["warnings"].append("Instagram insight permissions or metric availability need attention. Reconnect the professional account and approve insights access.")
+
             media_resp = client.get(
                 f"https://graph.facebook.com/v22.0/{ig_user_id}/media",
-                params={
-                    "fields": "id,caption,timestamp,like_count,comments_count,media_type,permalink",
-                    "access_token": page_token, "limit": 10,
-                },
+                params={"fields": "id,caption,timestamp,like_count,comments_count,media_type,permalink", "access_token": page_token, "limit": 10},
             )
             if media_resp.status_code < 400:
                 recent = media_resp.json().get("data", [])[:10]
@@ -491,10 +522,12 @@ def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
                     if counts:
                         insights[label] = round(sum(counts) / len(counts), 1)
             else:
-                insights["warnings"].append("Recent post engagement was not returned by Instagram.")
+                insights["warnings"].append("Instagram recent posts need content-list permission. Reconnect the professional account and approve content access.")
+                insights["provider_error"] = _graph_error(media_resp, "Recent posts unavailable.")
             return insights
     except Exception:
         return {"error": "Instagram did not respond. Please try refreshing later."}
+
 
 
 def _fetch_threads_insights(threads_user_id: str, access_token: str) -> dict:

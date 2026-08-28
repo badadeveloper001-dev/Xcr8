@@ -31,6 +31,7 @@ const platforms = Object.keys(platformLabels);
 function AccountCard({ account }: { account: LiveAccount }) {
   const [expanded, setExpanded] = useState(false);
   const values = account.data || {};
+  const insightErrors = values.insight_errors && typeof values.insight_errors === "object" ? values.insight_errors as Record<string, unknown> : {};
   const warnings = Array.isArray(values.warnings) ? values.warnings.filter((v): v is string => typeof v === "string") : [];
   const posts = Array.isArray(values.recent_posts)
     ? values.recent_posts.filter((v): v is Record<string, unknown> => Boolean(v) && typeof v === "object") : [];
@@ -61,8 +62,9 @@ function AccountCard({ account }: { account: LiveAccount }) {
               </div>;
             })}
           </dl>
+          {Object.keys(insightErrors).length > 0 ? <p className="mt-3 text-xs text-amber-500">Some account metrics were declined by the provider; reconnect with the required insights permission if you need them.</p> : null}
           {warnings.map((warning) => <p key={warning} className="mt-3 text-xs text-amber-500">{warning}</p>)}
-          {account.platform === "facebook" ? <p className="mt-3 text-xs text-slate-500">Reach, unique viewers and watch time are not supplied by this connection. Likes are not a substitute for reach.</p> : null}
+          {account.platform === "facebook" ? <p className="mt-3 text-xs text-slate-500">Reach and watch-time availability depends on your Page permissions and what Meta exposes. Values above are provider-reported; a dash means Meta did not return that metric.</p> : null}
           {account.platform === "youtube_shorts" ? <p className="mt-3 text-xs text-slate-500">These are channel statistics. Watch time, retention and a Shorts-only breakdown are not available in this report.</p> : null}
           {posts.length > 0 ? <div className="mt-4 border-t border-white/10 pt-3 light:border-slate-200">
             <h3 className="text-sm font-semibold text-white light:text-slate-900">Recent posts</h3>

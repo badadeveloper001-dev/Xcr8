@@ -29,6 +29,13 @@ export default function NotificationsPage() {
   const [actionError, setActionError] = useState("");
   const selectedId = Number(params.get("notification")) > 0 ? Number(params.get("notification")) : null;
   useEffect(() => { if (hasHydrated && !userId) router.replace("/auth/login"); }, [hasHydrated, userId, router]);
+  useEffect(() => {
+    const requested = params.get("category");
+    if (requested === "support" || requested === "trends" || requested === "all") {
+      setCategory(requested);
+      setPage(0);
+    }
+  }, [params]);
   useEffect(() => { setPage(0); setActionError(""); }, [activeCreatorId]);
   const inbox = useQuery({
     queryKey: ["notification-inbox", userId, activeCreatorId, category, unreadOnly, search, page, selectedId],
