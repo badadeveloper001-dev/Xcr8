@@ -55,7 +55,7 @@ export default function NotificationsPage() {
     if (failed) setActionError(`${failed} notification(s) could not be marked read. Please retry.`);
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["notification-inbox", userId] }),
-      cache.invalidateQueries({ queryKey: ["notifications", userId] }),
+      cache.invalidateQueries({ queryKey: ["notification-count", userId] }),
       cache.invalidateQueries({ queryKey: ["intelligence-feed", userId] }),
     ]);
     setSaving(false);
