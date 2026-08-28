@@ -1,8 +1,9 @@
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
+from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -45,7 +46,7 @@ def _refresh_google_access_token(refresh_token: str) -> dict | None:
 
 
 @router.get("/overview/{user_id}")
-def analytics_overview(user_id: int, window: str = Query(default="30d", pattern="^(7d|30d|90d)$"), db: Session = Depends(get_db)) -> dict:
+def analytics_overview(user_id: int, window: Literal["7d", "30d", "90d"] = "30d", db: Session = Depends(get_db)) -> dict:
     snapshots = db.scalars(
         select(AnalyticsSnapshot)
         .where(AnalyticsSnapshot.user_id == user_id, AnalyticsSnapshot.metric_window == window)
@@ -523,10 +524,11 @@ def _fetch_threads_insights(threads_user_id: str, access_token: str) -> dict:
 @router.get("/live/{user_id}")
 def live_platform_analytics(
     user_id: int,
-    platform_filter: str = Query(default="all", alias="platform", pattern="^(all|instagram|facebook|youtube_shorts|threads)$"),
     db: Session = Depends(get_db),
+    platform: Literal["all", "instagram", "facebook", "youtube_shorts", "threads"] = "all",
 ) -> dict:
     """Fetch real-time analytics from each connected social media platform."""
+    platform_filter = platform
     platforms = list(
         db.scalars(
             select(ConnectedPlatform)
