@@ -42,3 +42,46 @@ test("backend syntax and reporting fixtures", () => {
   }
   assert.equal(result.status, 0, result.stderr || result.error?.message || "Python 3 is required for backend reporting checks");
 });
+
+
+test("billing renders four cards before pricing or usage completes", () => {
+  const queries = [];
+  const state = { hasHydrated: true, userId: 42, plan: "free", setPlan() {} };
+  const react = {
+    useEffect() {},
+    useState(value) { return [value, () => {}]; },
+    useMemo(fn) { return fn(); },
+  };
+  const dependencies = {
+    react: { ...react, default: react },
+    "react/jsx-runtime": { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+    "next/navigation": { useRouter: () => ({}), useSearchParams: () => new URLSearchParams() },
+    "@tanstack/react-query": {
+      useQuery(options) { queries.push(options); return { isPending: true }; },
+      useQueryClient: () => ({}),
+    },
+    "@/components/mobile-shell": { MobileShell: "shell" },
+    "@/lib/api": {},
+    "@/lib/store": { useCreatorStore: (selector) => selector(state) },
+  };
+  const pageExports = {};
+  const page = readFileSync(new URL("../app/settings/billing/page.tsx", import.meta.url), "utf8");
+  vm.runInNewContext(ts.transpileModule(page, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText, { exports: pageExports, require: (name) => dependencies[name], URLSearchParams });
+  const rendered = pageExports.default();
+  const nodes = [];
+  function visit(node) {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (!node || typeof node !== "object") return;
+    nodes.push(node);
+    visit(node.props?.children);
+  }
+  visit(rendered);
+  assert.equal(nodes.filter(node => node.type === "section").length, 4);
+  assert.equal(queries.length, 3);
+  assert.ok(queries.every(query => query.enabled && query.retry === false));
+  const checkoutButtons = nodes.filter(node => node.type === "button" && node.props.className?.includes("mt-6"));
+  assert.equal(checkoutButtons.length, 4);
+  assert.ok(checkoutButtons.every(node => node.props.disabled));
+});

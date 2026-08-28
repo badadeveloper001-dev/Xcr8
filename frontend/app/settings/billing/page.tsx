@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MobileShell } from "@/components/mobile-shell";
 import { apiClient, getApiErrorMessage, initializePaystackCheckout, verifyPaystackPayment } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -30,7 +31,7 @@ type PlanItem = {
   social_accounts: number | null;
   scheduled_posts: number;
   storage_megabytes: number;
-  pricing: RegionalPricing;
+  pricing: RegionalPricing | undefined;
 };
 
 type PlanItemApi = Omit<PlanItem, "pricing"> & {
@@ -45,40 +46,12 @@ type UsageResponse = {
   plan?: { id?: string };
 };
 
-const GLOBAL_FALLBACK_PRICES: Record<string, { monthly: number; annual: number }> = {
-  free: { monthly: 0, annual: 0 },
-  starter: { monthly: 900, annual: 9000 },
-  pro: { monthly: 2900, annual: 29000 },
-  business: { monthly: 9900, annual: 99000 },
-};
-
 const FALLBACK_PLAN_LIMITS: PlanItemApi[] = [
   { id: "free", name: "Free", price_cents: 0, monthly_credits: 500, text_generations: 50, image_generations: 0, high_quality_images: 0, voiceovers: 0, creator_profiles: 0, social_accounts: null, scheduled_posts: 10, storage_megabytes: 200 },
   { id: "starter", name: "Starter", price_cents: 900, monthly_credits: 5000, text_generations: 500, image_generations: 25, high_quality_images: 0, voiceovers: 10, creator_profiles: 0, social_accounts: null, scheduled_posts: 100, storage_megabytes: 2048 },
   { id: "pro", name: "Pro", price_cents: 2900, monthly_credits: 15000, text_generations: 2500, image_generations: 100, high_quality_images: 10, voiceovers: 50, creator_profiles: 0, social_accounts: null, scheduled_posts: 500, storage_megabytes: 10240 },
   { id: "business", name: "Business", price_cents: 9900, monthly_credits: 50000, text_generations: 10000, image_generations: 300, high_quality_images: 50, voiceovers: 200, creator_profiles: 5, social_accounts: null, scheduled_posts: 2000, storage_megabytes: 51200 },
 ];
-
-function fallbackPricing(planId: string): RegionalPricing {
-  const price = GLOBAL_FALLBACK_PRICES[planId] ?? { monthly: 0, annual: 0 };
-  const format = (amount: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(amount / 100);
-
-  return {
-    region: "global",
-    country_code: null,
-    currency: "USD",
-    monthly_amount_minor: price.monthly,
-    annual_amount_minor: price.annual,
-    monthly_formatted: format(price.monthly),
-    annual_formatted: format(price.annual),
-    annual_savings_months: 2,
-  };
-}
 
 function formatStorage(megabytes: number): string {
   if (megabytes >= 1024) return `${megabytes / 1024} GB`;
@@ -90,7 +63,7 @@ export default function BillingPage() {
   const searchParams = useSearchParams();
   const hasHydrated = useCreatorStore((state) => state.hasHydrated);
   const storedPlan = useCreatorStore((state) => state.plan);
-  const [plans, setPlans] = useState<PlanItem[]>([]);
+  const queryClient = useQueryClient();
   const [currentPlan, setCurrentPlan] = useState(storedPlan || "free");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [message, setMessage] = useState<string | null>(null);
@@ -104,48 +77,51 @@ export default function BillingPage() {
     }
   }, [hasHydrated, router, userId]);
 
+  const enabled = Boolean(hasHydrated && userId);
+  const catalog = useQuery({
+    queryKey: ["billing-catalog", userId],
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      (await apiClient.get<PlanItemApi[]>("/api/v1/plans/", { signal, timeout: 15_000 })).data,
+  });
+  const pricing = useQuery({
+    queryKey: ["billing-pricing", userId],
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      (await apiClient.get<PricingCatalogResponse>("/api/pricing", { signal, timeout: 10_000 })).data,
+  });
+  const usage = useQuery({
+    queryKey: ["billing-current-plan", userId],
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+    queryFn: async ({ signal }) =>
+      (await apiClient.get<UsageResponse>(`/api/v1/plans/${userId}/usage`, { signal, timeout: 20_000 })).data,
+  });
+  const plans = useMemo<PlanItem[]>(() =>
+    (catalog.data?.length ? catalog.data : FALLBACK_PLAN_LIMITS).map((plan) => ({
+      ...plan,
+      pricing: pricing.data?.plans?.[plan.id] || plan.pricing,
+    })), [catalog.data, pricing.data]);
+
   useEffect(() => {
-    async function load() {
-      const pricingCatalogPromise = fetch("/api/pricing", { cache: "no-store" })
-        .then(async (response) =>
-          response.ok ? ((await response.json()) as PricingCatalogResponse) : null,
-        )
-        .catch(() => null);
-
-      let sourcePlans = FALLBACK_PLAN_LIMITS;
-      try {
-        const plansResponse = await apiClient.get<PlanItemApi[]>("/api/v1/plans/");
-        if (plansResponse.data?.length) sourcePlans = plansResponse.data;
-      } catch (error) {
-        console.error("Plan catalog request failed; using the safe local catalog.", error);
-      }
-
-      const pricingCatalog = await pricingCatalogPromise;
-      const pricingByPlan = pricingCatalog?.plans || {};
-      setPlans(
-        sourcePlans.map((plan) => ({
-          ...plan,
-          pricing: pricingByPlan[plan.id] || plan.pricing || fallbackPricing(plan.id),
-        })),
-      );
-
-      try {
-        const usageResponse = await apiClient.get<UsageResponse>(
-          `/api/v1/plans/${userId}/usage`,
-        );
-        const nextPlan = usageResponse.data.plan?.id || "free";
-        setCurrentPlan(nextPlan);
-        setPlan(nextPlan);
-      } catch (error) {
-        console.error("Plan usage request failed; keeping the signed-in plan.", error);
-        setCurrentPlan(storedPlan || "free");
-      }
+    const nextPlan = usage.data?.plan?.id;
+    if (nextPlan) {
+      setCurrentPlan(nextPlan);
+      setPlan(nextPlan);
     }
+  }, [usage.data, setPlan]);
 
-    if (hasHydrated && userId) {
-      void load();
-    }
-  }, [hasHydrated, setPlan, storedPlan, userId]);
+  const billingUnavailable = catalog.isError || pricing.isError || usage.isError;
+  const retryBilling = () => {
+    void catalog.refetch();
+    void pricing.refetch();
+    void usage.refetch();
+  };
 
   useEffect(() => {
     const reference = searchParams.get("reference")?.trim();
@@ -156,6 +132,8 @@ export default function BillingPage() {
     void verifyPaystackPayment(userId, reference)
       .then((result) => {
         if (cancelled) return;
+        queryClient.setQueryData(["billing-current-plan", userId], { plan: { id: result.plan } });
+        void queryClient.invalidateQueries({ queryKey: ["billing-current-plan", userId] });
         setCurrentPlan(result.plan);
         setPlan(result.plan);
         setMessage(
@@ -174,11 +152,15 @@ export default function BillingPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasHydrated, router, searchParams, setPlan, userId]);
+  }, [hasHydrated, queryClient, router, searchParams, setPlan, userId]);
 
   async function showUpgradeStatus(plan: PlanItem) {
     if (!userId) {
       setMessage("Sign in to upgrade your plan.");
+      return;
+    }
+    if (!plan.pricing || !usage.data || usage.isError) {
+      setMessage("Please wait for current pricing and account verification, or retry loading billing.");
       return;
     }
     const quotedPrice =
@@ -216,6 +198,13 @@ export default function BillingPage() {
           </p>
         </div>
 
+        {billingUnavailable ? (
+          <p role="status" className="mb-4 rounded-xl border p-3 text-sm">
+            Some billing details could not refresh. Showing available information.{" "}
+            <button type="button" onClick={retryBilling} className="underline">Retry</button>
+          </p>
+        ) : null}
+        {usage.isPending ? <p role="status" className="mb-4 text-sm text-gray-500">Checking your current plan…</p> : null}
         {message && (
           <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
             {message}
@@ -260,6 +249,8 @@ export default function BillingPage() {
                     <p className="mt-1 text-sm text-gray-500">
                       {plan.id === "free" ? (
                         "Free"
+                      ) : !plan.pricing ? (
+                        <span role="status">Loading price…</span>
                       ) : (
                         <>
                           <span className="text-lg font-semibold text-gray-900">
@@ -329,7 +320,7 @@ export default function BillingPage() {
                 <button
                   type="button"
                   className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-                  disabled={isCurrent || checkoutLoading}
+                  disabled={isCurrent || plan.id === "free" || checkoutLoading || !plan.pricing || !usage.data || usage.isError}
                   onClick={() => showUpgradeStatus(plan)}
                 >
                   {isCurrent
