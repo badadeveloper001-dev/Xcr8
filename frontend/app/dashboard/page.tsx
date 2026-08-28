@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   CalendarClock,
@@ -18,18 +17,14 @@ import {
 import { Logo } from "@/components/logo";
 import { DashboardTrends } from "@/components/dashboard-trends";
 import { MobileShell } from "@/components/mobile-shell";
-import { getDashboardOverview, type DashboardOverviewPayload } from "@/lib/api";
+import { refreshIntelligence, getDashboardOverview, type DashboardOverviewPayload } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.32, delay },
-});
 
 export default function DashboardPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
   const activeCreatorId = useCreatorStore((s) => s.activeCreatorId);
@@ -43,8 +38,30 @@ export default function DashboardPage() {
     queryKey: ["dashboard", userId, activeCreatorId],
     queryFn: () => getDashboardOverview(userId as number),
     enabled: Boolean(userId),
-    refetchInterval: 20000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
+  });
+
+  // External discovery starts only after the workspace overview has rendered.
+  // Cache this job per profile to avoid repeating failed/empty searches on every visit.
+  useQuery({
+    queryKey: ["dashboard-trend-refresh", userId, activeCreatorId],
+    enabled: Boolean(userId && data?.trend_refresh_due),
+    staleTime: 12 * 60 * 60 * 1000,
+    gcTime: 12 * 60 * 60 * 1000,
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    queryFn: async () => {
+      const result = await refreshIntelligence({ user_id: userId as number, platform: "all" });
+      if (result.created > 0) {
+        void queryClient.invalidateQueries({ queryKey: ["dashboard", userId, activeCreatorId] });
+      }
+      return result;
+    },
   });
 
   const focusList = useMemo(() => {
@@ -116,8 +133,7 @@ export default function DashboardPage() {
   return (
     <MobileShell hideHeader>
       <div className="space-y-4">
-        <motion.section
-          {...fadeUp(0)}
+        <section
           className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
         >
           <div>
@@ -148,15 +164,14 @@ export default function DashboardPage() {
               </article>
             ))}
           </div>
-        </motion.section>
+        </section>
 
         {error ? <p role="alert" className="surface-soft rounded-xl p-3 text-sm text-amber-500">Dashboard updates could not load. <button type="button" onClick={() => void refetch()} className="min-h-11 underline">Retry</button></p> : null}
         {isPending ? <p role="status" className="text-sm text-slate-400">Loading your workspace…</p> : null}
         <DashboardTrends trends={data?.trend_explanations ?? []} />
         {proactiveAlert && proactiveAlert.trend_titles.length === 0 ? (
-          <motion.button
+          <button
             type="button"
-            {...fadeUp(0.04)}
             onClick={() =>
               router.push(
                 `/ai-studio/assistant?fresh=1&assistant_seed=${encodeURIComponent(
@@ -184,10 +199,10 @@ export default function DashboardPage() {
                 <Sparkles size={16} />
               </div>
             </div>
-          </motion.button>
+          </button>
         ) : null}
 
-        <motion.section {...fadeUp(0.08)} className="xcr8-panel rounded-2xl p-4">
+        <section className="xcr8-panel rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="xcr8-title-lg text-white light:text-slate-900">Quick Actions</h2>
             <div className="flex items-center gap-2">
@@ -221,10 +236,10 @@ export default function DashboardPage() {
               </Link>
             ))}
           </div>
-        </motion.section>
+        </section>
 
         <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-          <motion.section {...fadeUp(0.09)} className="xcr8-panel rounded-2xl p-4">
+          <section className="xcr8-panel rounded-2xl p-4">
             <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
               <Sparkles size={16} className="text-cyan-300" />
               Your Focus Today
@@ -255,9 +270,9 @@ export default function DashboardPage() {
               Open full insights
               <ArrowRight size={14} />
             </Link>
-          </motion.section>
+          </section>
 
-          <motion.section {...fadeUp(0.12)} className="xcr8-panel rounded-2xl p-4">
+          <section className="xcr8-panel rounded-2xl p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="xcr8-title-lg text-white light:text-slate-900">Continue Working</h2>
               <Link
@@ -297,7 +312,7 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-          </motion.section>
+          </section>
         </div>
       </div>
     </MobileShell>
