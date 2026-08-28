@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { DashboardTrends } from "@/components/dashboard-trends";
 import { MobileShell } from "@/components/mobile-shell";
 import { getDashboardOverview, type DashboardOverviewPayload } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
@@ -31,14 +32,15 @@ export default function DashboardPage() {
   const router = useRouter();
   const hasHydrated = useCreatorStore((s) => s.hasHydrated);
   const userId = useCreatorStore((s) => s.userId);
+  const activeCreatorId = useCreatorStore((s) => s.activeCreatorId);
   const { activeName, ownerName, isManaged } = useActiveCreatorIdentity();
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
   }, [hasHydrated, router, userId]);
 
-  const { data } = useQuery<DashboardOverviewPayload, Error>({
-    queryKey: ["dashboard", userId],
+  const { data, error, isPending, refetch } = useQuery<DashboardOverviewPayload, Error>({
+    queryKey: ["dashboard", userId, activeCreatorId],
     queryFn: () => getDashboardOverview(userId as number),
     enabled: Boolean(userId),
     refetchInterval: 20000,
@@ -47,7 +49,7 @@ export default function DashboardPage() {
 
   const focusList = useMemo(() => {
     const insights = data?.ai_insights ?? [];
-    return insights.slice(0, 3).map((item) => item.title);
+    return insights.slice(0, 3);
   }, [data?.ai_insights]);
 
   const quickStats = [
@@ -148,7 +150,10 @@ export default function DashboardPage() {
           </div>
         </motion.section>
 
-        {proactiveAlert ? (
+        {error ? <p role="alert" className="surface-soft rounded-xl p-3 text-sm text-amber-500">Dashboard updates could not load. <button type="button" onClick={() => void refetch()} className="min-h-11 underline">Retry</button></p> : null}
+        {isPending ? <p role="status" className="text-sm text-slate-400">Loading your workspace…</p> : null}
+        <DashboardTrends trends={data?.trend_explanations ?? []} />
+        {proactiveAlert && proactiveAlert.trend_titles.length === 0 ? (
           <motion.button
             type="button"
             {...fadeUp(0.04)}
@@ -228,13 +233,13 @@ export default function DashboardPage() {
               {focusList.length > 0 ? (
                 focusList.map((item, index) => (
                   <div
-                    key={item}
+                    key={item.title}
                     className="surface-soft flex items-center gap-3 rounded-xl px-3 py-3"
                   >
                     <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-xs font-semibold text-emerald-300 light:bg-emerald-100 light:text-emerald-700">
                       {index + 1}
                     </div>
-                    <p className="text-sm text-slate-200 light:text-slate-800">{item}</p>
+                    <div><p className="text-sm font-semibold text-slate-200 light:text-slate-800">{item.title}</p><p className="mt-1 text-xs text-slate-400">{item.description}</p></div>
                   </div>
                 ))
               ) : (

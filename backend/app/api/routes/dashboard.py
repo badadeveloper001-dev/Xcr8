@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -14,6 +14,7 @@ from app.db.models import (
     PostStatus,
     ScheduledPost,
     TrendSignalEvent,
+    TrendResearchBrief,
     User,
     Workspace,
 )
@@ -188,7 +189,11 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         recent = list(
             db.scalars(
                 select(TrendSignalEvent)
-                .where(TrendSignalEvent.user_id == user_id, TrendSignalEvent.status != "dismissed")
+                .where(
+                    TrendSignalEvent.user_id == user_id,
+                    TrendSignalEvent.status != "dismissed",
+                    TrendSignalEvent.created_at >= datetime.utcnow() - timedelta(days=7),
+                )
                 .order_by(TrendSignalEvent.created_at.desc())
                 .limit(100)
             )
@@ -237,6 +242,31 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
     trend_titles = [row.title for row in trend_signal_rows if row.title.strip()][:3]
     if not has_trend_signal_readiness:
         trend_titles = []
+
+    trend_explanations = []
+    if has_trend_signal_readiness:
+        for signal in trend_signal_rows:
+            meta = signal.signal_meta if isinstance(signal.signal_meta, dict) else {}
+            if meta.get("mode") != "live-niche-intelligence":
+                continue
+            brief = db.scalar(select(TrendResearchBrief).where(
+                TrendResearchBrief.trend_signal_id == signal.id,
+            ).order_by(TrendResearchBrief.created_at.desc()))
+            niche = str(meta.get("matched_niche") or niche_label or "your niche")
+            trend_explanations.append({
+                "id": signal.id,
+                "title": signal.topic,
+                "what_happened": str(meta.get("source_description") or (
+                    brief.what_is_happening if brief else signal.summary
+                )),
+                "why_it_matters": f"This story matches your saved {niche} niche. Consider it if it answers a question your audience has.",
+                "suggested_action": brief.opportunities if brief else f"Explain what this means for your {niche} audience.",
+                "source_label": signal.source_label,
+                "source_url": str(meta.get("source_url") or ""),
+                "source_published_at": str(meta.get("source_published_at") or ""),
+                "detected_at": signal.created_at.isoformat() if signal.created_at else "",
+                "niche": niche,
+            })
 
     user_language = str(user.language or "english").strip().lower()
 
@@ -316,15 +346,10 @@ def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
         scheduled=scheduled or 0,
         ai_suggestions=len(cr8or_ai_alert.trend_titles) if cr8or_ai_alert else 0,
         recent_posts=recent_posts,
+        trend_explanations=trend_explanations,
         ai_insights=[
-            {
-                "title": "Best Posting Time",
-                "description": "Your audience is most active at 8PM (Wednesdays and Fridays)",
-            },
-            {
-                "title": "Caption Style",
-                "description": "Funny hooks perform 43% better for your account",
-            },
+            {"title": "Continue a draft", "description": f"You have {drafts or 0} drafts you can pick up without starting over."},
+            {"title": "Review your publishing queue", "description": f"You have {scheduled or 0} upcoming scheduled posts."},
         ],
         connected_platforms=[
             PlatformConnection(

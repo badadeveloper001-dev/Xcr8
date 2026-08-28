@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "pnpm test:android && next build",
+    "build": "pnpm test:android && pnpm test:reporting && next build",
     "start": "next start -p 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:android": "node --test tests/android-oauth.test.mjs"
+    "test:android": "node --test tests/android-oauth.test.mjs",
+    "test:reporting": "node --test tests/reporting.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
