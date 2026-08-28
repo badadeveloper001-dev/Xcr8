@@ -148,3 +148,79 @@ test("Android files with missing MIME metadata are usable; unsupported files are
   assert.equal(normalizeSelectedMedia(new File(["html"], "photo.jpg", { type: "text/html" }), "image"), null);
   assert.equal(normalizeSelectedMedia(new File(["data"], "unknown.bin"), "media"), null);
 });
+
+
+function proxyRoute(fetchImpl) {
+  return loadTs("../app/api/v1/[...path]/route.ts", {
+    "next/server": { NextRequest },
+  }, { process: { env: { BACKEND_API_URL: "https://backend.example", VERCEL: "1" } },
+    fetch: fetchImpl, console });
+}
+
+test("Android compression and frontend routing metadata do not leak upstream", async () => {
+  const proxy = proxyRoute(async (_url, init) => {
+    const h = init.headers;
+    assert.equal(h.get("accept-encoding"), "identity");
+    assert.equal(h.get("x-deployment-id"), null);
+    assert.equal(h.get("sec-ch-ua-platform"), null);
+    assert.equal(h.get("content-length"), null);
+    assert.equal(h.get("cookie"), "session=keep");
+    assert.equal(h.get("authorization"), "Bearer keep");
+    assert.equal(h.get("x-xcr8-workspace-id"), "7");
+    return new Response('{"assistant_message":"Hello"}', {
+      headers: { "content-type": "application/json", "content-encoding": "gzip",
+        "content-length": "999", "cache-control": "public, max-age=3600" },
+    });
+  });
+  const req = new NextRequest("https://app.example/api/v1/ai/assistant", {
+    headers: { "accept-encoding": "gzip, deflate, br, zstd",
+      "x-deployment-id": "stale-deployment", "sec-ch-ua-platform": "Android",
+      "cookie": "__vdpl=stale;session=keep", "authorization": "Bearer keep",
+      "x-xcr8-workspace-id": "7" },
+  });
+  const response = await proxy.GET(req, { params: Promise.resolve({ path: ["ai", "assistant"] }) });
+  assert.equal(response.headers.get("content-length"), null);
+  assert.equal(response.headers.get("content-encoding"), null);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.ok(response.headers.get("x-xcr8-request-id"));
+  assert.equal((await response.json()).assistant_message, "Hello");
+});
+
+test("a failed AI POST is never replayed to another backend", async () => {
+  let calls = 0;
+  const proxy = proxyRoute(async () => { calls++; throw new Error("connection dropped"); });
+  const response = await proxy.POST(new NextRequest("https://app.example/api/v1/ai/assistant", {
+    method: "POST", body: '{"message":"hello"}', headers: { "content-type": "application/json" },
+  }), { params: Promise.resolve({ path: ["ai", "assistant"] }) });
+  assert.equal(calls, 1);
+  assert.equal(response.status, 502);
+});
+
+test("OAuth failures include a safe request reference and status", async () => {
+  const response = await startRoute(async () => Response.json({}, {
+    status: 502, headers: { "x-xcr8-request-id": "test-reference" },
+  }))(request());
+  const message = new URL(response.headers.get("location")).searchParams.get("oauth_error");
+  assert.match(message, /HTTP 502/);
+  assert.match(message, /test-reference/);
+});
+
+test("AI rejects incomplete and offline fallback replies instead of presenting them as answers", async () => {
+  for (const data of [
+    { assistant_message: "generic reply", model: "backend-local-assistant-fallback" },
+    { assistant_message: "", model: "live-provider" },
+    "<html>gateway error</html>",
+  ]) {
+    const client = { interceptors: { request: { use() {} } }, post: async () => ({ data }) };
+    const api = loadTs("../lib/api.ts", { axios: { default: { create: () => client } } },
+      { process: { env: {} } });
+    await assert.rejects(() => api.chatWithAiAssistant({ user_id: 42, message: "hello" }));
+  }
+  const client = { interceptors: { request: { use() {} } },
+    post: async () => ({ data: { assistant_message: "Useful answer", model: "deepseek-chat" } }) };
+  const api = loadTs("../lib/api.ts", { axios: { default: { create: () => client } } },
+    { process: { env: {} } });
+  const response = await api.chatWithAiAssistant({ user_id: 42, message: "hello" });
+  assert.equal(response.assistant_message, "Useful answer");
+  assert.equal(response.suggested_actions.length, 0);
+});
