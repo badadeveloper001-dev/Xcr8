@@ -32,6 +32,23 @@ const languageOptions = ["auto", "english", "nigerian_pidgin", "yoruba", "code_s
 const MAX_RENDERED_MESSAGES = 240;
 const MAX_SENT_MESSAGES = 40;
 
+// Storage failure must not abort successful chat requests or lose the live UI.
+const memoryStorage = new Map<string, string>();
+const safeStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key) ?? memoryStorage.get(key) ?? null; }
+    catch { return memoryStorage.get(key) ?? null; }
+  },
+  setItem(key: string, value: string) {
+    memoryStorage.set(key, value);
+    try { localStorage.setItem(key, value); } catch { /* Keep this session usable. */ }
+  },
+  removeItem(key: string) {
+    memoryStorage.delete(key);
+    try { localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
+  },
+};
+
 // Storage keys are scoped to email (stable across DB resets).
 // The ":e:" prefix avoids collisions with legacy userId-based keys.
 function chatSessionsStorageKey(email: string) {
@@ -52,12 +69,12 @@ function messagesStorageKey(email: string, chatId: string) {
 
 /** One-time silent migration from the old userId-scoped key to the email-scoped key. */
 function migrateLegacyKey(newKey: string, oldKey: string): string | null {
-  const existing = localStorage.getItem(newKey);
+  const existing = safeStorage.getItem(newKey);
   if (existing) return existing;
-  const legacy = localStorage.getItem(oldKey);
+  const legacy = safeStorage.getItem(oldKey);
   if (!legacy) return null;
-  localStorage.setItem(newKey, legacy);
-  localStorage.removeItem(oldKey);
+  safeStorage.setItem(newKey, legacy);
+  safeStorage.removeItem(oldKey);
   return legacy;
 }
 
@@ -143,6 +160,9 @@ export default function AssistantPage() {
   const [isHistoryReady, setIsHistoryReady] = useState(true);
   const [requestedChatId, setRequestedChatId] = useState<string | null>(null);
   const lastAssistantSeedRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
+  const localChatIdsRef = useRef(new Set<string>());
+  const conversationVersionRef = useRef(0);
 
   useEffect(() => {
     const forceFreshChat = searchParams.get("fresh") === "1";
@@ -217,7 +237,7 @@ export default function AssistantPage() {
       migrateLegacyKey(storageKey, `xcr8-assistant-active-chat:${userId}`);
 
       let cachedSessions: AiAssistantChatSummary[] = [];
-      const cachedRaw = localStorage.getItem(sessionsKey);
+      const cachedRaw = safeStorage.getItem(sessionsKey);
       if (cachedRaw) {
         try {
           const parsed = JSON.parse(cachedRaw) as unknown;
@@ -231,7 +251,7 @@ export default function AssistantPage() {
 
       if (cachedSessions.length > 0) {
         setChatSessions(cachedSessions);
-        const storedChatId = localStorage.getItem(storageKey);
+        const storedChatId = safeStorage.getItem(storageKey);
         const forceFreshChat = searchParams.get("fresh") === "1";
         const cachedActive = forceFreshChat
           ? null
@@ -253,7 +273,7 @@ export default function AssistantPage() {
         }
 
         setChatSessions(sessions);
-        const storedChatId = localStorage.getItem(storageKey);
+        const storedChatId = safeStorage.getItem(storageKey);
         const forceFreshChat = searchParams.get("fresh") === "1";
         const nextChatId = forceFreshChat
           ? null
@@ -266,7 +286,7 @@ export default function AssistantPage() {
         if (!cancelled) {
           if (cachedSessions.length > 0) {
             setChatSessions(cachedSessions);
-            const storedChatId = localStorage.getItem(storageKey);
+            const storedChatId = safeStorage.getItem(storageKey);
             const forceFreshChat = searchParams.get("fresh") === "1";
             const nextChatId = forceFreshChat
               ? null
@@ -296,7 +316,7 @@ export default function AssistantPage() {
       return;
     }
 
-    localStorage.setItem(chatSessionsStorageKey(email), JSON.stringify(chatSessions));
+    safeStorage.setItem(chatSessionsStorageKey(email), JSON.stringify(chatSessions));
   }, [chatSessions, email]);
 
   useEffect(() => {
@@ -304,7 +324,7 @@ export default function AssistantPage() {
       return;
     }
 
-    localStorage.setItem(activeChatStorageKey(email), activeChatId);
+    safeStorage.setItem(activeChatStorageKey(email), activeChatId);
   }, [activeChatId, email]);
 
   useEffect(() => {
@@ -312,12 +332,12 @@ export default function AssistantPage() {
       return;
     }
 
-    const draft = localStorage.getItem(draftStorageKey(email, activeChatId));
+    const draft = safeStorage.getItem(draftStorageKey(email, activeChatId));
     if (typeof draft === "string") {
       setPrompt(draft);
     }
 
-    const cachedMessagesRaw = localStorage.getItem(messagesStorageKey(email, activeChatId));
+    const cachedMessagesRaw = safeStorage.getItem(messagesStorageKey(email, activeChatId));
     if (cachedMessagesRaw) {
       try {
         const parsed = JSON.parse(cachedMessagesRaw) as unknown;
@@ -338,7 +358,7 @@ export default function AssistantPage() {
       return;
     }
 
-    localStorage.setItem(draftStorageKey(email, activeChatId), prompt);
+    safeStorage.setItem(draftStorageKey(email, activeChatId), prompt);
   }, [activeChatId, email, prompt]);
 
   useEffect(() => {
@@ -346,7 +366,7 @@ export default function AssistantPage() {
       return;
     }
 
-    localStorage.setItem(
+    safeStorage.setItem(
       messagesStorageKey(email, activeChatId),
       JSON.stringify(messages.slice(-MAX_RENDERED_MESSAGES)),
     );
@@ -357,14 +377,20 @@ export default function AssistantPage() {
       return;
     }
 
+    // New local chats have no server history. Do not fetch and overwrite the
+    // first message while its generation is in flight.
+    if (localChatIdsRef.current.has(activeChatId)) {
+      setIsHistoryReady(true);
+      return;
+    }
     setIsHistoryReady(false);
-
+    const version = conversationVersionRef.current;
     let cancelled = false;
 
     const loadChatHistory = async () => {
       try {
         const history = await getAiAssistantChatHistory(userId, activeChatId, email ?? undefined);
-        if (cancelled) {
+        if (cancelled || sendingRef.current || version !== conversationVersionRef.current) {
           return;
         }
 
@@ -387,11 +413,15 @@ export default function AssistantPage() {
   }, [activeChatId, email, userId, welcomeMessage]);
 
   const startNewChat = () => {
+    if (sendingRef.current) return;
     if (!userId) {
       return;
     }
 
     const chatId = buildClientChatId();
+    localChatIdsRef.current.add(chatId);
+    conversationVersionRef.current += 1;
+    setIsHistoryReady(true);
     const summary: AiAssistantChatSummary = {
       chat_id: chatId,
       title: "New chat",
@@ -403,7 +433,7 @@ export default function AssistantPage() {
     setMessages([welcomeMessage]);
     setError(null);
     setPrompt("");
-    if (email) localStorage.removeItem(draftStorageKey(email, chatId));
+    if (email) safeStorage.removeItem(draftStorageKey(email, chatId));
     setSuggestedActions(starterPrompts);
     setChatSessions((current) => [
       summary,
@@ -412,7 +442,7 @@ export default function AssistantPage() {
   };
 
   const submitPrompt = async (value: string) => {
-    if (loading) {
+    if (sendingRef.current) {
       return;
     }
 
@@ -433,6 +463,7 @@ export default function AssistantPage() {
 
     const currentChatId = activeChatId ?? buildClientChatId();
     if (!activeChatId) {
+      localChatIdsRef.current.add(currentChatId);
       setActiveChatId(currentChatId);
       setChatSessions((current) => [
         {
@@ -445,6 +476,8 @@ export default function AssistantPage() {
       ]);
     }
 
+    sendingRef.current = true;
+    conversationVersionRef.current += 1;
     const userMessage: ChatItem = { role: "user", content: nextPrompt };
     const nextMessages = [...messages, userMessage].slice(-MAX_RENDERED_MESSAGES);
     setMessages(nextMessages);
@@ -490,7 +523,7 @@ export default function AssistantPage() {
         return [updatedSession, ...current.filter((session) => session.chat_id !== resolvedChatId)];
       });
       setPrompt("");
-      if (email) localStorage.removeItem(draftStorageKey(email, resolvedChatId));
+      if (email) safeStorage.removeItem(draftStorageKey(email, resolvedChatId));
     } catch (err) {
       const errorMessage = getApiErrorMessage(
         err,
@@ -504,7 +537,9 @@ export default function AssistantPage() {
 
       setError(errorMessage);
     } finally {
+      sendingRef.current = false;
       setLoading(false);
+      setIsHistoryReady(true);
     }
   };
 
@@ -604,7 +639,7 @@ export default function AssistantPage() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   onKeyDown={(e) => {
-                    if (!isMobileInputMode && e.key === "Enter" && !e.shiftKey) {
+                    if (!e.nativeEvent.isComposing && !isMobileInputMode && e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       void submitPrompt(prompt);
                     }
