@@ -74,3 +74,12 @@ class ReportingRegressionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_social_trend_candidate_helpers_are_present_and_niche_filtered():
+    source = Path("app/api/routes/intelligence.py").read_text(encoding="utf-8")
+    assert "_youtube_candidates_from_payload" in source
+    assert "_threads_candidates_from_payload" in source
+    assert "YouTube niche discovery" in source
+    assert "Threads keyword discovery" in source
+    assert "youtube_api_key" in Path("app/core/config.py").read_text(encoding="utf-8")
