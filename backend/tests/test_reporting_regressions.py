@@ -64,6 +64,14 @@ class ReportingRegressionTests(unittest.TestCase):
         self.assertIn(".offset(offset).limit(limit)", source)
         self.assertIn("IntelligenceNotification.id == selected_id", source)
 
+    def test_dashboard_returns_cached_trends_without_provider_requests(self):
+        tree = ast.parse((ROOT / "app/api/routes/dashboard.py").read_text(encoding="utf-8"))
+        overview = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "overview")
+        calls = [ast.unparse(node.func) for node in ast.walk(overview) if isinstance(node, ast.Call)]
+        self.assertNotIn("_refresh_live_signals", calls)
+        self.assertFalse(any(call.startswith("httpx.") for call in calls))
+        self.assertIn("trend_refresh_due", ast.unparse(overview))
+
     def test_dashboard_has_no_hardcoded_performance_claims(self):
         source = (ROOT / "app/api/routes/dashboard.py").read_text(encoding="utf-8")
         self.assertNotIn("43% better", source)
@@ -77,9 +85,9 @@ if __name__ == "__main__":
 
 
 def test_social_trend_candidate_helpers_are_present_and_niche_filtered():
-    source = Path("app/api/routes/intelligence.py").read_text(encoding="utf-8")
+    source = (ROOT / "app/api/routes/intelligence.py").read_text(encoding="utf-8")
     assert "_youtube_candidates_from_payload" in source
     assert "_threads_candidates_from_payload" in source
     assert "YouTube niche discovery" in source
     assert "Threads keyword discovery" in source
-    assert "youtube_api_key" in Path("app/core/config.py").read_text(encoding="utf-8")
+    assert "youtube_api_key" in (ROOT / "app/core/config.py").read_text(encoding="utf-8")
