@@ -138,10 +138,18 @@ export default function AnalyticsPage() {
           <button type="button" disabled={!visible.length && !snapshots.length} onClick={exportReport} className="surface-soft inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm disabled:opacity-50"><Download size={15} />Export</button>
         </div>
       </section>
-      {live.map((query, i) => selected === "all" || selected === platforms[i] ? (
-        query.isPending ? <p key={platforms[i]} role="status" className="surface-soft rounded-xl p-4 text-sm">Loading {platformLabels[platforms[i]]}…</p> :
-        query.isError ? <div key={platforms[i]} role="alert" className="surface-soft rounded-xl p-4 text-sm text-amber-500">{platformLabels[platforms[i]]}: {getApiErrorMessage(query.error, "Could not retrieve analytics.")}<button type="button" onClick={() => void query.refetch()} className="ml-3 min-h-11 underline">Retry</button></div> : null
-      ) : null)}
+      {live.map((query, i) => {
+        const platform = platforms[i];
+        if (!platform || (selected !== "all" && selected !== platform)) return null;
+        const label = platformLabels[platform] ?? platform;
+        if (query.isPending) {
+          return <p key={platform} role="status" className="surface-soft rounded-xl p-4 text-sm">Loading {label}…</p>;
+        }
+        if (query.isError) {
+          return <div key={platform} role="alert" className="surface-soft rounded-xl p-4 text-sm text-amber-500">{label}: {getApiErrorMessage(query.error, "Could not retrieve analytics.")}<button type="button" onClick={() => void query.refetch()} className="ml-3 min-h-11 underline">Retry</button></div>;
+        }
+        return null;
+      })}
       <div className="grid items-start gap-4 lg:grid-cols-2">{visible.map((account, i) => <AccountCard key={`${activeCreatorId}-${account.connection_id ?? account.platform + account.handle + i}`} account={account} />)}</div>
       {!busy && !visible.length && !live.some(q => q.isError) ? <section className="xcr8-panel rounded-2xl p-6 text-center"><BarChart3 className="mx-auto mb-2 text-violet-400" /><p>No connected accounts {selected !== "all" ? `for ${platformLabels[selected]}` : "yet"}.</p><Link href="/settings#connected-platforms" className="mt-2 inline-flex min-h-11 items-center text-violet-400">Connect an account</Link></section> : null}
       <section className="xcr8-panel rounded-2xl p-5">
