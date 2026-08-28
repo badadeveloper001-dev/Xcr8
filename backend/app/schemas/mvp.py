@@ -117,6 +117,7 @@ class Cr8orAIAlert(BaseModel):
 
 
 class DashboardOverview(BaseModel):
+    trend_refresh_due: bool = False
     greeting: str
     creator_name: str
     platforms_connected: int
