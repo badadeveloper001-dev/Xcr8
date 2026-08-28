@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     tiktok_client_secret: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
+    # Optional YouTube Data API key for niche trend discovery.
+    youtube_api_key: str = ""
     threads_app_id: str = ""
     threads_app_secret: str = ""
 
