@@ -8,7 +8,7 @@ from xml.etree import ElementTree
 import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
@@ -359,6 +359,7 @@ def _refresh_live_signals(db: Session, user: User, interests: list[str], platfor
                 "matched_niche": matched_niche,
                 "source_url": item["source_url"],
                 "source_published_at": item["published_at"],
+                "source_description": re.sub(r"<[^>]+>", "", str(item.get("description") or ""))[:600],
                 "fetched_at": _as_iso(None),
             },
         )
@@ -528,7 +529,7 @@ def intelligence_feed(
     notifications = [
         item
         for item in recent_notifications
-        if _matches_niche(
+        if str(item.related_topic or "").startswith("Pulse incident #") or _matches_niche(
             f"{item.related_topic} {item.title} {item.body}",
             interests,
         )
@@ -570,6 +571,61 @@ def intelligence_feed(
         },
     )
 
+
+
+@router.get("/notifications/{user_id}")
+def notification_inbox(
+    user_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=50),
+    unread_only: bool = False,
+    category: str = Query(default="all", pattern="^(all|support|trends)$"),
+    q: str = Query(default="", max_length=100),
+    selected_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Read the inbox without refreshing trends or excluding support messages."""
+    base = [IntelligenceNotification.user_id == user_id]
+    filters = list(base)
+    if unread_only:
+        filters.append(IntelligenceNotification.is_read == False)  # noqa: E712
+    support = IntelligenceNotification.related_topic.startswith("Pulse incident #")
+    if category == "support":
+        filters.append(support)
+    elif category == "trends":
+        filters.append(~support)
+    if q.strip():
+        # Literal substring matching: SQLAlchemy escapes LIKE wildcard characters.
+        filters.append(or_(
+            IntelligenceNotification.title.icontains(q.strip(), autoescape=True),
+            IntelligenceNotification.body.icontains(q.strip(), autoescape=True),
+        ))
+    rows = list(db.scalars(
+        select(IntelligenceNotification).where(*filters)
+        .order_by(desc(IntelligenceNotification.created_at), desc(IntelligenceNotification.id))
+        .offset(offset).limit(limit)
+    ))
+    total = db.scalar(select(func.count(IntelligenceNotification.id)).where(*filters)) or 0
+    unread = db.scalar(select(func.count(IntelligenceNotification.id)).where(
+        *base, IntelligenceNotification.is_read == False,  # noqa: E712
+    )) or 0
+
+    def serialize(item: IntelligenceNotification) -> dict:
+        return {
+            "id": item.id, "title": item.title, "body": item.body,
+            "severity": item.severity, "related_topic": item.related_topic,
+            "is_read": item.is_read, "created_at": _as_iso(item.created_at),
+        }
+
+    selected = db.scalar(select(IntelligenceNotification).where(
+        *base, IntelligenceNotification.id == selected_id,
+    )) if selected_id else None
+    return {
+        "notifications": [serialize(item) for item in rows],
+        "total": total, "unread_count": unread,
+        "has_more": offset + len(rows) < total,
+        "selected": serialize(selected) if selected else None,
+    }
 
 @router.post("/notifications/{notification_id}/read", response_model=IntelligenceNotificationItem)
 def mark_notification_read(

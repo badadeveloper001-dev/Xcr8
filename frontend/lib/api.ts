@@ -255,7 +255,21 @@ export type SchedulePayload = {
   recurring_rule?: string | null;
 };
 
+export type DashboardTrendExplanation = {
+  id: number;
+  title: string;
+  what_happened: string;
+  why_it_matters: string;
+  suggested_action: string;
+  source_label: string;
+  source_url: string;
+  source_published_at: string;
+  detected_at: string;
+  niche: string;
+};
+
 export type DashboardOverviewPayload = {
+  trend_explanations?: DashboardTrendExplanation[];
   greeting: string;
   creator_name: string;
   platforms_connected: number;

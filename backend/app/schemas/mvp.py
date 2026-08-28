@@ -126,6 +126,7 @@ class DashboardOverview(BaseModel):
     recent_posts: list[dict]
     ai_insights: list[dict]
     connected_platforms: list[PlatformConnection]
+    trend_explanations: list[dict] = Field(default_factory=list)
     cr8or_ai_alert: Cr8orAIAlert | None = None
     ai_ops: dict | None = None
 

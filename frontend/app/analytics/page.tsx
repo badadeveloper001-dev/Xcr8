@@ -1,56 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, Clock3, Download, RefreshCw, Sparkles, Target, Wifi } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { BarChart3, RefreshCw, Download, ExternalLink } from "lucide-react";
 import { MobileShell } from "@/components/mobile-shell";
-import { apiClient } from "@/lib/api";
+import { apiClient, getApiErrorMessage } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
-import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
+import { platformLabels, platformMetrics, metricNumber, safeSourceUrl, displayDate } from "@/lib/reporting-ui";
 
-type EngagementItem = {
-  platform: string;
-  engagement_rate: number;
-  followers_delta: number;
-  caption_effectiveness: number;
-};
-
-type PlatformPlaybook = {
-  platform: string;
-  best_posting_hour: number | null;
-  engagement_rate: number;
-  followers_delta: number;
-  caption_effectiveness: number;
-  snapshot_count: number;
-  confidence: "high" | "directional";
-  why_it_is_working: string[];
-  recommended_test: string;
-};
-
-type AnalyticsOverview = {
-  engagement: EngagementItem[];
-  summary?: {
-    total_reach_estimate: number;
-    audience_growth: number;
-    average_engagement_rate: number;
-    average_caption_effectiveness: number;
-    top_platform: string;
-  };
-  insights: {
-    best_caption_length: number;
-    best_posting_times: string[];
-    trend: string;
-  };
-  platform_playbooks?: PlatformPlaybook[];
-  data_quality?: {
-    post_level_metrics_available: boolean;
-    message: string;
-  };
-};
-
-type LivePlatformResult = {
+type LiveAccount = {
+  connection_id?: number;
   platform: string;
   handle: string;
   status: string;
@@ -58,549 +19,152 @@ type LivePlatformResult = {
   fetched_at?: string;
   data: Record<string, unknown>;
 };
-
-type LiveAnalytics = {
-  user_id: number;
-  fetched_at: string;
-  platforms: LivePlatformResult[];
+type LiveResponse = { fetched_at: string; platforms: LiveAccount[] };
+type Snapshot = { platform: string; engagement_rate: number; followers_delta: number; caption_effectiveness: number };
+type Overview = {
+  engagement: Snapshot[];
+  platform_playbooks?: Array<{ platform: string; best_posting_hour: number | null; snapshot_count: number; recommended_test: string }>;
+  data_quality?: { message: string };
 };
+const platforms = Object.keys(platformLabels);
 
-async function fetchAnalytics(userId: number, window: string) {
-  const { data } = await apiClient.get<AnalyticsOverview>(`/api/v1/analytics/overview/${userId}`, {
-    params: { window },
-  });
-  return data;
+function AccountCard({ account }: { account: LiveAccount }) {
+  const [expanded, setExpanded] = useState(false);
+  const values = account.data || {};
+  const warnings = Array.isArray(values.warnings) ? values.warnings.filter((v): v is string => typeof v === "string") : [];
+  const posts = Array.isArray(values.recent_posts)
+    ? values.recent_posts.filter((v): v is Record<string, unknown> => Boolean(v) && typeof v === "object") : [];
+  const details = values.metric_details && typeof values.metric_details === "object"
+    ? values.metric_details as Record<string, { coverage?: string; end_time?: string }> : {};
+  const ready = account.status === "ok";
+  const statusLabel = ready ? (warnings.length ? "Partial data" : "Synced")
+    : account.status === "manual" ? "Connect with OAuth" : "Needs attention";
+  return (
+    <article className="xcr8-panel min-w-0 rounded-2xl p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">{platformLabels[account.platform]}</h2>
+          <p className="break-words text-sm text-slate-400">{account.handle}</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs ${ready && !warnings.length ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-500"}`}>{statusLabel}</span>
+      </div>
+      {ready ? (
+        <>
+          <dl className="mt-4 grid grid-cols-2 gap-2">
+            {(platformMetrics[account.platform] || []).map(([key, label, coverage]) => {
+              const value = metricNumber(values[key]);
+              return <div key={key} className="surface-soft min-w-0 rounded-xl p-3">
+                <dt className="text-xs text-slate-400">{label}</dt>
+                <dd className="mt-1 break-words text-xl font-semibold text-white light:text-slate-900">{value === null ? "—" : value.toLocaleString()}</dd>
+                <p className="mt-1 text-[11px] text-slate-500">{value === null ? "Not returned by platform" : coverage}</p>
+                {value !== null && details[key]?.coverage ? <p className="mt-1 text-[11px] text-slate-500">{details[key].coverage}{details[key].end_time ? ` · ending ${displayDate(details[key].end_time)}` : ""}</p> : null}
+              </div>;
+            })}
+          </dl>
+          {warnings.map((warning) => <p key={warning} className="mt-3 text-xs text-amber-500">{warning}</p>)}
+          {account.platform === "facebook" ? <p className="mt-3 text-xs text-slate-500">Reach, unique viewers and watch time are not supplied by this connection. Likes are not a substitute for reach.</p> : null}
+          {account.platform === "youtube_shorts" ? <p className="mt-3 text-xs text-slate-500">These are channel statistics. Watch time, retention and a Shorts-only breakdown are not available in this report.</p> : null}
+          {posts.length > 0 ? <div className="mt-4 border-t border-white/10 pt-3 light:border-slate-200">
+            <h3 className="text-sm font-semibold text-white light:text-slate-900">Recent posts</h3>
+            <p className="mt-1 text-xs text-slate-500">Newest first · a sample of up to 10 posts, not a complete history.</p>
+            <ul className="mt-2 space-y-2">
+              {posts.slice(0, expanded ? posts.length : 3).map((post, i) => {
+                const url = safeSourceUrl(post.permalink);
+                return <li key={String(post.id || i)} className="surface-soft rounded-xl p-3">
+                  <p className="line-clamp-2 break-words text-sm text-slate-200 light:text-slate-800">{String(post.caption || post.media_type || "Untitled post")}</p>
+                  <p className="mt-1 text-xs text-slate-500">{displayDate(typeof post.timestamp === "string" ? post.timestamp : null)}</p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
+                    <span>Likes: {metricNumber(post.like_count)?.toLocaleString() ?? "—"}</span>
+                    <span>Comments: {metricNumber(post.comments_count)?.toLocaleString() ?? "—"}</span>
+                    {url ? <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-violet-400">View post <ExternalLink size={12} /></a> : null}
+                  </div>
+                </li>;
+              })}
+            </ul>
+            {posts.length > 3 ? <button type="button" onClick={() => setExpanded(!expanded)} className="mt-2 min-h-11 text-sm text-violet-400">{expanded ? "Show fewer posts" : `See all ${posts.length} sampled posts`}</button> : null}
+          </div> : null}
+        </>
+      ) : <div className="mt-3 space-y-2">
+        <p className="text-sm text-amber-500">{account.message || (typeof values.error === "string" ? values.error : "This account did not return analytics. Reconnect or refresh to try again.")}</p>
+        <Link href="/settings#connected-platforms" className="inline-flex min-h-11 items-center text-sm text-violet-400">Review connection</Link>
+      </div>}
+      {account.fetched_at ? <p className="mt-3 text-[11px] text-slate-500">Retrieved {displayDate(account.fetched_at)}. Platforms may report with a delay.</p> : null}
+    </article>
+  );
 }
-
-async function fetchLiveAnalytics(userId: number) {
-  const { data } = await apiClient.get<LiveAnalytics>(`/api/v1/analytics/live/${userId}`);
-  return data;
-}
-
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.32, delay },
-});
-
-const activePlatformIds = ["instagram", "facebook", "youtube_shorts", "threads"];
 
 export default function AnalyticsPage() {
   const router = useRouter();
-  const hasHydrated = useCreatorStore((s) => s.hasHydrated);
-  const userId = useCreatorStore((s) => s.userId);
-  const { activeName } = useActiveCreatorIdentity();
-
-  const [analyticsWindow, setAnalyticsWindow] = useState<"7d" | "30d" | "90d">("30d");
-  const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
-  const [liveRefreshKey, setLiveRefreshKey] = useState(0);
-
-  useEffect(() => {
-    if (hasHydrated && !userId) router.replace("/auth/login");
-  }, [hasHydrated, router, userId]);
-
-  const { data } = useQuery({
-    queryKey: ["analytics", userId, analyticsWindow],
-    queryFn: () => fetchAnalytics(userId as number, analyticsWindow),
-    enabled: Boolean(userId),
+  const userId = useCreatorStore(s => s.userId);
+  const hasHydrated = useCreatorStore(s => s.hasHydrated);
+  const activeCreatorId = useCreatorStore(s => s.activeCreatorId);
+  const [selected, setSelected] = useState("all");
+  const [window, setWindow] = useState("30d");
+  useEffect(() => { if (hasHydrated && !userId) router.replace("/auth/login"); }, [hasHydrated, userId, router]);
+  const live = useQueries({ queries: platforms.map(platform => ({
+    queryKey: ["analytics-live", userId, activeCreatorId, platform],
+    queryFn: async ({ signal }: { signal: AbortSignal }) => (await apiClient.get<LiveResponse>(`/api/v1/analytics/live/${userId}`, { params: { platform }, signal, timeout: 55000 })).data,
+    enabled: hasHydrated && Boolean(userId),
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  })) });
+  const overview = useQuery({
+    queryKey: ["analytics", userId, activeCreatorId, window],
+    queryFn: async ({ signal }) => (await apiClient.get<Overview>(`/api/v1/analytics/overview/${userId}`, { params: { window }, signal })).data,
+    enabled: hasHydrated && Boolean(userId),
   });
-
-  const {
-    data: liveData,
-    isFetching: liveLoading,
-    refetch: refetchLive,
-  } = useQuery({
-    queryKey: ["analytics-live", userId, liveRefreshKey],
-    queryFn: () => fetchLiveAnalytics(userId as number),
-    enabled: Boolean(userId),
-    staleTime: 5 * 60 * 1000, // 5 min cache
-  });
-
   if (!hasHydrated || !userId) return null;
-
-  const engagement = (data?.engagement ?? []).filter((item) => activePlatformIds.includes(item.platform));
-  const platformOptions = Array.from(new Set(engagement.map((item) => item.platform)));
-  const filtered =
-    selectedPlatform === "all"
-      ? engagement
-      : engagement.filter((item) => item.platform === selectedPlatform);
-
-  const totalReach = data?.summary?.total_reach_estimate ?? 0;
-  const audienceGrowth = data?.summary?.audience_growth ?? 0;
-  const avgEngagement = (data?.summary?.average_engagement_rate ?? 0) * 100;
-  const avgCaptionFit = (data?.summary?.average_caption_effectiveness ?? 0) * 100;
-
-  const platformPlaybooks = (data?.platform_playbooks ?? []).filter((item) => activePlatformIds.includes(item.platform));
-  const livePlatforms = (liveData?.platforms ?? []).filter((item) => activePlatformIds.includes(item.platform));
-
-  const topRecommendations = [
-    data?.insights?.trend ?? "No live trend signal yet.",
-    data?.insights?.best_posting_times?.length
-      ? `Best posting windows: ${data.insights.best_posting_times.join(" · ")}`
-      : "Best posting windows: Not enough live data yet.",
-    data?.insights?.best_caption_length
-      ? `Ideal caption length: ${data.insights.best_caption_length} characters.`
-      : "Ideal caption length: Not enough live data yet.",
-  ];
-
-  const exportSnapshot = () => {
-    const lines = [
-      `XCR8 ANALYTICS SNAPSHOT (${analyticsWindow})`,
-      `Creator: ${activeName}`,
-      `Total Reach: ${totalReach.toLocaleString()}`,
-      `Audience Growth: +${audienceGrowth}`,
-      `Avg Engagement: ${avgEngagement.toFixed(1)}%`,
-      `Caption Fit: ${avgCaptionFit.toFixed(0)}%`,
-      "",
-      "Top Recommendations:",
-      ...topRecommendations.map((item) => `- ${item}`),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `xcr8-analytics-${analyticsWindow}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const accounts = live.flatMap(query => query.data?.platforms || []);
+  const visible = accounts.filter(account => selected === "all" || account.platform === selected);
+  const snapshots = (overview.data?.engagement || []).filter(row => platforms.includes(row.platform) && (selected === "all" || row.platform === selected));
+  const busy = live.some(query => query.isFetching);
+  const exportReport = () => {
+    const payload = { exported_at: new Date().toISOString(), selected_platform: selected, snapshot_window: window, accounts: visible, snapshots, note: "Account totals and recent samples are not filtered by the snapshot window. Missing metrics are unavailable, not zero." };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a"); link.href = url; link.download = "xcr8-analytics.json"; link.click();
+    globalThis.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-
-  return (
-    <MobileShell title="Analytics" subtitle="Understand performance in under a minute.">
-      <div className="space-y-4">
-        {/* Header controls */}
-        <motion.section
-          {...fadeUp(0)}
-          className="xcr8-panel rounded-2xl border-2 border-cyan-300/30 p-5"
-        >
-          <p className="xcr8-soft-chip mb-2 inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-            Clarity View
-          </p>
-          <h1 className="xcr8-title-xl text-white light:text-slate-900">Analytics, simplified</h1>
-          <p className="xcr8-subtle mt-2 text-sm">
-            Focus on what changed, what matters, and what to do next.
-          </p>
-
-          <div className="mt-4 grid gap-2 sm:grid-cols-[auto_auto_1fr_auto] sm:items-center">
-            <div className="flex gap-2">
-              {(["7d", "30d", "90d"] as const).map((windowOption) => (
-                <button
-                  key={windowOption}
-                  type="button"
-                  onClick={() => setAnalyticsWindow(windowOption)}
-                  className={`rounded-xl px-3 py-2 text-xs font-medium ${
-                    analyticsWindow === windowOption
-                      ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/35"
-                      : "surface-soft text-slate-400"
-                  }`}
-                >
-                  {windowOption.toUpperCase()}
-                </button>
-              ))}
-            </div>
-
-            <select
-              value={selectedPlatform}
-              onChange={(event) => setSelectedPlatform(event.target.value)}
-              className="xcr8-input w-full min-w-0 py-2 text-xs sm:w-auto sm:min-w-[150px]"
-            >
-              <option value="all">All platforms</option>
-              {platformOptions.map((platform) => (
-                <option key={platform} value={platform}>
-                  {platform.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-
-            <span className="text-xs text-slate-500">
-              Showing {selectedPlatform === "all" ? "all channels" : selectedPlatform}
-            </span>
-
-            <button
-              type="button"
-              onClick={exportSnapshot}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200"
-            >
-              <Download size={13} /> Export
-            </button>
-          </div>
-        </motion.section>
-
-        {/* Loading skeleton */}
-        {!data && (
-          <motion.section {...fadeUp(0.03)} className="xcr8-panel rounded-2xl p-6 text-center">
-            <BarChart3 size={32} className="mx-auto mb-3 text-violet-400 opacity-50" />
-            <p className="text-sm text-slate-400">Loading your analytics…</p>
-          </motion.section>
-        )}
-
-        {/* Live Platform Data */}
-        {liveData && livePlatforms.length > 0 && (
-          <motion.section {...fadeUp(0.04)} className="xcr8-panel rounded-2xl p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="xcr8-title-lg flex items-center gap-2 text-white light:text-slate-900">
-                <Wifi size={15} className="text-emerald-400" />
-                Live Platform Data
-              </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setLiveRefreshKey((k) => k + 1);
-                  refetchLive();
-                }}
-                disabled={liveLoading}
-                className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300 disabled:opacity-50"
-              >
-                <RefreshCw size={12} className={liveLoading ? "animate-spin" : ""} />
-                {liveLoading ? "Fetching…" : "Refresh"}
-              </button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {livePlatforms.map((p) => (
-                <article key={p.platform} className="surface-soft rounded-xl p-3">
-                  <div className="mb-1.5 flex items-center justify-between gap-1">
-                    <p className="text-xs font-semibold capitalize text-white light:text-slate-900">
-                      {p.platform.replace(/_/g, " ")}
-                    </p>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        p.status === "ok"
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : p.status === "manual"
-                            ? "bg-yellow-500/15 text-yellow-400"
-                            : "bg-red-500/15 text-red-400"
-                      }`}
-                    >
-                      {p.status === "ok" ? "live" : p.status}
-                    </span>
-                  </div>
-                  <p className="mb-2 text-[11px] text-slate-400">{p.handle}</p>
-                  {p.status === "ok" && (
-                    <div className="grid grid-cols-2 gap-1.5 text-xs">
-                      {/* Facebook */}
-                      {p.platform === "facebook" && (
-                        <>
-                          {typeof p.data.page_fans === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Followers</p>
-                              <p className="font-semibold text-white">
-                                {(p.data.page_fans as number).toLocaleString()}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.page_impressions_unique === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Reach (day)</p>
-                              <p className="font-semibold text-white">
-                                {(p.data.page_impressions_unique as number).toLocaleString()}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.page_engaged_users === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Engaged</p>
-                              <p className="font-semibold text-white">
-                                {(p.data.page_engaged_users as number).toLocaleString()}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.recent_posts_count === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Posts (recent)</p>
-                              <p className="font-semibold text-white">
-                                {(p.data.recent_posts_count as number).toLocaleString()}
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {/* Instagram */}
-                      {p.platform === "instagram" && (
-                        <>
-                          {typeof p.data.followers_count === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Followers</p>
-                              <p className="font-semibold text-white">
-                                {(p.data.followers_count as number).toLocaleString()}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.media_count === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Posts</p>
-                              <p className="font-semibold text-white">
-                                {p.data.media_count as number}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.avg_likes === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Avg Likes</p>
-                              <p className="font-semibold text-white">
-                                {p.data.avg_likes as number}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.avg_comments === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Avg Comments</p>
-                              <p className="font-semibold text-white">
-                                {p.data.avg_comments as number}
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {/* YouTube */}
-                      {p.platform === "youtube_shorts" && (
-                        <>
-                          {typeof p.data.subscriber_count === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Subscribers</p>
-                              <p className="font-semibold text-white">
-                                {(p.data.subscriber_count as number).toLocaleString()}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.view_count === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Total Views</p>
-                              <p className="font-semibold text-white">
-                                {(p.data.view_count as number).toLocaleString()}
-                              </p>
-                            </div>
-                          )}
-                          {typeof p.data.video_count === "number" && (
-                            <div className="rounded-lg bg-white/5 px-2 py-1.5">
-                              <p className="text-slate-500">Videos</p>
-                              <p className="font-semibold text-white">
-                                {p.data.video_count as number}
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                  {(p.status === "manual" || p.status === "unsupported") && (
-                    <p className="text-[11px] text-slate-500">{p.message}</p>
-                  )}
-                  {p.status === "error" && (
-                    <p className="text-[11px] text-red-400">
-                      {(p.data?.error as string) ?? "Error fetching data"}
-                    </p>
-                  )}
-                </article>
-              ))}
-            </div>
-            <p className="mt-2 text-right text-[10px] text-slate-600">
-              Last synced:{" "}
-              {liveData.fetched_at ? new Date(liveData.fetched_at).toLocaleTimeString() : "—"}
-            </p>
-          </motion.section>
-        )}
-
-        {/* No live platforms */}
-        {liveData && livePlatforms.length === 0 && (
-          <motion.section
-            {...fadeUp(0.04)}
-            className="xcr8-panel rounded-2xl border border-dashed border-white/10 p-5 text-center"
-          >
-            <Wifi size={26} className="mx-auto mb-2 text-slate-600" />
-            <p className="text-sm text-slate-400">
-              No OAuth-connected platforms yet. Connect in Settings to see live stats.
-            </p>
-          </motion.section>
-        )}
-        {data && engagement.length === 0 && (
-          <motion.section
-            {...fadeUp(0.03)}
-            className="xcr8-panel rounded-2xl border border-dashed border-white/10 p-6 text-center light:border-slate-200"
-          >
-            <BarChart3 size={32} className="mx-auto mb-3 text-slate-500" />
-            <p className="text-sm font-semibold text-white light:text-slate-900">
-              No live analytics yet
-            </p>
-            <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
-              Connect a platform in Settings, then publish a post to start seeing real data here.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => router.push("/settings")}
-                className="cta-btn rounded-xl px-4 py-2 text-sm font-semibold"
-              >
-                Connect a platform
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push("/compose")}
-                className="surface-soft rounded-xl px-4 py-2 text-sm font-medium text-slate-200 light:text-slate-700"
-              >
-                Create a post
-              </button>
-            </div>
-          </motion.section>
-        )}
-
-        {/* Live data */}
-        {data && engagement.length > 0 && (
-          <>
-            <motion.section {...fadeUp(0.05)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                { label: "Total Reach", value: totalReach.toLocaleString() },
-                { label: "Audience Growth", value: `+${audienceGrowth}` },
-                { label: "Avg Engagement", value: `${avgEngagement.toFixed(1)}%` },
-                { label: "Caption Fit", value: `${avgCaptionFit.toFixed(0)}%` },
-              ].map((card) => (
-                <article key={card.label} className="xcr8-panel rounded-2xl p-4">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                    {card.label}
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold text-white light:text-slate-900">
-                    {card.value}
-                  </p>
-                </article>
-              ))}
-            </motion.section>
-
-            {platformPlaybooks.length > 0 && (
-              <motion.section {...fadeUp(0.08)} className="xcr8-panel rounded-2xl p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="xcr8-title-lg flex items-center gap-2 text-white light:text-slate-900">
-                      <Target size={16} className="text-cyan-300" />
-                      Why this is working
-                    </h2>
-                    <p className="mt-1 text-xs text-slate-400 light:text-slate-600">
-                      Platform-level signals, not a claim about one individual viral post.
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200">
-                    <Clock3 size={12} />
-                    Best times included
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {platformPlaybooks.map((playbook) => (
-                    <article key={playbook.platform} className="surface-soft rounded-xl p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-sm font-semibold capitalize text-white light:text-slate-900">
-                          {playbook.platform.replaceAll("_", " ")}
-                        </h3>
-                        <span className="text-[10px] uppercase tracking-wide text-slate-500">
-                          {playbook.confidence} confidence
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs text-cyan-200">
-                        Best time: {playbook.best_posting_hour === null ? "Still learning" : `${String(playbook.best_posting_hour).padStart(2, "0")}:00`}
-                      </p>
-                      <ul className="mt-2 space-y-1 text-xs text-slate-300 light:text-slate-700">
-                        {playbook.why_it_is_working.slice(0, 3).map((reason) => (
-                          <li key={reason}>• {reason}</li>
-                        ))}
-                      </ul>
-                      <p className="mt-2 text-xs text-violet-200 light:text-violet-700">
-                        Next test: {playbook.recommended_test}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-                {data?.data_quality?.message && (
-                  <p className="mt-3 text-[11px] text-slate-500">{data.data_quality.message}</p>
-                )}
-              </motion.section>
-            )}
-
-            <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-              <motion.section {...fadeUp(0.1)} className="xcr8-panel rounded-2xl p-4">
-                <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
-                  <Sparkles size={16} className="text-cyan-300" />
-                  What to focus on
-                </h2>
-                <div className="space-y-2.5">
-                  {topRecommendations.map((item) => (
-                    <div
-                      key={item}
-                      className="surface-soft rounded-xl px-3 py-3 text-sm text-slate-200 light:text-slate-800"
-                    >
-                      {item}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(
-                        `/ai-studio/assistant?prompt=${encodeURIComponent(
-                          `Review my ${analyticsWindow} performance and give me a simple 3-step improvement plan.`,
-                        )}`,
-                      )
-                    }
-                    className="cta-btn rounded-xl px-3 py-2.5 text-sm font-semibold"
-                  >
-                    Ask Cr8or AI
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/compose")}
-                    className="surface-soft rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-200 light:text-slate-800"
-                  >
-                    Create next post
-                  </button>
-                </div>
-              </motion.section>
-
-              <motion.section {...fadeUp(0.13)} className="xcr8-panel rounded-2xl p-4">
-                <h2 className="xcr8-title-lg mb-3 flex items-center gap-2 text-white light:text-slate-900">
-                  <BarChart3 size={16} className="text-violet-300" />
-                  Platform performance
-                </h2>
-                <div className="space-y-2.5">
-                  {filtered.map((item) => (
-                    <article key={item.platform} className="surface-soft rounded-xl px-3 py-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold capitalize text-white light:text-slate-900">
-                          {item.platform.replace(/_/g, " ")}
-                        </p>
-                        <p className="text-xs text-emerald-400">
-                          {(item.engagement_rate * 100).toFixed(1)}%
-                        </p>
-                      </div>
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-500 light:text-slate-600">
-                        <div>
-                          <p>Followers</p>
-                          <p className="mt-0.5 text-slate-300 light:text-slate-800">
-                            +{item.followers_delta}
-                          </p>
-                        </div>
-                        <div>
-                          <p>Caption Fit</p>
-                          <p className="mt-0.5 text-slate-300 light:text-slate-800">
-                            {(item.caption_effectiveness * 100).toFixed(0)}%
-                          </p>
-                        </div>
-                        <div>
-                          <p>Status</p>
-                          <p className="mt-0.5 text-slate-300 light:text-slate-800">Active</p>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => router.push("/calendar")}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200"
-                >
-                  Plan posting windows
-                  <ArrowRight size={14} />
-                </button>
-              </motion.section>
-            </div>
-          </>
-        )}
-      </div>
-    </MobileShell>
-  );
+  return <MobileShell title="Analytics" subtitle="Understand what each connected account is reporting.">
+    <div className="space-y-4">
+      <section className="xcr8-panel rounded-2xl p-5">
+        <h1 className="xcr8-title-xl text-white light:text-slate-900">Your platform performance</h1>
+        <p className="mt-2 text-sm text-slate-400">Account totals and recent activity, with clear labels for what is—and isn't—available.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <select aria-label="Filter analytics by platform" className="xcr8-input min-h-11 min-w-0 flex-1 sm:flex-none" value={selected} onChange={e => setSelected(e.target.value)}>
+            <option value="all">All platforms</option>{platforms.map(p => <option key={p} value={p}>{platformLabels[p]}</option>)}
+          </select>
+          <button type="button" disabled={busy} onClick={() => { void Promise.all(live.map(q => q.refetch())); }} className="surface-soft inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm disabled:opacity-50"><RefreshCw size={15} className={busy ? "animate-spin" : ""} />{busy ? "Syncing…" : "Refresh accounts"}</button>
+          <button type="button" disabled={!visible.length && !snapshots.length} onClick={exportReport} className="surface-soft inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm disabled:opacity-50"><Download size={15} />Export</button>
+        </div>
+      </section>
+      {live.map((query, i) => selected === "all" || selected === platforms[i] ? (
+        query.isPending ? <p key={platforms[i]} role="status" className="surface-soft rounded-xl p-4 text-sm">Loading {platformLabels[platforms[i]]}…</p> :
+        query.isError ? <div key={platforms[i]} role="alert" className="surface-soft rounded-xl p-4 text-sm text-amber-500">{platformLabels[platforms[i]]}: {getApiErrorMessage(query.error, "Could not retrieve analytics.")}<button type="button" onClick={() => void query.refetch()} className="ml-3 min-h-11 underline">Retry</button></div> : null
+      ) : null)}
+      <div className="grid items-start gap-4 lg:grid-cols-2">{visible.map((account, i) => <AccountCard key={`${activeCreatorId}-${account.connection_id ?? account.platform + account.handle + i}`} account={account} />)}</div>
+      {!busy && !visible.length && !live.some(q => q.isError) ? <section className="xcr8-panel rounded-2xl p-6 text-center"><BarChart3 className="mx-auto mb-2 text-violet-400" /><p>No connected accounts {selected !== "all" ? `for ${platformLabels[selected]}` : "yet"}.</p><Link href="/settings#connected-platforms" className="mt-2 inline-flex min-h-11 items-center text-violet-400">Connect an account</Link></section> : null}
+      <section className="xcr8-panel rounded-2xl p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-white light:text-slate-900">Saved reporting windows</h2>
+          <select aria-label="Saved analytics reporting window" value={window} onChange={e => setWindow(e.target.value)} className="xcr8-input min-h-11">{["7d", "30d", "90d"].map(w => <option key={w} value={w}>{w.replace("d", "-day snapshots")}</option>)}</select>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">Latest saved snapshot per platform for this window. This selector does not change lifetime totals or recent samples above.</p>
+        {overview.isPending ? <p role="status" className="mt-3 text-sm">Loading saved reports…</p> : overview.isError ? <p role="alert" className="mt-3 text-sm text-amber-500">Saved reports couldn't load. <button type="button" onClick={() => void overview.refetch()} className="min-h-11 underline">Retry</button></p> : !snapshots.length ? <p className="mt-3 text-sm text-slate-400">No saved snapshots for this selection. Live account data above is separate.</p> :
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">{snapshots.map(row => {
+            const playbook = overview.data?.platform_playbooks?.find(p => p.platform === row.platform);
+            return <article key={row.platform} className="surface-soft rounded-xl p-3">
+              <h3 className="font-semibold">{platformLabels[row.platform]}</h3>
+              <p className="mt-2 text-sm">Recorded engagement: {(row.engagement_rate * 100).toFixed(1)}%</p>
+              <p className="text-sm">Follower change: {row.followers_delta > 0 ? "+" : ""}{row.followers_delta}</p>
+              <p className="mt-2 text-xs text-slate-500">{playbook?.snapshot_count ?? 1} saved snapshots. {playbook?.best_posting_hour != null ? `Recorded posting-hour suggestion: ${String(playbook.best_posting_hour).padStart(2, "0")}:00 (source timezone not recorded). Treat this as a test, not a confirmed best time.` : "Not enough posting-time data for a reliable recommendation."}</p>
+            </article>;
+          })}</div>}
+      </section>
+      <section className="surface-soft rounded-2xl p-4 text-sm text-slate-400">
+        <h2 className="font-semibold text-white light:text-slate-900">Why did a post perform well?</h2>
+        <p className="mt-2">Likes and comments show reactions, not the cause of virality. Saves, shares, retention and comparable post-level reach are needed before Xcr8 can explain a breakout or recommend a dependable best posting time. Unavailable metrics are shown as —, never invented.</p>
+      </section>
+    </div>
+  </MobileShell>;
 }

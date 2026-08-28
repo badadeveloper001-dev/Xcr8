@@ -2,7 +2,7 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -45,15 +45,14 @@ def _refresh_google_access_token(refresh_token: str) -> dict | None:
 
 
 @router.get("/overview/{user_id}")
-def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(get_db)) -> dict:
+def analytics_overview(user_id: int, window: str = Query(default="30d", pattern="^(7d|30d|90d)$"), db: Session = Depends(get_db)) -> dict:
     snapshots = db.scalars(
         select(AnalyticsSnapshot)
-        .where(AnalyticsSnapshot.user_id == user_id)
+        .where(AnalyticsSnapshot.user_id == user_id, AnalyticsSnapshot.metric_window == window)
         .order_by(desc(AnalyticsSnapshot.created_at))
-        .limit(30)
+        .limit(300)
     )
-    data = list(snapshots)
-    filtered_data = [snapshot for snapshot in data if snapshot.metric_window == window] or data
+    filtered_data = list(snapshots)
 
     posts = list(
         db.scalars(
@@ -80,6 +79,10 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
         )
     )
 
+    latest_by_platform = {}
+    for snapshot in filtered_data:
+        latest_by_platform.setdefault(snapshot.platform.value, snapshot)
+
     engagement = [
         {
             "platform": snapshot.platform.value,
@@ -87,7 +90,7 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
             "followers_delta": snapshot.followers_delta,
             "caption_effectiveness": snapshot.caption_effectiveness,
         }
-        for snapshot in filtered_data
+        for snapshot in latest_by_platform.values()
     ]
 
     avg_engagement = (
@@ -96,7 +99,7 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
     avg_caption_effectiveness = (
         sum(item["caption_effectiveness"] for item in engagement) / len(engagement) if engagement else 0.0
     )
-    total_reach_estimate = sum(max(int(item["engagement_rate"] * 130000), 0) for item in engagement)
+    total_reach_estimate = None  # Reach cannot be inferred from an engagement rate.
     audience_growth = sum(item["followers_delta"] for item in engagement)
     top_platform = max(engagement, key=lambda item: item["engagement_rate"], default=None)
 
@@ -108,7 +111,7 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
     ]
 
     caption_lengths = [len(post.master_caption or "") for post in posts if (post.master_caption or "").strip()]
-    best_caption_length = int(sum(caption_lengths) / len(caption_lengths)) if caption_lengths else 0
+    best_caption_length = 0  # Caption length alone does not establish performance.
 
     region_counter: Counter[str] = Counter()
     language_counter: Counter[str] = Counter()
@@ -139,7 +142,7 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
         content_type_counter.most_common(1)[0][0] if content_type_counter else ""
     )
 
-    strongest_post = max(posts, key=lambda post: len(post.master_caption or ""), default=None)
+    strongest_post = None  # Requires comparable post-level metrics.
     latest_post = posts[0] if posts else None
     active_platform_count = len([platform for platform in platforms if platform.is_active])
     ai_generation_count = len(ai_generations)
@@ -209,7 +212,7 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
                 "followers_delta": current.followers_delta,
                 "caption_effectiveness": current.caption_effectiveness,
                 "snapshot_count": len(ordered),
-                "confidence": "high" if len(ordered) >= 3 else "directional",
+                "confidence": "directional",
                 "why_it_is_working": reasons,
                 "recommended_test": (
                     "Repeat the winning structure in the next posting window and compare engagement."
@@ -228,7 +231,7 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
             else "No strongest platform yet. Connect channels and publish to start tracking."
         ),
         (
-            f"Your audience is most active around {best_posting_times[0]} and caption length performs best around {best_caption_length} characters."
+            f"Saved snapshots suggest testing around {best_posting_times[0]}; this is not audience activity data."
             if best_posting_times and best_caption_length > 0
             else "Not enough analytics snapshots yet to detect posting windows and caption length trends."
         ),
@@ -245,40 +248,12 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
     ]
 
     performance_signals = {
-        "watch_time_curve": "Strongest retention is early in the content arc." if engagement else "Not enough live watch data yet.",
-        "drop_off_point": "Around 0:25 on average" if engagement else "Collect a few more posts to detect drop-off.",
-        "replay_spike": (
-            f"Replay spikes most on {latest_post.title}" if latest_post and latest_post.title else "Replay spikes around strong reveal moments."
-        ),
-        "emotion_signal": "Not enough live data yet.",
+        "watch_time_curve": "Watch-time data is not available.",
+        "drop_off_point": "Retention data is not available.",
+        "replay_spike": "Replay data is not available.",
+        "emotion_signal": "Not measured.",
     }
-
-    category_scores = (
-        [
-            {
-                "label": "Storytelling",
-                "score": int(72 + avg_engagement * 220),
-                "insight": "Best for retention and emotional connection.",
-            },
-            {
-                "label": "Educational",
-                "score": int(68 + avg_caption_effectiveness * 24),
-                "insight": "Strong share potential when hooks are tighter.",
-            },
-            {
-                "label": "Cinematic",
-                "score": int(70 + avg_engagement * 180),
-                "insight": "High save-rate when visual payoff lands early.",
-            },
-            {
-                "label": "Community",
-                "score": int(60 + active_platform_count * 4),
-                "insight": "Builds loyalty when paired with direct audience questions.",
-            },
-        ]
-        if engagement
-        else []
-    )
+    category_scores = []
 
     return {
         "engagement": engagement,
@@ -297,9 +272,9 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
         "insights": {
             "best_caption_length": best_caption_length,
             "best_posting_times": best_posting_times,
-            "trend": "Live trend signal available."
+            "trend": "Saved platform snapshots available."
             if engagement
-            else "No live trend signal yet.",
+            else "No snapshots for this reporting window yet.",
         },
         "active_window": window,
         "trend_series": trend_series,
@@ -315,7 +290,7 @@ def analytics_overview(user_id: int, window: str = "30d", db: Session = Depends(
             "languages": top_languages,
             "content_preference": dominant_content_type.title() if dominant_content_type else "",
             "peak_active_window": " - ".join(best_posting_times[:2]) if len(best_posting_times) > 1 else (best_posting_times[0] if best_posting_times else ""),
-            "loyalty_score": int(62 + avg_caption_effectiveness * 30),
+            "loyalty_score": None,
             "device_split": "",
             "mood_signal": "",
         },
@@ -396,151 +371,129 @@ def ai_usage_summary(user_id: int, db: Session = Depends(get_db)) -> dict:
 # Live platform analytics — fetches real data from connected social APIs
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
-    """Fetch real Facebook Page stats using page fields and recent posts only.
+def _insight_values(payload: dict) -> dict:
+    """Preserve real zeros, total_value responses, and per-metric time coverage."""
+    result: dict = {"metric_details": {}}
+    for item in payload.get("data", []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        if not name:
+            continue
+        total = item.get("total_value")
+        value = total.get("value") if isinstance(total, dict) else None
+        values = item.get("values") if isinstance(item.get("values"), list) else []
+        points = [point for point in values if isinstance(point, dict)]
+        if value is None and points:
+            # A time series is not a period total (especially unique reach).
+            value = points[-1].get("value")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            result[name] = value
+            result["metric_details"][name] = {
+                "period": item.get("period", ""),
+                "coverage": "reported total" if isinstance(total, dict) else "latest reported interval",
+                "end_time": points[-1].get("end_time") if points else None,
+            }
+    return result
 
-    Many page tokens do not support the old insights metric set reliably, but
-    page fields and recent post edges are stable.
-    """
+
+def _fetch_facebook_page_insights(page_id: str, page_token: str) -> dict:
+    """Return account totals and a labeled recent-post sample, never inferred reach."""
     try:
         with httpx.Client(timeout=12.0) as client:
             page_resp = client.get(
                 f"https://graph.facebook.com/v22.0/{page_id}",
-                params={
-                    "fields": "id,name,fan_count,followers_count",
-                    "access_token": page_token,
-                },
+                params={"fields": "id,name,fan_count,followers_count", "access_token": page_token},
             )
             if page_resp.status_code >= 400:
-                return {"error": page_resp.json().get("error", {}).get("message", "Page fields unavailable")}
-
-            pd = page_resp.json()
+                return {"error": "Facebook account statistics could not be retrieved. Check connection permissions."}
+            page = page_resp.json()
             result: dict = {
-                "page_name": pd.get("name", ""),
-                "page_fans": pd.get("fan_count", 0),
-                "followers_count": pd.get("followers_count", 0),
-                "recent_posts_count": 0,
-                "avg_likes": 0,
-                "avg_comments": 0,
-                "total_engagement": 0,
-                "estimated_reach": 0,
+                "page_name": page.get("name", ""),
+                "page_fans": page.get("fan_count"),
+                "followers_count": page.get("followers_count"),
+                "warnings": [],
             }
-
             posts_resp = client.get(
                 f"https://graph.facebook.com/v22.0/{page_id}/posts",
                 params={
-                    "fields": "id,message,created_time,likes.summary(true),comments.summary(true)",
-                    "limit": 10,
-                    "access_token": page_token,
+                    "fields": "id,message,created_time,permalink_url,likes.summary(true),comments.summary(true)",
+                    "limit": 10, "access_token": page_token,
                 },
             )
             if posts_resp.status_code < 400:
                 posts = posts_resp.json().get("data", [])
-                total_likes = sum(
-                    (p.get("likes", {}).get("summary", {}).get("total_count") or 0) for p in posts
-                )
-                total_comments = sum(
-                    (p.get("comments", {}).get("summary", {}).get("total_count") or 0) for p in posts
-                )
-                post_count = len(posts)
-                result["recent_posts_count"] = post_count
-                result["avg_likes"] = round(total_likes / post_count, 1) if post_count else 0
-                result["avg_comments"] = round(total_comments / post_count, 1) if post_count else 0
-                result["total_engagement"] = total_likes + total_comments
-                result["estimated_reach"] = max(total_likes * 8 + total_comments * 12, 0)
-                # Keep compatibility with frontend metric labels.
-                result["page_impressions_unique"] = result["estimated_reach"]
-                result["page_engaged_users"] = result["total_engagement"]
+                recent = [{
+                    "id": post.get("id"), "caption": post.get("message", ""),
+                    "timestamp": post.get("created_time"), "permalink": post.get("permalink_url"),
+                    "like_count": (post.get("likes", {}).get("summary", {}).get("total_count")),
+                    "comments_count": (post.get("comments", {}).get("summary", {}).get("total_count")),
+                } for post in posts]
+                result["recent_posts"] = recent
+                result["recent_posts_count"] = len(recent)
+                for field, label in (("like_count", "avg_likes"), ("comments_count", "avg_comments")):
+                    counts = [post[field] for post in recent if isinstance(post[field], (int, float))]
+                    if counts:
+                        result[label] = round(sum(counts) / len(counts), 1)
             else:
-                # Fallback: try summary counts when /posts edge is unavailable for this token.
-                fallback_posts = client.get(
-                    f"https://graph.facebook.com/v22.0/{page_id}",
-                    params={
-                        "fields": "posts.limit(1).summary(true)",
-                        "access_token": page_token,
-                    },
-                )
-                if fallback_posts.status_code < 400:
-                    summary = (
-                        (fallback_posts.json().get("posts") or {}).get("summary") or {}
-                        if isinstance(fallback_posts.json(), dict)
-                        else {}
-                    )
-                    total_count = summary.get("total_count")
-                    if isinstance(total_count, int):
-                        result["recent_posts_count"] = total_count
-
-                result["page_impressions_unique"] = result["estimated_reach"]
-                result["page_engaged_users"] = result["total_engagement"]
-
-        return result
-    except Exception as exc:
-        return {"error": str(exc)[:120]}
+                result["warnings"].append("Recent posts are unavailable. Account totals are still shown.")
+            return result
+    except Exception:
+        return {"error": "Facebook did not respond. Please try refreshing later."}
 
 
 def _fetch_instagram_insights(ig_user_id: str, page_token: str) -> dict:
-    """Fetch real Instagram Business account insights."""
     try:
         with httpx.Client(timeout=12.0) as client:
-            # Profile metrics
             profile_resp = client.get(
                 f"https://graph.facebook.com/v22.0/{ig_user_id}",
                 params={
-                    "fields": "username,followers_count,media_count,profile_views",
+                    "fields": "username,followers_count,media_count",
                     "access_token": page_token,
                 },
             )
             if profile_resp.status_code >= 400:
-                return {"error": profile_resp.json().get("error", {}).get("message", "IG insights unavailable")}
-
+                return {"error": "Instagram account statistics could not be retrieved. Check professional-account permissions."}
             profile = profile_resp.json()
-
-            # Account-level insights (reach, impressions)
+            insights: dict = {
+                "username": profile.get("username", ""),
+                "followers_count": profile.get("followers_count"),
+                "media_count": profile.get("media_count"),
+                "warnings": [],
+            }
+            # Do not mix removed impressions/profile fields into one request:
+            # one unsupported metric would discard the whole response.
             insights_resp = client.get(
                 f"https://graph.facebook.com/v22.0/{ig_user_id}/insights",
                 params={
-                    "metric": "reach,impressions,profile_views,follower_count",
-                    "period": "day",
+                    "metric": "reach,views", "period": "day", "metric_type": "total_value",
                     "access_token": page_token,
-                    "limit": 7,
                 },
             )
-
-            insights: dict = {
-                "username": profile.get("username", ""),
-                "followers_count": profile.get("followers_count", 0),
-                "media_count": profile.get("media_count", 0),
-            }
-
             if insights_resp.status_code < 400:
-                for item in insights_resp.json().get("data", []):
-                    name = item.get("name", "")
-                    values = item.get("values", [])
-                    if values:
-                        latest = values[-1].get("value", 0)
-                        insights[name] = int(latest) if isinstance(latest, (int, float)) else 0
-
-            # Recent media engagement
+                insights.update(_insight_values(insights_resp.json()))
+            else:
+                insights["warnings"].append("Account reach/views were not returned. Check insights permissions; account totals and recent posts remain available.")
             media_resp = client.get(
                 f"https://graph.facebook.com/v22.0/{ig_user_id}/media",
                 params={
-                    "fields": "id,caption,timestamp,like_count,comments_count,media_type",
-                    "access_token": page_token,
-                    "limit": 10,
+                    "fields": "id,caption,timestamp,like_count,comments_count,media_type,permalink",
+                    "access_token": page_token, "limit": 10,
                 },
             )
             if media_resp.status_code < 400:
-                media_items = media_resp.json().get("data", [])
-                insights["recent_posts"] = media_items[:10]
-                total_likes = sum(int(m.get("like_count") or 0) for m in media_items)
-                total_comments = sum(int(m.get("comments_count") or 0) for m in media_items)
-                post_count = len(media_items)
-                insights["avg_likes"] = round(total_likes / post_count, 1) if post_count else 0
-                insights["avg_comments"] = round(total_comments / post_count, 1) if post_count else 0
-
+                recent = media_resp.json().get("data", [])[:10]
+                insights["recent_posts"] = recent
+                insights["recent_posts_count"] = len(recent)
+                for field, label in (("like_count", "avg_likes"), ("comments_count", "avg_comments")):
+                    counts = [post[field] for post in recent if isinstance(post.get(field), (int, float))]
+                    if counts:
+                        insights[label] = round(sum(counts) / len(counts), 1)
+            else:
+                insights["warnings"].append("Recent post engagement was not returned by Instagram.")
             return insights
-    except Exception as exc:
-        return {"error": str(exc)[:120]}
+    except Exception:
+        return {"error": "Instagram did not respond. Please try refreshing later."}
 
 
 def _fetch_threads_insights(threads_user_id: str, access_token: str) -> dict:
@@ -558,24 +511,21 @@ def _fetch_threads_insights(threads_user_id: str, access_token: str) -> dict:
             detail = (response.json().get("error") or {}).get("message", response.text[:180])
             return {"error": detail}
 
-        metrics: dict[str, int] = {}
-        for item in response.json().get("data", []):
-            name = str(item.get("name") or "").strip()
-            values = item.get("values") if isinstance(item.get("values"), list) else []
-            latest = values[-1].get("value") if values and isinstance(values[-1], dict) else 0
-            if name:
-                try:
-                    metrics[name] = int(latest or 0)
-                except (TypeError, ValueError):
-                    metrics[name] = 0
-        metrics["total_engagement"] = sum(metrics.get(name, 0) for name in ("likes", "replies", "reposts", "quotes"))
+        metrics = _insight_values(response.json())
+        engagement_names = ("likes", "replies", "reposts", "quotes")
+        if all(name in metrics for name in engagement_names):
+            metrics["total_engagement"] = sum(metrics[name] for name in engagement_names)
         return metrics
     except Exception as exc:
         return {"error": str(exc)[:120]}
 
 
 @router.get("/live/{user_id}")
-def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict:
+def live_platform_analytics(
+    user_id: int,
+    platform_filter: str = Query(default="all", alias="platform", pattern="^(all|instagram|facebook|youtube_shorts|threads)$"),
+    db: Session = Depends(get_db),
+) -> dict:
     """Fetch real-time analytics from each connected social media platform."""
     platforms = list(
         db.scalars(
@@ -589,6 +539,8 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
 
     for platform in platforms:
         platform_name = platform.platform.value
+        if platform_filter != "all" and platform_name != platform_filter:
+            continue
         auth = platform.auth_meta or {}
         if not isinstance(auth, dict):
             continue
@@ -597,6 +549,7 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
         if connection_method != "oauth":
             results.append({
                 "platform": platform_name,
+                "connection_id": platform.id,
                 "handle": platform.account_handle,
                 "status": "manual",
                 "message": "Manually linked — real insights require OAuth connection.",
@@ -608,6 +561,7 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
         if not access_token:
             results.append({
                 "platform": platform_name,
+                "connection_id": platform.id,
                 "handle": platform.account_handle,
                 "status": "no_token",
                 "data": {},
@@ -622,10 +576,11 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
                 data = {"error": "Threads user ID not stored — reconnect Threads."}
             results.append({
                 "platform": platform_name,
+                "connection_id": platform.id,
                 "handle": platform.account_handle,
                 "status": "ok" if "error" not in data else "permission_required",
                 "message": (
-                    "Threads insights are live."
+                    "Threads insights were retrieved."
                     if "error" not in data
                     else "Reconnect Threads to grant the threads_manage_insights permission."
                 ),
@@ -642,6 +597,7 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
                 data = {"error": "Page ID not stored — reconnect Facebook."}
             results.append({
                 "platform": platform_name,
+                "connection_id": platform.id,
                 "handle": platform.account_handle,
                 "status": "ok" if "error" not in data else "error",
                 "fetched_at": fetched_at,
@@ -657,6 +613,7 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
                 data = {"error": "Instagram user ID not stored — reconnect Instagram."}
             results.append({
                 "platform": platform_name,
+                "connection_id": platform.id,
                 "handle": platform.account_handle,
                 "status": "ok" if "error" not in data else "error",
                 "fetched_at": fetched_at,
@@ -688,9 +645,9 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
                         snippet = items[0].get("snippet", {})
                         data = {
                             "channel_title": snippet.get("title", ""),
-                            "subscriber_count": int(stats.get("subscriberCount") or 0),
-                            "view_count": int(stats.get("viewCount") or 0),
-                            "video_count": int(stats.get("videoCount") or 0),
+                            "subscriber_count": None if stats.get("hiddenSubscriberCount") or "subscriberCount" not in stats else int(stats["subscriberCount"]),
+                            "view_count": int(stats["viewCount"]) if "viewCount" in stats else None,
+                            "video_count": int(stats["videoCount"]) if "videoCount" in stats else None,
                         }
                     else:
                         data = {"error": "No YouTube channel found."}
@@ -701,6 +658,7 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
 
             results.append({
                 "platform": platform_name,
+                "connection_id": platform.id,
                 "handle": platform.account_handle,
                 "status": "ok" if "error" not in data else "error",
                 "fetched_at": fetched_at,
@@ -710,6 +668,7 @@ def live_platform_analytics(user_id: int, db: Session = Depends(get_db)) -> dict
         else:
             results.append({
                 "platform": platform_name,
+                "connection_id": platform.id,
                 "handle": platform.account_handle,
                 "status": "unsupported",
                 "message": f"Live analytics not yet available for {platform_name}.",
