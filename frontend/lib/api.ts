@@ -269,6 +269,7 @@ export type DashboardTrendExplanation = {
 };
 
 export type DashboardOverviewPayload = {
+  trend_refresh_due?: boolean;
   trend_explanations?: DashboardTrendExplanation[];
   greeting: string;
   creator_name: string;
