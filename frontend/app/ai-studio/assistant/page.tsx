@@ -610,6 +610,22 @@ export default function AssistantPage() {
                   </div>
                 </div>
               ))}
+              {loading ? (
+                <div className="flex w-full" role="status" aria-live="polite" aria-atomic="true">
+                  <div className="ai-msg ai-msg-assistant mr-auto flex items-center gap-3">
+                    <span className="text-sm">Cr8or AI is typing</span>
+                    <span className="inline-flex items-center gap-1" aria-hidden="true">
+                      {[0, 150, 300].map((delay) => (
+                        <span
+                          key={delay}
+                          className="h-1.5 w-1.5 rounded-full bg-current motion-safe:animate-bounce"
+                          style={{ animationDelay: `${delay}ms` }}
+                        />
+                      ))}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {feedbackTarget ? (
