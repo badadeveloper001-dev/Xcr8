@@ -242,3 +242,20 @@ test("HTTP 402 preserves the actual service detail instead of inventing configur
   assert.match(result, /ref-123/);
   assert.doesNotMatch(result, /NEXT_PUBLIC|BACKEND_API_URL/);
 });
+
+
+test("idempotent AI POST retries a gateway 402 on the same-origin backend", async () => {
+  const targets = [];
+  const proxy = proxyRoute(async (url) => {
+    targets.push(String(url));
+    if (targets.length === 1) return new Response("deployment protection", { status: 402 });
+    return Response.json({ ok: true });
+  });
+  const response = await proxy.POST(new NextRequest("https://app.example/api/v1/ai/assistant", {
+    method: "POST",
+    body: '{"message":"hello"}',
+    headers: { "content-type": "application/json", "idempotency-key": "request-1" },
+  }), { params: Promise.resolve({ path: ["ai", "assistant"] }) });
+  assert.equal(response.status, 200);
+  assert.equal(targets.length, 2);
+});
