@@ -106,7 +106,11 @@ async function proxy(request: NextRequest, path: string[]) {
       upstreamHost = targetUrl.hostname;
 
       // Retry with the next candidate when the upstream gateway blocks this route.
-      if (response.status === 402 && retrySafe) {
+      // Vercel deployment protection can answer 402 before the backend.
+      // Idempotency-Key makes retrying AI/publish/billing requests safe.
+      const canRetryGateway = retrySafe || request.headers.has("idempotency-key");
+      if (response.status === 402 && canRetryGateway) {
+        await response.body?.cancel();
         upstreamResponse = response;
         continue;
       }
