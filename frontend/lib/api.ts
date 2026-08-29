@@ -1229,7 +1229,11 @@ function formatApiErrorDetail(detail: ApiErrorDetail | undefined): string | null
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError<{ detail?: ApiErrorDetail }>(error)) {
     if (error.response?.status === 402) {
-      return "Request was rejected by an upstream gateway. Use proxy mode by setting NEXT_PUBLIC_API_URL=/ and configure BACKEND_API_URL for the frontend server.";
+      const detail = formatApiErrorDetail(error.response.data?.detail);
+      if (detail) return detail;
+      const reference = error.response.headers?.["x-xcr8-request-id"];
+      return "The service rejected this request (HTTP 402). Please contact Xcr8 support." +
+        (typeof reference === "string" ? " Reference: " + reference : "");
     }
 
     if (error.response?.status === 429) {
