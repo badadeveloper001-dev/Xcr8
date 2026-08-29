@@ -224,3 +224,21 @@ test("AI rejects incomplete and offline fallback replies instead of presenting t
   assert.equal(response.assistant_message, "Useful answer");
   assert.equal(response.suggested_actions.length, 0);
 });
+
+
+test("HTTP 402 preserves the actual service detail instead of inventing configuration advice", () => {
+  const client = { interceptors: { request: { use() {} } } };
+  const api = loadTs("../lib/api.ts", {
+    axios: { default: { create: () => client, isAxiosError: () => true } },
+  }, { process: { env: {} } });
+  for (const detail of ["Provider billing unavailable", { message: "Payment verification required" }]) {
+    const result = api.getApiErrorMessage({ response: { status: 402, data: { detail } } }, "fallback");
+    assert.equal(result, typeof detail === "string" ? detail : detail.message);
+  }
+  const result = api.getApiErrorMessage({ response: {
+    status: 402, data: "<html>gateway</html>", headers: { "x-xcr8-request-id": "ref-123" },
+  } }, "fallback");
+  assert.match(result, /HTTP 402/);
+  assert.match(result, /ref-123/);
+  assert.doesNotMatch(result, /NEXT_PUBLIC|BACKEND_API_URL/);
+});

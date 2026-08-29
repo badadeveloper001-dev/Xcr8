@@ -97,11 +97,13 @@ async function proxy(request: NextRequest, path: string[]) {
   }
 
   let upstreamResponse: Response | null = null;
+  let upstreamHost = "";
   let sawNetworkFailure = false;
 
   for (const targetUrl of targetCandidates) {
     try {
       const response = await fetch(targetUrl, init);
+      upstreamHost = targetUrl.hostname;
 
       // Retry with the next candidate when the upstream gateway blocks this route.
       if (response.status === 402 && retrySafe) {
@@ -148,7 +150,8 @@ async function proxy(request: NextRequest, path: string[]) {
   responseHeaders.set("X-Xcr8-Request-Id", requestId);
   if (!upstreamResponse.ok) {
     console.warn("xcr8_backend_response", { requestId, status: upstreamResponse.status,
-      route: path.slice(0, 3).join("/") });
+      route: path.slice(0, 3).join("/"), upstreamHost,
+      gatewayCode: upstreamResponse.headers.get("x-vercel-error") });
   }
 
   return new Response(upstreamResponse.body, {
