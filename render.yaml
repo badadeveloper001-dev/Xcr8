@@ -22,7 +22,7 @@ services:
     autoDeployTrigger: checksPass
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt -r ai-services/requirements.txt
     startCommand: bash scripts/render-start-platform.sh
-    healthCheckPath: /
+    healthCheckPath: /api/v1/health/db
     maxShutdownDelaySeconds: 120
     buildFilter:
       paths:
@@ -62,8 +62,22 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.4-mini
+      - key: OPENAI_HIGH_REASONING_MODEL
+        value: gpt-5.4
+      - key: OPENAI_COMPATIBILITY_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_IMAGE_MODEL
+        value: gpt-image-1
+      - key: OPENAI_TTS_MODEL
+        value: gpt-4o-mini-tts
       - key: DEEPSEEK_API_KEY
         sync: false
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
       - key: PINECONE_API_KEY
         sync: false
       - key: META_GRAPH_API_VERSION
@@ -79,6 +93,8 @@ services:
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: YOUTUBE_API_KEY
         sync: false
       - key: STORAGE_PROVIDER
         value: s3
