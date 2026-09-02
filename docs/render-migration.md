@@ -42,10 +42,10 @@ Required for the app to start:
 
 Required for the corresponding feature:
 
-- AI: `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `PINECONE_API_KEY`
+- AI: `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `PINECONE_API_KEY` (at least one text provider is required for Cr8or AI)
 - Meta/Facebook/Instagram: `META_APP_ID`, `META_APP_SECRET`
 - Threads: `THREADS_APP_ID`, `THREADS_APP_SECRET`
-- Google/YouTube: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- Google/YouTube: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YOUTUBE_API_KEY`
 - Signup email: `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`
 - Admin and billing: `ADMIN_ACCESS_CODE`, `BILLING_WEBHOOK_SECRET`
 - Pulse external alerts: `FOUNDER_ALERT_EMAILS`, `PULSE_SLACK_WEBHOOK_URL`, `PULSE_DISCORD_WEBHOOK_URL`
@@ -66,7 +66,7 @@ Also add the Render hostname/redirect path to the Google OAuth client and update
 
 Do not move production traffic until all of these pass:
 
-1. Render shows both web services as live and the API health check is healthy.
+1. Render shows both web services as live and `GET /api/v1/health/db` reports the database healthy.
 2. `https://<render-frontend-host>/api/v1/health` returns `{"status":"ok"}`.
 3. Login and signup work against existing accounts/data.
 4. Admin login works.
@@ -87,6 +87,10 @@ Do not move production traffic until all of these pass:
 6. Only then disconnect the Git repository/custom domain from Vercel and cancel or downgrade the Vercel project as appropriate.
 
 Keep Vercel available briefly as a rollback target, but disconnect automatic deployments after cutover so pushes do not continue consuming Vercel build resources.
+
+## Cost and plan warning
+
+The Blueprint deliberately uses non-sleeping fixed instances for the frontend/API and a cron service because Xcr8 needs OAuth callbacks, AI requests, and scheduled publishing to be available continuously. Review Render's live estimate before applying it. If the displayed total is not acceptable, stop before creation; changing to sleeping/free instances would reintroduce slow cold starts and can delay scheduled work.
 
 ## Rollback
 
