@@ -22,7 +22,7 @@ services:
     autoDeployTrigger: checksPass
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt -r ai-services/requirements.txt
     startCommand: bash scripts/render-start-platform.sh
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /api/v1/health/db
     maxShutdownDelaySeconds: 120
     buildFilter:
       paths:
