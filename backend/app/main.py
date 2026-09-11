@@ -142,6 +142,12 @@ async def pulse_request_middleware(request: Request, call_next):
 
     request._receive = receive
 
+    # Render liveness probes must not initialize schemas or query Pulse/Supabase.
+    if request.method == "GET" and request.url.path.rstrip("/") == "/api/v1/health":
+        response = await call_next(request)
+        response.headers["x-request-id"] = request_id
+        return response
+
     try:
         ensure_profile_scope_schema()
     except Exception as exc:
