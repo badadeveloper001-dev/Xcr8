@@ -1,6 +1,15 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
 
+const BACKEND_API_URL =
+  process.env.BACKEND_API_URL ?? process.env.BACKEND_INTERNAL_URL ?? process.env.BACKEND_URL;
+
+function normalizeBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, "");
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+}
+
 export function resolveMainAppOrigin(request: NextRequest): string {
   const forwardedProto =
     request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
@@ -37,8 +46,14 @@ export async function proxyAdminRequest(
   backendPath: string,
   init?: RequestInit,
 ): Promise<Response> {
-  const targetOrigin = resolveMainAppOrigin(request);
-  const targetUrl = `${targetOrigin}${backendPath}`;
+  const backendBase = BACKEND_API_URL ? normalizeBaseUrl(BACKEND_API_URL) : "";
+  if (!backendBase) {
+    return Response.json(
+      { detail: "Backend API is not configured." },
+      { status: 503 },
+    );
+  }
+  const targetUrl = `${backendBase}${backendPath}`;
 
   const headers = new Headers(init?.headers ?? request.headers);
   headers.delete("host");
