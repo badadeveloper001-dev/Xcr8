@@ -20,7 +20,7 @@ export default function PulseCostsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const headers = () => ({ "Content-Type": "application/json", "x-admin-code": sessionStorage.getItem("xcr8-admin-access") || "" });
+  const headers = () => ({ "Content-Type": "application/json" });
   const refresh = async () => {
     setBusy(true); setError("");
     try {
