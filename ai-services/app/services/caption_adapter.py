@@ -6,6 +6,7 @@ import re
 from time import perf_counter
 
 from openai import OpenAI
+from app.usage import ledger
 
 from app.core.config import create_chat_completion, settings
 
@@ -202,6 +203,8 @@ def detect_caption_language(text: str) -> dict:
                 "is_mixed": profile["is_mixed"],
                 "segments": profile["segments"],
             }
+        except ledger.UsageBlocked:
+            raise
         except Exception as exc:
             logger.warning(
                 "AI language detection failed (attempt %s/%s): %s",
@@ -442,6 +445,8 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
                     "total_tokens": completion.usage.total_tokens if completion.usage else None,
                 },
             }
+        except ledger.UsageBlocked:
+            raise
         except Exception as exc:
             last_error = exc
             logger.warning(

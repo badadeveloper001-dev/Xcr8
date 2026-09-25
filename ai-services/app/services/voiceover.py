@@ -7,6 +7,7 @@ from time import perf_counter
 
 import httpx
 from openai import OpenAI
+from app.usage import ledger
 
 from app.core.config import create_chat_completion, settings
 
@@ -261,6 +262,8 @@ def generate_voiceover_script(payload: dict) -> dict:
                 "total_tokens": completion.usage.total_tokens if completion.usage else None,
             },
         }
+    except ledger.UsageBlocked:
+        raise
     except Exception as exc:
         logger.warning("OpenAI voiceover generation failed; using fallback: %s", exc)
         fallback = _fallback_voiceover(payload)
@@ -303,21 +306,24 @@ def generate_voiceover_audio(payload: dict) -> bytes:
     )
     speed = PACE_TO_SPEED.get(pace, 1.0)
 
-    response = httpx.post(
-        "https://api.openai.com/v1/audio/speech",
-        headers={
-            "Authorization": f"Bearer {settings.openai_api_key}",
-            "Content-Type": "application/json",
-            "Accept": "audio/mpeg",
-        },
-        json={
-            "model": settings.openai_tts_model,
-            "input": text,
-            "voice": voice,
-            "response_format": "mp3",
-            "speed": speed,
-        },
-        timeout=120.0,
-    )
-    response.raise_for_status()
-    return response.content
+    def speak():
+        response = httpx.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={
+                "Authorization": f"Bearer {settings.openai_api_key}",
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg",
+            },
+            json={
+                "model": settings.openai_tts_model,
+                "input": text,
+                "voice": voice,
+                "response_format": "mp3",
+                "speed": speed,
+            },
+            timeout=120.0,
+        )
+        response.raise_for_status()
+        return response.content
+    return ledger.provider_call("openai", settings.openai_tts_model, speak,
+        reserve_units={"characters": len(text)}, measured=lambda result: {"characters": len(text)})

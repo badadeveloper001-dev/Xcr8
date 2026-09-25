@@ -1,6 +1,7 @@
 import logging
 
 from openai import OpenAI
+from app.usage import ledger
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,7 +46,9 @@ def create_chat_completion(client, **kwargs):
 
     if client is not None:
         try:
-            return client.chat.completions.create(**kwargs)
+            return ledger.chat_call(client, "openai", kwargs)
+        except ledger.UsageBlocked:
+            raise
         except Exception as exc:
             last_error = exc
             logger.warning("OpenAI model %s failed: %s", primary_model, exc)
@@ -55,7 +58,9 @@ def create_chat_completion(client, **kwargs):
             try:
                 fallback_kwargs = dict(kwargs)
                 fallback_kwargs["model"] = fallback_model
-                return client.chat.completions.create(**fallback_kwargs)
+                return ledger.chat_call(client, "openai", fallback_kwargs, fallback=True)
+            except ledger.UsageBlocked:
+                raise
             except Exception as exc:
                 last_error = exc
                 logger.warning("OpenAI compatibility model %s failed: %s", fallback_model, exc)
@@ -80,7 +85,9 @@ def create_chat_completion(client, **kwargs):
                 deepseek_kwargs.setdefault("max_tokens", 1200)
 
             logger.info("Using DeepSeek after OpenAI was unavailable or failed.")
-            return deepseek_client.chat.completions.create(**deepseek_kwargs)
+            return ledger.chat_call(deepseek_client, "deepseek", deepseek_kwargs, fallback=client is not None)
+        except ledger.UsageBlocked:
+            raise
         except Exception as exc:
             last_error = exc
             logger.warning("DeepSeek fallback failed: %s", exc)

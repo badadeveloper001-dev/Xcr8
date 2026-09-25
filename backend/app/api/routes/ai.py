@@ -1360,6 +1360,10 @@ def assistant(
         _persist_durable_assistant_facts(db, user.id, payload.message)
         parsed_response.chat_id = chat_id
         return parsed_response
+    except HTTPException:
+        # Usage policy rejections must reach the caller, never masquerade as a generated answer.
+        refund_usage(db, usage_ledger, reason="assistant_usage_policy_blocked")
+        raise
     except Exception as exc:
         refund_usage(
             db,

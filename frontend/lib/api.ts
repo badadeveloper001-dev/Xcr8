@@ -15,6 +15,17 @@ export const apiClient = axios.create({
   timeout: 30_000,
 });
 
+const pulseRequestIds = new WeakMap<object, string>();
+apiClient.interceptors.response.use((response) => {
+  const id = response.headers["x-pulse-request-id"];
+  if (id && response.data && typeof response.data === "object") pulseRequestIds.set(response.data, String(id));
+  return response;
+});
+export function pulseRequestId(result: object): string | undefined { return pulseRequestIds.get(result); }
+export function reportPulseDownload(requestId?: string) {
+  if (requestId) void apiClient.post("/api/v1/pulse/value-event", { request_id: requestId }).catch(() => undefined);
+}
+
 // Admin routes are Next.js same-origin handlers. They must never inherit the
 // backend service prefix or requests become /_/backend/admin/data/* and 404.
 const adminClient = axios.create({

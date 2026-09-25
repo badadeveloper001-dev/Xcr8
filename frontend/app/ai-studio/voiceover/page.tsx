@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, Mic, SendHorizontal, Sparkles } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
-import { generateAiVoiceoverAudio, getApiErrorMessage } from "@/lib/api";
+import { generateAiVoiceoverAudio, getApiErrorMessage, pulseRequestId, reportPulseDownload } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
 
@@ -33,6 +33,7 @@ export default function VoiceoverPage() {
   const [language, setLanguage] = useState("english");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usageId, setUsageId] = useState<string>();
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioName, setAudioName] = useState("xcr8-voiceover.mp3");
 
@@ -70,6 +71,7 @@ export default function VoiceoverPage() {
         duration_seconds: durationSeconds,
       });
 
+      setUsageId(pulseRequestId(audioBlob));
       setAudioUrl((previous) => {
         if (previous) {
           URL.revokeObjectURL(previous);
@@ -100,6 +102,7 @@ export default function VoiceoverPage() {
     anchor.download = audioName;
     document.body.appendChild(anchor);
     anchor.click();
+    reportPulseDownload(usageId);
     anchor.remove();
   };
 

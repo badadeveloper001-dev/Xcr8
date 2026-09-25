@@ -7,6 +7,7 @@ import re
 from time import perf_counter
 
 from openai import OpenAI
+from app.usage import ledger
 
 from app.core.config import create_chat_completion, settings
 
@@ -289,6 +290,8 @@ def generate_content_ideas(payload: dict) -> dict:
                 "total_tokens": completion.usage.total_tokens if completion.usage else None,
             },
         }
+    except ledger.UsageBlocked:
+        raise
     except Exception as exc:
         logger.warning("OpenAI idea generation failed; using fallback: %s", exc)
         return {
@@ -434,6 +437,8 @@ def generate_composed_content(payload: dict) -> dict:
                 "total_tokens": completion.usage.total_tokens if completion.usage else None,
             },
         }
+    except ledger.UsageBlocked:
+        raise
     except Exception as exc:
         logger.warning("OpenAI compose generation failed; using fallback: %s", exc)
         fallback = _fallback_compose(payload)

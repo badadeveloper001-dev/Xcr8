@@ -143,7 +143,7 @@ async def pulse_request_middleware(request: Request, call_next):
     request._receive = receive
 
     # Render liveness probes must not initialize schemas or query Pulse/Supabase.
-    if request.method == "GET" and request.url.path.rstrip("/") == "/api/v1/health":
+    if (request.method == "GET" and request.url.path.rstrip("/") == "/api/v1/health") or request.url.path.rstrip("/") == "/api/v1/admin/pulse-costs":
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
         return response
@@ -357,6 +357,9 @@ async def pulse_unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled backend exception", exc_info=exc)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+
+from app.services.usage_cockpit import install as install_usage_cockpit
+install_usage_cockpit(app)
 
 app.include_router(api_router, prefix="/api/v1")
 

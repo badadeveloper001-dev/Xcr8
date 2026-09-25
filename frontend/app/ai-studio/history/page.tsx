@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { reportPulseDownload } from "@/lib/api";
 import { Download } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { useCreatorStore } from "@/lib/store";
@@ -11,6 +12,7 @@ type HistoryItem = {
   title: string;
   src: string;
   downloadName: string;
+  usageId?: string;
   prompt: string;
   createdAt: string;
 };
@@ -80,6 +82,7 @@ export default function ImageHistoryPage() {
     anchor.download = fileName;
     document.body.appendChild(anchor);
     anchor.click();
+    reportPulseDownload(history.find(image => image.src === src)?.usageId);
     anchor.remove();
   };
 

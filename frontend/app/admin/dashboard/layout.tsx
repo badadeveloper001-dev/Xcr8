@@ -11,6 +11,7 @@ const items = [
   ["/admin/dashboard/content", "Content", FileWarning],
   ["/admin/dashboard/system", "System", Settings2],
   ["/admin/dashboard/pulse", "Pulse", Activity],
+  ["/admin/dashboard/pulse/costs", "Usage & costs", Activity],
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

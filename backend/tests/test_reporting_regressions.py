@@ -64,10 +64,11 @@ class ReportingRegressionTests(unittest.TestCase):
         self.assertIn(".offset(offset).limit(limit)", source)
         self.assertIn("IntelligenceNotification.id == selected_id", source)
 
-    def test_render_uses_database_health_and_long_running_connection_pool(self):
+    def test_render_uses_liveness_health_and_long_running_connection_pool(self):
         blueprint = (ROOT.parent / "render.yaml").read_text(encoding="utf-8")
         session_source = (ROOT / "app/db/session.py").read_text(encoding="utf-8")
-        self.assertIn("healthCheckPath: /api/v1/health", blueprint)
+        self.assertIn("healthCheckPath: /api/v1/health\n", blueprint)
+        self.assertNotIn("healthCheckPath: /api/v1/health/db", blueprint)
         self.assertIn('if os.getenv("VERCEL")', session_source)
         self.assertIn("pool_size=5", session_source)
         self.assertIn("pool_recycle=300", session_source)

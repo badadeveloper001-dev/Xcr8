@@ -34,4 +34,6 @@ api_router.include_router(social_router)
 api_router.include_router(upload_router)
 api_router.include_router(workspaces_router)
 api_router.include_router(plans_router)
+from app.api.routes.pulse_costs import router as pulse_costs_router
+api_router.include_router(pulse_costs_router)
 

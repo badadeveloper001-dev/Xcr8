@@ -7,6 +7,9 @@ import re
 import httpx
 
 from app.core.config import settings
+from app.usage import ledger
+from app.services.usage_cockpit import tracked
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +50,15 @@ def _ai_service_candidates() -> list[str]:
 
 def ai_service_headers() -> dict[str, str]:
     token = str(settings.ai_internal_token or settings.oauth_state_secret or settings.cron_secret or "").strip()
-    return {"X-Xcr8-Internal-Token": token} if token else {}
+    headers = {"X-Xcr8-Internal-Token": token} if token else {}
+    ctx = ledger.context.get()
+    if ledger.enabled() and ctx:
+        headers.update({"X-Pulse-User": str(ctx["user_id"]), "X-Pulse-Request": ctx["request_id"], "X-Pulse-Feature": ctx["feature"]})
+    return headers
 
 
 
+@tracked("ai_service")
 def post_ai_service(endpoint: str, payload: dict, *, timeout: float = 60.0) -> httpx.Response:
     """Call the deployed AI service, falling back to the same-origin Vercel mount."""
     clean_endpoint = "/" + str(endpoint or "").lstrip("/")
@@ -64,6 +72,8 @@ def post_ai_service(endpoint: str, payload: dict, *, timeout: float = 60.0) -> h
                 json=payload,
                 timeout=timeout,
             )
+            if response.status_code in {401, 403, 413, 429} or (response.status_code == 503 and response.headers.get("x-pulse-blocked")):
+                raise HTTPException(response.status_code, response.json().get("detail", "AI temporarily unavailable."))
             if response.status_code < 400:
                 return response
 
@@ -164,7 +174,7 @@ def _memory_hint(creator_memory: dict) -> str:
 
 
 def _hashtags(platform: str, language: str) -> list[str]:
-    base = ["#xcr8", "#creatoros", "#contentstrategy"]
+    base = ["#contentstrategy"]
     ptag = {
         "instagram": "#instagramcreator",
         "tiktok": "#tiktokcreator",
@@ -314,6 +324,7 @@ def _local_brainstorm(payload: dict) -> dict:
 
 # ─── Public interface ───────────────────────────────────────
 
+@tracked("caption_adaptation")
 def generate_adaptation(
     text: str,
     platform: str,
@@ -334,8 +345,12 @@ def generate_adaptation(
                         "creator_memory": creator_memory,
                     },
                 )
+                if response.status_code in {401, 403, 413, 429} or (response.status_code == 503 and response.headers.get("x-pulse-blocked")):
+                    raise HTTPException(response.status_code, response.json().get("detail", "AI temporarily unavailable."))
                 response.raise_for_status()
                 return response.json()
+        except HTTPException:
+            raise
         except Exception as exc:
             last_error = exc
 
@@ -343,6 +358,7 @@ def generate_adaptation(
     return _local_adapt(text, platform, language, creator_memory)
 
 
+@tracked("language_detection")
 def detect_caption_language(text: str) -> dict:
     cleaned = text.strip()
     if not cleaned:
@@ -365,12 +381,16 @@ def detect_caption_language(text: str) -> dict:
                     headers=ai_service_headers(),
                     json={"text": cleaned},
                 )
+                if response.status_code in {401, 403, 413, 429} or (response.status_code == 503 and response.headers.get("x-pulse-blocked")):
+                    raise HTTPException(response.status_code, response.json().get("detail", "AI temporarily unavailable."))
                 response.raise_for_status()
                 data = response.json()
                 language = str(data.get("language", "english")).lower()
                 if language not in {"english", "nigerian_pidgin", "yoruba", "code_switch"}:
                     return _local_detect_language(cleaned)
                 return data
+        except HTTPException:
+            raise
         except Exception as exc:
             last_error = exc
 
@@ -378,6 +398,7 @@ def detect_caption_language(text: str) -> dict:
     return _local_detect_language(cleaned)
 
 
+@tracked("brainstorm")
 def generate_content_ideas(payload: dict) -> dict:
     last_error: Exception | None = None
     for base_url in _ai_service_candidates():
@@ -388,8 +409,12 @@ def generate_content_ideas(payload: dict) -> dict:
                     headers=ai_service_headers(),
                     json=payload,
                 )
+                if response.status_code in {401, 403, 413, 429} or (response.status_code == 503 and response.headers.get("x-pulse-blocked")):
+                    raise HTTPException(response.status_code, response.json().get("detail", "AI temporarily unavailable."))
                 response.raise_for_status()
                 return response.json()
+        except HTTPException:
+            raise
         except Exception as exc:
             last_error = exc
 
@@ -436,6 +461,7 @@ def _local_compose(payload: dict) -> dict:
     }
 
 
+@tracked("compose")
 def generate_composed_content(payload: dict) -> dict:
     last_error: Exception | None = None
     for base_url in _ai_service_candidates():
@@ -446,8 +472,12 @@ def generate_composed_content(payload: dict) -> dict:
                     headers=ai_service_headers(),
                     json=payload,
                 )
+                if response.status_code in {401, 403, 413, 429} or (response.status_code == 503 and response.headers.get("x-pulse-blocked")):
+                    raise HTTPException(response.status_code, response.json().get("detail", "AI temporarily unavailable."))
                 response.raise_for_status()
                 return response.json()
+        except HTTPException:
+            raise
         except Exception as exc:
             last_error = exc
 

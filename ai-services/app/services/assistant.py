@@ -6,6 +6,7 @@ import re
 from time import perf_counter
 
 from openai import OpenAI
+from app.usage import ledger
 
 from app.core.config import create_chat_completion, settings
 
@@ -51,6 +52,8 @@ def _web_search(query: str, max_results: int = 5) -> list[dict]:
             if title or body:
                 results.append({"title": title, "snippet": body, "url": href})
         return results
+    except ledger.UsageBlocked:
+        raise
     except Exception as exc:
         logger.warning("Web search failed: %s", exc)
         return []
@@ -547,6 +550,8 @@ def generate_assistant_reply(payload: dict) -> dict:
                 "total_tokens": completion.usage.total_tokens if completion.usage else None,
             },
         }
+    except ledger.UsageBlocked:
+        raise
     except Exception as exc:
         logger.warning("OpenAI assistant generation failed; using fallback: %s", exc)
         fallback_payload = dict(payload)

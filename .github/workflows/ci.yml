@@ -52,8 +52,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install backend test dependencies
-        run: pip install -r backend/requirements.txt pytest
+      - name: Install backend and AI-service test dependencies
+        run: pip install -r backend/requirements.txt -r ai-services/requirements.txt pytest
 
       - name: Compile check — backend
         run: python -m compileall backend/app
@@ -62,4 +62,7 @@ jobs:
         run: PYTHONPATH=backend pytest -q backend/tests
 
       - name: Compile check — ai-services
-        run: python -m compileall ai-services/app
+        run: python -m compileall shared ai-services/app
+
+      - name: AI-service usage instrumentation tests
+        run: PYTHONPATH=ai-services pytest -q ai-services/tests

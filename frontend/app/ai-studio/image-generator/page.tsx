@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Download, ImagePlus, RefreshCw, Upload } from "lucide-react";
 import { StudioShell } from "@/components/ai-studio/studio-shell";
 import { DeviceMediaPicker } from "@/components/device-media-picker";
+import { reportPulseDownload } from "@/lib/api";
 import { useCreatorStore } from "@/lib/store";
 
 type GenerationMode = "text-to-image" | "image-enhance";
@@ -16,6 +17,7 @@ type GeneratedImage = {
   src: string;
   historySrc: string;
   downloadName: string;
+  usageId?: string;
   prompt: string;
   createdAt: string;
 };
@@ -25,6 +27,7 @@ type HistoryImage = {
   title: string;
   src: string;
   downloadName: string;
+  usageId?: string;
   prompt: string;
   createdAt: string;
   settings: {
@@ -327,7 +330,7 @@ export default function ImageGeneratorPage() {
     height: number,
     seed: number,
     attempts: number,
-  ): Promise<{ blobUrl: string; historySrc: string }> => {
+  ): Promise<{ blobUrl: string; historySrc: string; usageId?: string }> => {
     const params = new URLSearchParams({
       prompt,
       width: String(width),
@@ -374,6 +377,7 @@ export default function ImageGeneratorPage() {
     return {
       blobUrl,
       historySrc,
+      usageId: response.headers.get("X-Pulse-Request-Id") || undefined,
     };
   };
 
@@ -381,7 +385,7 @@ export default function ImageGeneratorPage() {
     file: File,
     level: RealismLevel,
     style: EnhancementStyle,
-  ): Promise<{ blobUrl: string; historySrc: string }> => {
+  ): Promise<{ blobUrl: string; historySrc: string; usageId?: string }> => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("style", style);
@@ -466,6 +470,7 @@ export default function ImageGeneratorPage() {
       title: "Generated image",
       src: resolved.blobUrl,
       historySrc: resolved.historySrc,
+      usageId: resolved.usageId,
       downloadName: `xcr8-${useCase}-${style}-${ratio.replace(":", "x")}-hd.png`,
       prompt,
       createdAt: now,
@@ -516,6 +521,7 @@ export default function ImageGeneratorPage() {
             title: built.title,
             src: built.historySrc,
             downloadName: built.downloadName,
+          usageId: built.usageId,
             prompt: built.prompt,
             createdAt: built.createdAt,
             settings: {
@@ -572,6 +578,7 @@ export default function ImageGeneratorPage() {
           title: built.title,
           src: built.historySrc,
           downloadName: built.downloadName,
+          usageId: built.usageId,
           prompt: built.prompt,
           createdAt: built.createdAt,
           settings: {
@@ -628,6 +635,7 @@ export default function ImageGeneratorPage() {
           title: regenerated.title,
           src: regenerated.historySrc,
           downloadName: regenerated.downloadName,
+          usageId: regenerated.usageId,
           prompt: regenerated.prompt,
           createdAt: regenerated.createdAt,
           settings: {
@@ -659,6 +667,7 @@ export default function ImageGeneratorPage() {
     anchor.download = fileName;
     document.body.appendChild(anchor);
     anchor.click();
+    reportPulseDownload(images.find(image => image.src === src)?.usageId ?? history.find(image => image.src === src)?.usageId);
     anchor.remove();
   };
 

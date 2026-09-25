@@ -2,7 +2,8 @@ import hmac
 import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
+from app.usage import ledger
 
 from app.core.config import settings
 from app.schemas import (
@@ -29,6 +30,34 @@ from app.services.image_generator import generate_image
 from app.services.voiceover import generate_voiceover_audio, generate_voiceover_script
 
 app = FastAPI(title="Xcr8 AI Services", version="0.1.0")
+
+
+@app.exception_handler(ledger.UsageBlocked)
+async def usage_blocked(request, exc):
+    return JSONResponse({"detail": str(exc)}, status_code=exc.status, headers={"x-pulse-blocked": "1"})
+
+
+@app.middleware("http")
+async def usage_context(request, call_next):
+    if not ledger.enabled() or request.method != "POST":
+        return await call_next(request)
+    expected = str(settings.ai_internal_token or settings.oauth_state_secret or settings.cron_secret or "")
+    if not expected or not hmac.compare_digest(request.headers.get("X-Xcr8-Internal-Token", ""), expected):
+        return JSONResponse({"detail": "Invalid AI internal token"}, status_code=401)
+    try:
+        user_id = int(request.headers.get("X-Pulse-User", "0"))
+        request_id = request.headers.get("X-Pulse-Request", "")
+        feature = request.headers.get("X-Pulse-Feature", "")
+        if user_id < 1 or len(request_id) != 32 or not feature or len(feature) > 80:
+            raise ValueError
+    except ValueError:
+        return JSONResponse({"detail": "Missing AI usage identity"}, status_code=401)
+    token = ledger.context.set({"user_id": user_id, "request_id": request_id, "feature": feature})
+    try:
+        return await call_next(request)
+    finally:
+        ledger.context.reset(token)
+
 
 
 def _require_internal_token(
@@ -110,6 +139,8 @@ def image_generate(payload: ImageGenerateRequest) -> ImageGenerateResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ledger.UsageBlocked:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Image provider failed: {exc}") from exc
     return ImageGenerateResponse(**result)
@@ -129,6 +160,8 @@ def voiceover_audio(payload: VoiceoverAudioRequest) -> Response:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ledger.UsageBlocked:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Voiceover audio generation failed: {exc}") from exc
 

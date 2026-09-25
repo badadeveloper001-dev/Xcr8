@@ -638,6 +638,19 @@ def publish_post(
         if result.get("success"):
             published_any = True
 
+    if published_any:
+        from app.usage import ledger
+        if ledger.enabled():
+            try:
+                with ledger.engine().begin() as usage_conn:
+                    for published_platform, published_result in results.items():
+                        if published_result.get("success"):
+                            ledger.put_event(usage_conn, f"published:{post.id}:{published_platform}", payload.user_id,
+                                             "publishing", "published", source="server_confirmed")
+            except Exception:
+                # Publishing already succeeded; do not turn it into a retry/duplicate publication.
+                ledger.log.error("Pulse publish event needs reconciliation: post=%s", post.id)
+
     if not published_any and results:
         error_detail = " ".join(
             str(item.get("error") or "")

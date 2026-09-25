@@ -4,6 +4,7 @@ import base64
 from time import perf_counter
 
 from openai import OpenAI
+from app.usage import ledger
 
 from app.core.config import settings
 
@@ -40,13 +41,13 @@ def generate_image(payload: dict) -> dict:
 
     client = OpenAI(api_key=settings.openai_api_key)
     started = perf_counter()
-    response = client.images.generate(
+    response = ledger.provider_call("openai", settings.openai_image_model, lambda: client.with_options(max_retries=0).images.generate(
         model=settings.openai_image_model,
         prompt=f"{prompt}. {QUALITY_SUFFIX}",
         size=size,
         quality=quality,
         n=1,
-    )
+    ), reserve_units={"images": 1}, measured=lambda result: {"images": len(result.data or [])})
 
     image_base64 = ""
     mime_type = "image/png"

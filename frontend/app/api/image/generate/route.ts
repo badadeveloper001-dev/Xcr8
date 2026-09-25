@@ -11,6 +11,7 @@ const GLOBAL_QUALITY_NEGATIVE =
 
 async function fetchBackendImage(
   origin: string,
+  cookie: string,
   userId: number,
   prompt: string,
   width: number,
@@ -25,6 +26,7 @@ async function fetchBackendImage(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        cookie,
         "Idempotency-Key": crypto.randomUUID(),
       },
       body: JSON.stringify({
@@ -238,6 +240,7 @@ export async function GET(request: NextRequest) {
   try {
     backendResponse = await fetchBackendImage(
       request.nextUrl.origin,
+      request.headers.get("cookie") || "",
       userId,
       enrichedPrompt,
       width,
@@ -273,6 +276,7 @@ export async function GET(request: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "image/webp",
+        "X-Pulse-Request-Id": backendResponse.headers.get("X-Pulse-Request-Id") || "",
           "Cache-Control": "no-store",
           "X-Xcr8-Image-Bytes": String(polished.byteLength),
           "X-Xcr8-Image-Source": "xcr8-ai-service",
@@ -283,6 +287,7 @@ export async function GET(request: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "image/png",
+          "X-Pulse-Request-Id": backendResponse.headers.get("X-Pulse-Request-Id") || "",
           "Cache-Control": "no-store",
           "X-Xcr8-Image-Source": "xcr8-ai-service",
         },
