@@ -37,9 +37,11 @@ test("backend syntax and reporting fixtures", () => {
   const path = fileURLToPath(new URL("../../backend/tests/test_reporting_regressions.py", import.meta.url));
   let result;
   for (const command of ["python3", "python"]) {
-    result = spawnSync(command, [path], { encoding: "utf8", timeout: 30000 });
-    if (!result.error || result.error.code !== "ENOENT") break;
+  result = spawnSync(command, [path], { encoding: "utf8", timeout: 30000 });
+  if (!result.error && result.status !== 9009) {
+    break;
   }
+}
   assert.equal(result.status, 0, result.stderr || result.error?.message || "Python 3 is required for backend reporting checks");
 });
 

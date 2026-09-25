@@ -211,13 +211,29 @@ test("AI rejects incomplete and offline fallback replies instead of presenting t
     { assistant_message: "", model: "live-provider" },
     "<html>gateway error</html>",
   ]) {
-    const client = { interceptors: { request: { use() {} } }, post: async () => ({ data }) };
+    const client = {
+  interceptors: {
+    request: { use() {} },
+    response: { use() {} },
+  },
+  post: async () => ({ data }),
+};
     const api = loadTs("../lib/api.ts", { axios: { default: { create: () => client } } },
       { process: { env: {} } });
     await assert.rejects(() => api.chatWithAiAssistant({ user_id: 42, message: "hello" }));
   }
-  const client = { interceptors: { request: { use() {} } },
-    post: async () => ({ data: { assistant_message: "Useful answer", model: "deepseek-chat" } }) };
+  const client = {
+  interceptors: {
+    request: { use() {} },
+    response: { use() {} },
+  },
+  post: async () => ({
+    data: {
+      assistant_message: "Useful answer",
+      model: "deepseek-chat",
+    },
+  }),
+};
   const api = loadTs("../lib/api.ts", { axios: { default: { create: () => client } } },
     { process: { env: {} } });
   const response = await api.chatWithAiAssistant({ user_id: 42, message: "hello" });
@@ -227,7 +243,12 @@ test("AI rejects incomplete and offline fallback replies instead of presenting t
 
 
 test("HTTP 402 preserves the actual service detail instead of inventing configuration advice", () => {
-  const client = { interceptors: { request: { use() {} } } };
+  const client = {
+  interceptors: {
+    request: { use() {} },
+    response: { use() {} },
+  },
+};
   const api = loadTs("../lib/api.ts", {
     axios: { default: { create: () => client, isAxiosError: () => true } },
   }, { process: { env: {} } });
