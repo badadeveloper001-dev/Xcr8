@@ -22,6 +22,22 @@ router = APIRouter(prefix="/plans", tags=["plans"])
 PAID_WEBHOOK_STATUSES = {"paid", "succeeded", "active", "completed"}
 
 
+def _require_request_user_id(request: Request, supplied_user_id: int) -> int:
+    """Bind payment actions to the user context already attached by the Xcr8 frontend."""
+    raw_header = str(request.headers.get("x-xcr8-user-id") or "").strip()
+    if not raw_header:
+        raise HTTPException(status_code=401, detail="Xcr8 account context is required")
+    try:
+        header_user_id = int(raw_header)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Xcr8 account context")
+    if header_user_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid Xcr8 account context")
+    if header_user_id != supplied_user_id:
+        raise HTTPException(status_code=403, detail="This payment request belongs to another account")
+    return header_user_id
+
+
 @router.get("/", response_model=list)
 def list_plans(request: Request, response: Response) -> list:
     # Render traffic passes through Cloudflare; keep the former Vercel header as
@@ -295,6 +311,7 @@ def create_checkout(
     normalized_plan = normalize_plan_id(payload.plan)
     if normalized_plan not in {"starter", "pro", "business"}:
         raise HTTPException(status_code=400, detail="Choose a paid Xcr8 plan to continue")
+    user_id = _require_request_user_id(request, user_id)
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -361,8 +378,10 @@ def create_checkout(
 @router.post("/paystack/verify", response_model=dict)
 def verify_paystack_payment(
     payload: PaystackVerifyRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user_id = _require_request_user_id(request, payload.user_id)
     verified = _verify_paystack_reference(payload.reference)
     user_id, plan_id, billing_cycle = _paystack_metadata(verified)
     if user_id != payload.user_id:
