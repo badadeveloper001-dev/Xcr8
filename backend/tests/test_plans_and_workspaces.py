@@ -729,3 +729,24 @@ def test_paystack_checkout_requires_a_secret(monkeypatch):
         assert response.status_code == 503
     finally:
         db.close()
+
+
+
+def test_paystack_checkout_requires_matching_xcr8_account_context(monkeypatch):
+    db = SessionLocal()
+    try:
+        user = User(email="paystack-context@test.local", display_name="Paystack Context Tester")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        monkeypatch.setattr(settings, "paystack_secret_key", "sk_test_example")
+        client = TestClient(app)
+        missing = client.post("/api/v1/plans/checkout", params={"user_id": user.id}, json={"plan": "starter"})
+        assert missing.status_code == 401
+        mismatched = client.post(
+            "/api/v1/plans/checkout", params={"user_id": user.id},
+            headers={"X-Xcr8-User-Id": str(user.id + 1)}, json={"plan": "starter"},
+        )
+        assert mismatched.status_code == 403
+    finally:
+        db.close()
