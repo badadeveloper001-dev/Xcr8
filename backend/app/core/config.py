@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     paystack_currency: str = "AUTO"
     paystack_test_mode: bool = True
     paystack_base_url: str = "https://api.paystack.co"
+    paystack_starter_monthly_plan: str = ""
+    paystack_starter_annual_plan: str = ""
+    paystack_pro_monthly_plan: str = ""
+    paystack_pro_annual_plan: str = ""
+    paystack_business_monthly_plan: str = ""
+    paystack_business_annual_plan: str = ""
 
     ai_service_url: str = "http://localhost:8100"
     default_timezone: str = "Africa/Lagos"
