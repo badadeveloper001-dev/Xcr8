@@ -104,6 +104,17 @@ def _paystack_currency(request: Request) -> str:
     return "NGN" if _request_country_code(request) == "NG" else "USD"
 
 
+def _paystack_plan_code(plan_id: str, billing_cycle: str) -> str:
+    key = f"paystack_{plan_id}_{billing_cycle}_plan"
+    code = str(getattr(settings, key, "") or "").strip()
+    if not code:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Paystack recurring plan is not configured for {plan_id} {billing_cycle}",
+        )
+    return code
+
+
 def _paystack_amount(plan_id: str, currency: str, billing_cycle: str) -> int:
     plan = PLAN_CONFIG[plan_id]
     if currency == "NGN":
@@ -339,6 +350,7 @@ def create_checkout(
     }
     if callback_url:
         initialize_payload["callback_url"] = callback_url
+    initialize_payload["plan"] = _paystack_plan_code(normalized_plan, payload.billing_cycle)
 
     base_url = str(settings.paystack_base_url or "https://api.paystack.co").rstrip("/")
     with httpx.Client(timeout=20.0) as client:
