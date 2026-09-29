@@ -104,7 +104,8 @@ export default function BillingPage() {
     }
   }, [usage.data, setPlan]);
 
-  const billingUnavailable = catalog.isError || usage.isError;
+  const billingUnavailable =
+    (catalog.isError && !catalog.data) || (usage.isError && !usage.data);
   const retryBilling = () => {
     void catalog.refetch();
     void usage.refetch();
