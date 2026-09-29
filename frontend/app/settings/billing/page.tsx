@@ -38,10 +38,6 @@ type PlanItemApi = Omit<PlanItem, "pricing"> & {
   pricing?: RegionalPricing;
 };
 
-type PricingCatalogResponse = {
-  plans?: Record<string, RegionalPricing>;
-};
-
 type UsageResponse = {
   plan?: { id?: string };
 };
@@ -86,14 +82,6 @@ export default function BillingPage() {
     queryFn: async ({ signal }) =>
       (await apiClient.get<PlanItemApi[]>("/api/v1/plans/", { signal, timeout: 15_000 })).data,
   });
-  const pricing = useQuery({
-    queryKey: ["billing-pricing", userId],
-    enabled,
-    staleTime: 60_000,
-    retry: false,
-    queryFn: async ({ signal }) =>
-      (await apiClient.get<PricingCatalogResponse>("/api/pricing", { signal, timeout: 10_000 })).data,
-  });
   const usage = useQuery({
     queryKey: ["billing-current-plan", userId],
     enabled,
@@ -105,8 +93,8 @@ export default function BillingPage() {
   const plans = useMemo<PlanItem[]>(() =>
     (catalog.data?.length ? catalog.data : FALLBACK_PLAN_LIMITS).map((plan) => ({
       ...plan,
-      pricing: pricing.data?.plans?.[plan.id] || plan.pricing,
-    })), [catalog.data, pricing.data]);
+      pricing: plan.pricing,
+    })), [catalog.data]);
 
   useEffect(() => {
     const nextPlan = usage.data?.plan?.id;
@@ -116,10 +104,9 @@ export default function BillingPage() {
     }
   }, [usage.data, setPlan]);
 
-  const billingUnavailable = catalog.isError || pricing.isError || usage.isError;
+  const billingUnavailable = catalog.isError || usage.isError;
   const retryBilling = () => {
     void catalog.refetch();
-    void pricing.refetch();
     void usage.refetch();
   };
 
