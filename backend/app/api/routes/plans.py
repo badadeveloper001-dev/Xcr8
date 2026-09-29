@@ -239,6 +239,36 @@ def _verify_paystack_reference(reference: str) -> dict:
     return data
 
 
+def _paystack_recurring_metadata(db: Session, data: dict) -> tuple[int, str, str]:
+    metadata = data.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("user_id") and metadata.get("plan"):
+        return _paystack_metadata(data)
+
+    subscription = data.get("subscription") if isinstance(data.get("subscription"), dict) else {}
+    subscription_code = str(subscription.get("subscription_code") or "").strip()
+    customer = data.get("customer") if isinstance(data.get("customer"), dict) else {}
+    email = str(customer.get("email") or "").strip().lower()
+    users = db.scalars(select(User)).all()
+    user = next(
+        (
+            candidate for candidate in users
+            if subscription_code
+            and str((candidate.billing_meta or {}).get("paystack_subscription_code") or "") == subscription_code
+        ),
+        None,
+    )
+    if not user and email:
+        user = db.scalar(select(User).where(User.email == email))
+    if not user:
+        raise HTTPException(status_code=404, detail="Paystack recurring customer is not mapped to an Xcr8 account")
+    billing_meta = user.billing_meta or {}
+    plan_id = str(billing_meta.get("plan") or user.plan_tier.value or "").strip().lower()
+    billing_cycle = str(billing_meta.get("billing_cycle") or "monthly").strip().lower()
+    if plan_id not in {"starter", "pro", "business"}:
+        raise HTTPException(status_code=400, detail="Stored Paystack subscription has an invalid Xcr8 plan")
+    return user.id, plan_id, billing_cycle
+
+
 def _paystack_metadata(data: dict) -> tuple[int, str, str]:
     metadata = data.get("metadata")
     if not isinstance(metadata, dict):
@@ -321,7 +351,7 @@ async def _handle_paystack_webhook(request: Request, db: Session) -> dict:
         raise HTTPException(status_code=400, detail="Paystack webhook reference is missing")
 
     verified = _verify_paystack_reference(reference)
-    user_id, plan_id, billing_cycle = _paystack_metadata(verified)
+    user_id, plan_id, billing_cycle = _paystack_recurring_metadata(db, verified)
     return _activate_paystack_payment(
         db,
         event_id=reference,
