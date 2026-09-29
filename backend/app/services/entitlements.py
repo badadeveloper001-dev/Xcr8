@@ -5,11 +5,12 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import (
+    ConnectedPlatform,
     PlanTier,
     UsageAccount,
     UsageLedger,
@@ -445,7 +446,6 @@ def consume_usage(
     if pulse_ledger.enabled() and ctx is not None:
         ctx["new_credit_debit"] = (db, ledger.id)
     return ledger
-
 
 
 def refund_usage(
