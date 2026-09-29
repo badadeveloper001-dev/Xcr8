@@ -1,6 +1,15 @@
 import { NextRequest } from "next/server";
 import sharp from "sharp";
 
+const BACKEND_API_URL =
+  process.env.BACKEND_API_URL ?? process.env.BACKEND_INTERNAL_URL ?? process.env.BACKEND_URL;
+
+function normalizeBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, "");
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+}
+
 export const dynamic = "force-dynamic";
 
 const MIN_DIMENSION = 512;
@@ -22,7 +31,12 @@ async function fetchBackendImage(
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    return await fetch(`${origin}/api/v1/ai/image/generate`, {
+    const backendBaseUrl = BACKEND_API_URL ? normalizeBaseUrl(BACKEND_API_URL) : "";
+    if (!backendBaseUrl) {
+      throw new Error("Backend API is not configured.");
+    }
+
+    return await fetch(`${backendBaseUrl}/api/v1/ai/image/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
