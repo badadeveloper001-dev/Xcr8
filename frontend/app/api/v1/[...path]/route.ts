@@ -84,7 +84,7 @@ async function proxy(request: NextRequest, path: string[]) {
   const init: RequestInit = {
     method: request.method,
     headers: upstreamHeaders,
-    redirect: "manual",
+    redirect: retrySafe ? "follow" : "manual",
     cache: "no-store",
     signal: request.signal,
   };
