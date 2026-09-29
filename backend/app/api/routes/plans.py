@@ -38,6 +38,7 @@ def _require_request_user_id(request: Request, supplied_user_id: int) -> int:
     return header_user_id
 
 
+@router.get("", response_model=list)
 @router.get("/", response_model=list)
 def list_plans(request: Request, response: Response) -> list:
     # Render traffic passes through Cloudflare; keep the former Vercel header as
