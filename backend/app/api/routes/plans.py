@@ -263,10 +263,30 @@ async def _handle_paystack_webhook(request: Request, db: Session) -> dict:
 
     event = str(payload.get("event") or "").strip().lower()
     data = payload.get("data")
-    if event != "charge.success":
-        return {"processed": False, "ignored": True, "event": event or None}
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Paystack webhook data is missing")
+
+    if event == "subscription.create":
+        subscription = data.get("subscription") if isinstance(data.get("subscription"), dict) else data
+        customer = data.get("customer") if isinstance(data.get("customer"), dict) else {}
+        subscription_code = str(subscription.get("subscription_code") or data.get("subscription_code") or "").strip()
+        customer_code = str(customer.get("customer_code") or "").strip()
+        email = str(customer.get("email") or data.get("email") or "").strip().lower()
+        user = db.scalar(select(User).where(User.email == email)) if email else None
+        if not user and customer_code:
+            users = db.scalars(select(User)).all()
+            user = next((candidate for candidate in users if str((candidate.billing_meta or {}).get("paystack_customer_code") or "") == customer_code), None)
+        if not user or not subscription_code:
+            return {"processed": False, "ignored": True, "event": event, "reason": "customer_not_mapped"}
+        meta = dict(user.billing_meta or {})
+        meta.update({"provider": "paystack", "paystack_subscription_code": subscription_code, "paystack_customer_code": customer_code or meta.get("paystack_customer_code"), "subscription_status": str(subscription.get("status") or "active"), "next_payment_date": subscription.get("next_payment_date")})
+        user.billing_meta = meta
+        db.add(user)
+        db.commit()
+        return {"processed": True, "event": event, "user_id": user.id}
+
+    if event != "charge.success":
+        return {"processed": False, "ignored": True, "event": event or None}
 
     reference = str(data.get("reference") or "").strip()
     if not reference:
