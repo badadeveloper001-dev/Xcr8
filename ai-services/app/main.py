@@ -3,6 +3,7 @@ import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import Response, JSONResponse
+import httpx
 from app.usage import ledger
 
 from app.core.config import settings
@@ -162,6 +163,24 @@ def voiceover_audio(payload: VoiceoverAudioRequest) -> Response:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ledger.UsageBlocked:
         raise
+    except httpx.HTTPStatusError as exc:
+        provider_payload: object = {}
+        try:
+            provider_payload = exc.response.json()
+        except ValueError:
+            provider_payload = {}
+        provider_error = provider_payload.get("error") if isinstance(provider_payload, dict) else None
+        if not isinstance(provider_error, dict):
+            provider_error = {}
+        detail = {
+            "provider": "openai",
+            "status": exc.response.status_code,
+            "type": str(provider_error.get("type") or "provider_error"),
+            "code": provider_error.get("code"),
+            "message": str(provider_error.get("message") or "OpenAI rejected the voiceover request.")[:300],
+            "request_id": exc.response.headers.get("x-request-id"),
+        }
+        return JSONResponse(detail, status_code=exc.response.status_code)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Voiceover audio generation failed: {exc}") from exc
 
