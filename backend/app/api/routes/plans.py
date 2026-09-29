@@ -174,7 +174,13 @@ def _activate_paystack_payment(
         return {"processed": False, "duplicate": True, "event_id": event_id, "plan": normalized_plan}
 
     now = datetime.now(tz=UTC)
-    expires_at = now + timedelta(days=365 if billing_cycle == "annual" else 31)
+    previous_meta = dict(user.billing_meta or {})
+    recurring = bool(previous_meta.get("paystack_subscription_code"))
+    if recurring:
+        base = user.plan_expires_at if user.plan_expires_at and user.plan_expires_at > now else now
+        expires_at = base + timedelta(days=365 if billing_cycle == "annual" else 31)
+    else:
+        expires_at = now + timedelta(days=365 if billing_cycle == "annual" else 31)
     user.plan_tier = PlanTier(normalized_plan)
     user.plan_started_at = now
     user.plan_expires_at = expires_at
@@ -185,6 +191,9 @@ def _activate_paystack_payment(
         "currency": currency,
         "amount_minor": int(amount_minor),
         "last_verified_at": now.isoformat(),
+        "subscription_status": previous_meta.get("subscription_status", "active"),
+        "paystack_subscription_code": previous_meta.get("paystack_subscription_code"),
+        "paystack_customer_code": previous_meta.get("paystack_customer_code"),
         **{key: value for key, value in provider_meta.items() if value is not None},
     }
     db.add(
