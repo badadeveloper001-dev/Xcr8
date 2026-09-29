@@ -187,6 +187,7 @@ def _activate_paystack_payment(
     user.billing_meta = {
         "provider": "paystack",
         "reference": event_id,
+        "plan": normalized_plan,
         "billing_cycle": billing_cycle,
         "currency": currency,
         "amount_minor": int(amount_minor),
