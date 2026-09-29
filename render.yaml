@@ -133,6 +133,18 @@ services:
         value: "true"
       - key: PAYSTACK_BASE_URL
         value: https://api.paystack.co
+      - key: PAYSTACK_STARTER_MONTHLY_PLAN
+        sync: false
+      - key: PAYSTACK_STARTER_ANNUAL_PLAN
+        sync: false
+      - key: PAYSTACK_PRO_MONTHLY_PLAN
+        sync: false
+      - key: PAYSTACK_PRO_ANNUAL_PLAN
+        sync: false
+      - key: PAYSTACK_BUSINESS_MONTHLY_PLAN
+        sync: false
+      - key: PAYSTACK_BUSINESS_ANNUAL_PLAN
+        sync: false
       - key: FOUNDER_ALERT_EMAILS
         sync: false
       - key: PULSE_SLACK_WEBHOOK_URL
