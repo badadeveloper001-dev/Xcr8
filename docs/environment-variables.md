@@ -53,6 +53,10 @@
 - `PAYSTACK_CURRENCY`: `AUTO` (recommended for location-aware NGN/USD checkout), or explicitly `NGN`/`USD` if your Paystack account settles in one currency.
 - `PAYSTACK_TEST_MODE`: keep `true` with a test key; set `false` only when you intentionally switch to live keys.
 - `PAYSTACK_BASE_URL`: Paystack API base URL (default `https://api.paystack.co`).
+- PAYSTACK_STARTER_MONTHLY_PLAN / PAYSTACK_STARTER_ANNUAL_PLAN: Paystack plan codes for Xcr8 Starter recurring billing.
+- PAYSTACK_PRO_MONTHLY_PLAN / PAYSTACK_PRO_ANNUAL_PLAN: Paystack plan codes for Xcr8 Pro recurring billing.
+- PAYSTACK_BUSINESS_MONTHLY_PLAN / PAYSTACK_BUSINESS_ANNUAL_PLAN: Paystack plan codes for Xcr8 Business recurring billing.
+- Recurring plan codes must belong to the same Paystack environment as PAYSTACK_SECRET_KEY (test codes with test keys, live codes with live keys).
 - `AI_INTERNAL_TOKEN`: shared high-entropy secret used by the backend to call costly internal AI routes.
 - `META_GRAPH_API_VERSION`: supported Meta Graph API version used for Facebook and Instagram (default `v22.0`).
 - `META_APP_ID` / `META_APP_SECRET`: Meta OAuth credentials.
