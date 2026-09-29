@@ -81,7 +81,7 @@ test("billing renders four cards before pricing or usage completes", () => {
   }
   visit(rendered);
   assert.equal(nodes.filter(node => node.type === "section").length, 4);
-  assert.equal(queries.length, 3);
+  assert.equal(queries.length, 2);
   assert.ok(queries.every(query => query.enabled && query.retry === false));
   const checkoutButtons = nodes.filter(node => node.type === "button" && node.props.className?.includes("mt-6"));
   assert.equal(checkoutButtons.length, 4);
