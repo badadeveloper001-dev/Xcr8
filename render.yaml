@@ -128,9 +128,9 @@ services:
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_CURRENCY
-        value: AUTO
+        value: NGN
       - key: PAYSTACK_TEST_MODE
-        value: "true"
+        value: "false"
       - key: PAYSTACK_BASE_URL
         value: https://api.paystack.co
       - key: PAYSTACK_STARTER_MONTHLY_NGN_PLAN
