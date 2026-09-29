@@ -323,7 +323,27 @@ def generate_voiceover_audio(payload: dict) -> bytes:
             },
             timeout=120.0,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            provider_payload: object = {}
+            try:
+                provider_payload = response.json()
+            except ValueError:
+                provider_payload = {}
+            provider_error = provider_payload.get("error") if isinstance(provider_payload, dict) else None
+            if not isinstance(provider_error, dict):
+                provider_error = {}
+            logger.error(
+                "OpenAI TTS provider rejected request: status=%s type=%s code=%s request_id=%s model=%s message=%s",
+                response.status_code,
+                provider_error.get("type"),
+                provider_error.get("code"),
+                response.headers.get("x-request-id"),
+                settings.openai_tts_model,
+                _compact_text(str(provider_error.get("message") or response.text), 300),
+            )
+            raise exc
         return response.content
     return ledger.provider_call("openai", settings.openai_tts_model, speak,
         reserve_units={"characters": len(text)}, measured=lambda result: {"characters": len(text)})
