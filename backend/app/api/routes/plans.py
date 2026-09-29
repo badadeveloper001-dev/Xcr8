@@ -294,6 +294,25 @@ async def _handle_paystack_webhook(request: Request, db: Session) -> dict:
         db.commit()
         return {"processed": True, "event": event, "user_id": user.id}
 
+    if event in {"subscription.disable", "subscription.not_renew", "invoice.payment_failed"}:
+        subscription = data.get("subscription") if isinstance(data.get("subscription"), dict) else {}
+        subscription_code = str(subscription.get("subscription_code") or data.get("subscription_code") or data.get("subscription") or "").strip()
+        customer = data.get("customer") if isinstance(data.get("customer"), dict) else {}
+        email = str(customer.get("email") or data.get("email") or "").strip().lower()
+        users = db.scalars(select(User)).all()
+        user = next((candidate for candidate in users if subscription_code and str((candidate.billing_meta or {}).get("paystack_subscription_code") or "") == subscription_code), None)
+        if not user and email:
+            user = db.scalar(select(User).where(User.email == email))
+        if not user:
+            return {"processed": False, "ignored": True, "event": event, "reason": "customer_not_mapped"}
+        meta = dict(user.billing_meta or {})
+        meta["subscription_status"] = "payment_failed" if event == "invoice.payment_failed" else ("disabled" if event == "subscription.disable" else "non-renewing")
+        meta["last_billing_event_at"] = datetime.now(tz=UTC).isoformat()
+        user.billing_meta = meta
+        db.add(user)
+        db.commit()
+        return {"processed": True, "event": event, "user_id": user.id}
+
     if event != "charge.success":
         return {"processed": False, "ignored": True, "event": event or None}
 
