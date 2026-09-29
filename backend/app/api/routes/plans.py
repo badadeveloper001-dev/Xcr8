@@ -397,8 +397,11 @@ def create_checkout(
     secret = str(settings.paystack_secret_key or "").strip()
     if not secret:
         raise HTTPException(status_code=503, detail="Paystack checkout is not configured")
-    if settings.paystack_test_mode and not secret.startswith("sk_test_"):
-        raise HTTPException(status_code=503, detail="Paystack test mode requires a sk_test_ secret key")
+    if settings.paystack_test_mode:
+        if not secret.startswith("sk_test_"):
+            raise HTTPException(status_code=503, detail="Paystack test mode requires a sk_test_ secret key")
+    elif not secret.startswith("sk_live_"):
+        raise HTTPException(status_code=503, detail="Paystack live mode requires a sk_live_ secret key")
 
     normalized_plan = normalize_plan_id(payload.plan)
     if normalized_plan not in {"starter", "pro", "business"}:
