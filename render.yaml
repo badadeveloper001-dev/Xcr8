@@ -133,17 +133,29 @@ services:
         value: "true"
       - key: PAYSTACK_BASE_URL
         value: https://api.paystack.co
-      - key: PAYSTACK_STARTER_MONTHLY_PLAN
+      - key: PAYSTACK_STARTER_MONTHLY_NGN_PLAN
         sync: false
-      - key: PAYSTACK_STARTER_ANNUAL_PLAN
+      - key: PAYSTACK_STARTER_ANNUAL_NGN_PLAN
         sync: false
-      - key: PAYSTACK_PRO_MONTHLY_PLAN
+      - key: PAYSTACK_STARTER_MONTHLY_USD_PLAN
         sync: false
-      - key: PAYSTACK_PRO_ANNUAL_PLAN
+      - key: PAYSTACK_STARTER_ANNUAL_USD_PLAN
         sync: false
-      - key: PAYSTACK_BUSINESS_MONTHLY_PLAN
+      - key: PAYSTACK_PRO_MONTHLY_NGN_PLAN
         sync: false
-      - key: PAYSTACK_BUSINESS_ANNUAL_PLAN
+      - key: PAYSTACK_PRO_ANNUAL_NGN_PLAN
+        sync: false
+      - key: PAYSTACK_PRO_MONTHLY_USD_PLAN
+        sync: false
+      - key: PAYSTACK_PRO_ANNUAL_USD_PLAN
+        sync: false
+      - key: PAYSTACK_BUSINESS_MONTHLY_NGN_PLAN
+        sync: false
+      - key: PAYSTACK_BUSINESS_ANNUAL_NGN_PLAN
+        sync: false
+      - key: PAYSTACK_BUSINESS_MONTHLY_USD_PLAN
+        sync: false
+      - key: PAYSTACK_BUSINESS_ANNUAL_USD_PLAN
         sync: false
       - key: FOUNDER_ALERT_EMAILS
         sync: false
