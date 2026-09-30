@@ -77,6 +77,8 @@ type Snapshot = {
 
 const money = (value: number | null) =>
   value === null ? "Unknown" : "$" + (value / 1_000_000).toFixed(4);
+const accountedMoney = (value: number | null, unknown: number) =>
+  unknown > 0 ? "Unknown" : money(value);
 const panel = "rounded-2xl border border-white/10 bg-white/5 p-5";
 const cell = "px-3 py-3";
 const tabs = ["overview", "users", "requests"] as const;
@@ -159,12 +161,15 @@ export default function PulseCostsPage() {
                 <section key={key} className={panel}>
                   <p className="text-sm text-slate-400">{label}</p>
                   <p className="mt-2 text-3xl font-semibold">
-                    {money(period.cost_micros)}
+                    {accountedMoney(period.cost_micros, period.unknown_attempts)}
                   </p>
                   <p className="mt-2 text-sm text-slate-300">
                     {period.active_users} active users
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
+                    {period.unknown_attempts > 0
+                      ? "Known spend: " + money(period.cost_micros) + " · "
+                      : ""}
                     {period.unknown_attempts} unknown ·{" "}
                     {money(period.unsettled_micros)} unresolved
                   </p>
@@ -210,7 +215,12 @@ export default function PulseCostsPage() {
                       {data.features.map((row) => (
                         <tr key={row.name} className="border-t border-white/5">
                           <td className={cell + " font-medium"}>{row.name}</td>
-                          <td className={cell}>{money(row.cost_micros)}</td>
+                          <td className={cell}>
+                            <span>{accountedMoney(row.cost_micros, row.unknown_attempts)}</span>
+                            {row.unknown_attempts > 0 && (
+                              <span className="ml-2 text-xs text-slate-500">known {money(row.cost_micros)}</span>
+                            )}
+                          </td>
                           <td className={cell}>{row.requests}</td>
                           <td className={cell}>{money(row.average_cost_per_request_micros)}</td>
                           <td className={cell}>{money(row.openai_cost_micros)}</td>
