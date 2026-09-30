@@ -128,6 +128,7 @@ def test_calendar_boundaries():
     w = ledger.windows(datetime(2026, 3, 1, 4, tzinfo=UTC))
     assert w["day"].day == 1 and w["month"].day == 1
     assert w["week"] == datetime(2026, 2, 23, tzinfo=UTC)
+    assert w["year"] == datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def test_events_idempotent_dashboard_active_denominator(db):
@@ -222,3 +223,18 @@ def test_dashboard_accounting_breakdowns_and_fallback_request_cost(db):
     assert request["cost_micros"] == 100
     assert request["fallback"] is True
     assert len(request["providers"]) == 2
+    token = ledger.context.set({"user_id": 13})
+    unknown_ident = ledger.start_request("compose")
+    ledger.context.set({"user_id": 13, "request_id": unknown_ident, "feature": "compose"})
+    try:
+        with pytest.raises(RuntimeError):
+            ledger.provider_call(
+                "openai", "test", lambda: (_ for _ in ()).throw(RuntimeError("provider failure")),
+                reserve_units={"input_tokens": 100, "output_tokens": 100},
+            )
+        ledger.finish_request(unknown_ident, "success", 30)
+    finally:
+        ledger.context.reset(token)
+    unknown_request = next(row for row in ledger.dashboard()["recent"] if row["id"] == unknown_ident)
+    assert unknown_request["cost_micros"] is None
+    assert unknown_request["unknown_attempts"] == 1
