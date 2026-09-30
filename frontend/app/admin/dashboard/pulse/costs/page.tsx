@@ -11,6 +11,85 @@ type Snapshot = {
   value_events: { feature: string; event: string; source: string; count: number }[];
   recent: { id: string; user_id: number; feature: string; provider: string; model: string; status: string; fallback: number; cost_micros: number | null; duration_ms: number | null; input_tokens: number | null; output_tokens: number | null; characters: number | null; images: number | null }[];
 };
+const numberOr = (value: unknown, fallback = 0) => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
+const nullableNumber = (value: unknown) => value === null || value === undefined ? null : numberOr(value, 0);
+const normalizeSnapshot = (body: unknown): Snapshot => {
+  if (!body || typeof body !== "object") throw new Error("Pulse returned an invalid response.");
+  const value = body as Record<string, unknown>;
+  const periods = value.periods;
+  if (!periods || typeof periods !== "object") throw new Error("Pulse response is missing period data.");
+  const periodObject = periods as Record<string, unknown>;
+  for (const key of ["day", "week", "month"]) {
+    if (!periodObject[key] || typeof periodObject[key] !== "object") throw new Error(`Pulse response is missing ${key} period data.`);
+  }
+  const normalizePeriod = (input: unknown): Period => {
+    const p = input as Record<string, unknown>;
+    return {
+      cost_micros: numberOr(p.cost_micros),
+      active_users: numberOr(p.active_users),
+      cost_per_active_user_micros: nullableNumber(p.cost_per_active_user_micros),
+      unknown_attempts: numberOr(p.unknown_attempts),
+      unsettled_micros: numberOr(p.unsettled_micros),
+    };
+  };
+  const normalizeGroups = (input: unknown): Group[] => {
+    if (!Array.isArray(input)) throw new Error("Pulse response contains invalid grouped usage data.");
+    return input.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        name: typeof item.name === "string" || typeof item.name === "number" ? item.name : "Unknown",
+        cost_micros: numberOr(item.cost_micros),
+        attempts: numberOr(item.attempts),
+        fallbacks: numberOr(item.fallbacks),
+        unknown_attempts: numberOr(item.unknown_attempts),
+      };
+    });
+  };
+  const valueEvents = Array.isArray(value.value_events) ? value.value_events.map((event) => {
+    const item = event as Record<string, unknown>;
+    return {
+      feature: String(item.feature ?? "unknown"),
+      event: String(item.event ?? "unknown"),
+      source: String(item.source ?? "unknown"),
+      count: numberOr(item.count),
+    };
+  }) : [];
+  const recent = Array.isArray(value.recent) ? value.recent.map((attempt) => {
+    const item = attempt as Record<string, unknown>;
+    return {
+      id: String(item.id ?? crypto.randomUUID()),
+      user_id: numberOr(item.user_id),
+      feature: String(item.feature ?? "unknown"),
+      provider: String(item.provider ?? "unknown"),
+      model: String(item.model ?? "unknown"),
+      status: String(item.status ?? "unknown"),
+      fallback: numberOr(item.fallback),
+      cost_micros: nullableNumber(item.cost_micros),
+      duration_ms: nullableNumber(item.duration_ms),
+      input_tokens: nullableNumber(item.input_tokens),
+      output_tokens: nullableNumber(item.output_tokens),
+      characters: nullableNumber(item.characters),
+      images: nullableNumber(item.images),
+    };
+  }) : [];
+  if (!value.config || typeof value.config !== "object") throw new Error("Pulse response is missing policy configuration.");
+  return {
+    periods: {
+      day: normalizePeriod(periodObject.day),
+      week: normalizePeriod(periodObject.week),
+      month: normalizePeriod(periodObject.month),
+    },
+    features: normalizeGroups(value.features),
+    users: normalizeGroups(value.users),
+    revision: numberOr(value.revision),
+    config: value.config as Record<string, unknown>,
+    value_events: valueEvents,
+    recent,
+  };
+};
 const money = (value: number | null) => value === null ? "Unknown" : `$${(value / 1000000).toFixed(4)}`;
 const panel = "rounded-2xl border border-white/10 bg-white/5 p-5";
 
@@ -27,11 +106,12 @@ export default function PulseCostsPage() {
       const response = await fetch("/admin/data/pulse-costs", { headers: headers(), cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Unable to load cockpit.");
-      setData(body); setPolicy(JSON.stringify(body.config, null, 2));
+      const snapshot = normalizeSnapshot(body);
+      setData(snapshot); setPolicy(JSON.stringify(snapshot.config, null, 2));
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to load cockpit."); }
     finally { setBusy(false); }
   };
-  useEffect(() => { void refresh(); }, []); // Manual refresh avoids continuous database polling.
+  useEffect(() => { void refresh(); }, []);
   const save = async () => {
     if (!data) return;
     setBusy(true); setError(""); setNotice("");
@@ -53,6 +133,6 @@ export default function PulseCostsPage() {
     <section className={panel}><h2 className="mb-3 font-semibold">Product value · this month</h2><p className="mb-3 text-sm text-slate-400">Generated outputs and unique download reports by feature. Published counts are server-confirmed post/platform events; they are not attributed to AI unless a generation link is available.</p><div className="grid gap-2 md:grid-cols-3">{data.value_events.map(v => <div key={`${v.feature}:${v.event}:${v.source}`} className="rounded-lg border border-white/10 p-3"><strong>{v.count} {v.event}</strong><p>{v.feature}</p><small>{v.source}</small></div>)}</div>{!data.value_events.length && <p>No value events recorded yet.</p>}</section>
     <section className={panel}><h2 className="mb-3 font-semibold">Recent provider attempts</h2><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr>{["User / feature", "Provider / model", "Result", "Units", "Duration", "Cost"].map(x => <th key={x} className="p-2">{x}</th>)}</tr></thead><tbody>{data.recent.map(r => <tr key={r.id}><td className="p-2">{r.user_id} / {r.feature}</td><td className="p-2">{r.provider} / {r.model}{r.fallback ? " (fallback)" : ""}</td><td className="p-2">{r.status}</td><td className="p-2">{r.input_tokens ?? "?"} in / {r.output_tokens ?? "?"} out; {r.characters ?? "—"} chars; {r.images ?? "—"} images</td><td className="p-2">{r.duration_ms ?? "—"} ms</td><td className="p-2">{money(r.cost_micros)}</td></tr>)}</tbody></table></div></section>
     <section className={panel}><h2 className="font-semibold">Budget policy & price catalog</h2><p className="my-3 text-sm text-slate-400">Observe records usage; enforce checks global, feature and user caps before each provider attempt. Limits are integer USD microdollars (1 USD = 1,000,000). Use user_limits.default for the default user cap. Unknown rates block paid calls in enforce mode. Image/character rates are estimates; verify current provider pricing before enforcing.</p><label htmlFor="policy" className="sr-only">Budget policy JSON</label><textarea id="policy" value={policy} onChange={e => setPolicy(e.target.value)} rows={18} spellCheck={false} className="w-full rounded-lg border border-slate-600 bg-slate-950 p-3 font-mono text-sm text-slate-100"/><button disabled={busy} onClick={() => void save()} className="mt-3 rounded-lg bg-cyan-600 px-4 py-2 disabled:opacity-50">Save policy</button></section>
-    </>}
+    </> }
   </div>;
 }
