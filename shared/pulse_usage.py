@@ -156,21 +156,23 @@ def cost(rate, *, input_tokens=None, output_tokens=None, input_cache_hit_tokens=
     elif characters is not None and "per_character" in rate:
         amount = Decimal(str(rate["per_character"])) * characters * 1000000
     elif input_tokens is not None and output_tokens is not None and "input_cache_hit_per_million" in rate:
-        if input_cache_hit_tokens is not None and input_cache_miss_tokens is not None:
-            hit_key = "input_cache_hit_peak_per_million" if peak and "input_cache_hit_peak_per_million" in rate else "input_cache_hit_per_million"
-            miss_key = "input_cache_miss_peak_per_million" if peak and "input_cache_miss_peak_per_million" in rate else "input_cache_miss_per_million"
-            output_key = "output_peak_per_million" if peak and "output_peak_per_million" in rate else "output_per_million"
-            amount = (
-                Decimal(str(rate[hit_key])) * input_cache_hit_tokens
-                + Decimal(str(rate[miss_key])) * input_cache_miss_tokens
-                + Decimal(str(rate[output_key])) * output_tokens
-            )
+        output_key = "output_peak_per_million" if peak and "output_peak_per_million" in rate else "output_per_million"
+        output_rate = Decimal(str(rate[output_key]))
+        hit_rate = Decimal(str(rate["input_cache_hit_per_million"]))
+        if "input_cache_miss_per_million" in rate:
+            miss_rate = Decimal(str(rate["input_cache_miss_peak_per_million"] if peak and "input_cache_miss_peak_per_million" in rate else "input_cache_miss_per_million"))
+            if input_cache_hit_tokens is not None and input_cache_miss_tokens is not None:
+                amount = hit_rate * input_cache_hit_tokens + miss_rate * input_cache_miss_tokens + output_rate * output_tokens
+            else:
+                input_rate = max(hit_rate, miss_rate)
+                amount = input_rate * input_tokens + output_rate * output_tokens
+        elif input_cache_hit_tokens is not None:
+            uncached_tokens = max(0, input_tokens - input_cache_hit_tokens)
+            amount = hit_rate * input_cache_hit_tokens + Decimal(str(rate["input_per_million"])) * uncached_tokens + output_rate * output_tokens
+        elif "input_per_million" in rate:
+            amount = Decimal(str(rate["input_per_million"])) * input_tokens + output_rate * output_tokens
         else:
-            hit_key = "input_cache_hit_peak_per_million" if peak and "input_cache_hit_peak_per_million" in rate else "input_cache_hit_per_million"
-            miss_key = "input_cache_miss_peak_per_million" if peak and "input_cache_miss_peak_per_million" in rate else "input_cache_miss_per_million"
-            output_key = "output_peak_per_million" if peak and "output_peak_per_million" in rate else "output_per_million"
-            input_rate = max(Decimal(str(rate[hit_key])), Decimal(str(rate[miss_key])))
-            amount = input_rate * input_tokens + Decimal(str(rate[output_key])) * output_tokens
+            return None
     elif input_tokens is not None and output_tokens is not None and all(k in rate for k in ("input_per_million", "output_per_million")):
         amount = Decimal(str(rate["input_per_million"])) * input_tokens + Decimal(str(rate["output_per_million"])) * output_tokens
     else:
@@ -309,6 +311,9 @@ def chat_call(client, provider, kwargs, fallback=False):
                 "input_cache_miss_tokens": getattr(usage, "prompt_cache_miss_tokens", None),
                 "peak": deepseek_peak(),
             })
+        elif provider == "openai":
+            details = getattr(usage, "prompt_tokens_details", None)
+            units["input_cache_hit_tokens"] = getattr(details, "cached_tokens", None) if details is not None else None
         return units
     return provider_call(provider, params["model"], lambda: client.with_options(max_retries=0).chat.completions.create(**params),
         fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound}, measured=measured)
