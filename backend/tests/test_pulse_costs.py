@@ -37,6 +37,16 @@ def policy(db, **changes):
 
 
 RATE = {"input_per_million": "1", "output_per_million": "2", "source": "synthetic-test-rate", "effective_date": "2026-09-13"}
+DEEPSEEK_RATE = {
+    "input_cache_hit_per_million": "0.003",
+    "input_cache_miss_per_million": "0.15",
+    "input_cache_hit_peak_per_million": "0.006",
+    "input_cache_miss_peak_per_million": "0.3",
+    "output_per_million": "0.6",
+    "output_peak_per_million": "1.2",
+    "source": "synthetic-deepseek-test-rate",
+    "effective_date": "2026-09-30",
+}
 
 
 def run_call(user=1, fail=False, provider="openai", fallback=False):
@@ -60,6 +70,62 @@ def test_price_precision_and_unknown():
     assert ledger.cost({}, input_tokens=10, output_tokens=20) is None
     assert ledger.cost({"per_character": "0.000001"}, characters=7) == 7
     assert ledger.cost({"per_image": "0.04"}, images=2) == 80000
+
+
+def test_deepseek_cache_pricing_and_peak_rates():
+    config = deepcopy(ledger.DEFAULT_CONFIG)
+    config["prices"] = {"deepseek/test": DEEPSEEK_RATE}
+    ledger.validate_config(config)
+    assert ledger.cost(
+        DEEPSEEK_RATE,
+        input_tokens=1000,
+        output_tokens=200,
+        input_cache_hit_tokens=700,
+        input_cache_miss_tokens=300,
+        peak=False,
+    ) == 168
+    assert ledger.cost(
+        DEEPSEEK_RATE,
+        input_tokens=1000,
+        output_tokens=200,
+        input_cache_hit_tokens=700,
+        input_cache_miss_tokens=300,
+        peak=True,
+    ) == 335
+    assert ledger.cost(
+        DEEPSEEK_RATE,
+        input_tokens=1000,
+        output_tokens=200,
+        peak=False,
+    ) == 270
+
+
+def test_deepseek_provider_settlement_uses_cache_usage(db):
+    policy(db, prices={"deepseek/test": DEEPSEEK_RATE})
+    token = ledger.context.set({"user_id": 1})
+    ident = ledger.start_request("compose")
+    ledger.context.set({"user_id": 1, "request_id": ident, "feature": "compose"})
+    try:
+        assert ledger.provider_call(
+            "deepseek",
+            "test",
+            lambda: "ok",
+            fallback=True,
+            reserve_units={"input_tokens": 1000, "output_tokens": 200},
+            measured=lambda result: {
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "input_cache_hit_tokens": 700,
+                "input_cache_miss_tokens": 300,
+                "peak": False,
+            },
+        ) == "ok"
+    finally:
+        ledger.context.reset(token)
+    with db.connect() as conn:
+        row = conn.execute(select(ledger.attempts)).mappings().one()
+        assert row["cost_micros"] == 168
+        assert row["cost_basis"] == "calculated"
 
 
 def test_migration_repeated_and_observe_unknown(db):
