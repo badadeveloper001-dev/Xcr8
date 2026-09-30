@@ -255,7 +255,7 @@ export default function PulseCostsPage() {
                         <tr key={row.provider + "/" + row.model} className="border-t border-white/5">
                           <td className={cell}>{row.provider}</td>
                           <td className={cell}>{row.model}</td>
-                          <td className={cell}>{money(row.cost_micros)}</td>
+                          <td className={cell}>{accountedMoney(row.cost_micros, row.unknown_attempts)}</td>
                           <td className={cell}>{row.requests}</td>
                           <td className={cell}>{row.attempts}</td>
                           <td className={cell}>{row.fallbacks ?? 0}</td>
@@ -339,7 +339,7 @@ export default function PulseCostsPage() {
                         <tr key={row.user_id + ":" + row.feature} className="border-t border-white/5">
                           <td className={cell}>{row.user_id}</td>
                           <td className={cell}>{row.feature}</td>
-                          <td className={cell}>{money(row.cost_micros)}</td>
+                          <td className={cell}>{accountedMoney(row.cost_micros, row.unknown_attempts)}</td>
                           <td className={cell}>{row.requests}</td>
                           <td className={cell}>{row.unknown_attempts}</td>
                         </tr>
