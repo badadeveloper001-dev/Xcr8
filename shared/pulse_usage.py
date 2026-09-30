@@ -160,7 +160,8 @@ def cost(rate, *, input_tokens=None, output_tokens=None, input_cache_hit_tokens=
         output_rate = Decimal(str(rate[output_key]))
         hit_rate = Decimal(str(rate["input_cache_hit_per_million"]))
         if "input_cache_miss_per_million" in rate:
-            miss_rate = Decimal(str(rate["input_cache_miss_peak_per_million"] if peak and "input_cache_miss_peak_per_million" in rate else "input_cache_miss_per_million"))
+            miss_key = "input_cache_miss_peak_per_million" if peak and "input_cache_miss_peak_per_million" in rate else "input_cache_miss_per_million"
+            miss_rate = Decimal(str(rate[miss_key]))
             if input_cache_hit_tokens is not None and input_cache_miss_tokens is not None:
                 amount = hit_rate * input_cache_hit_tokens + miss_rate * input_cache_miss_tokens + output_rate * output_tokens
             else:
