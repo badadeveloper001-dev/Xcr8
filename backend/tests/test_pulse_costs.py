@@ -190,3 +190,22 @@ def test_invalid_config():
     config["limits"] = {"day": -1}
     with pytest.raises(ValueError):
         ledger.validate_config(config)
+
+
+def test_cache_aware_peak_cost_and_request_aggregation(db):
+    deepseek_rate = {
+        "input_cache_hit_per_million": "0.003",
+        "input_cache_miss_per_million": "0.15",
+        "output_per_million": "0.6",
+        "input_cache_hit_peak_per_million": "0.006",
+        "input_cache_miss_peak_per_million": "0.30",
+        "output_peak_per_million": "1.2",
+        "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+        "effective_date": "2026-09-10",
+    }
+    assert ledger.cost(deepseek_rate, input_tokens=1000000, output_tokens=1000000,
+                       cache_hit_tokens=900000, cache_miss_tokens=100000,
+                       at=datetime(2026, 9, 30, 2, tzinfo=UTC)) == 1260000
+    assert ledger.cost(deepseek_rate, input_tokens=1000000, output_tokens=1000000,
+                       cache_hit_tokens=900000, cache_miss_tokens=100000,
+                       at=datetime(2026, 9, 30, 12, tzinfo=UTC)) == 663000
