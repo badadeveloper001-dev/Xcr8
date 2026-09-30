@@ -209,3 +209,14 @@ def test_cache_aware_peak_cost_and_request_aggregation(db):
     assert ledger.cost(deepseek_rate, input_tokens=1000000, output_tokens=1000000,
                        cache_hit_tokens=900000, cache_miss_tokens=100000,
                        at=datetime(2026, 9, 30, 12, tzinfo=UTC)) == 617700
+
+
+def test_openai_cached_input_rate():
+    rate = {
+        "input_per_million": "0.75",
+        "input_cache_hit_per_million": "0.075",
+        "output_per_million": "4.5",
+        "source": "synthetic-openai-rate",
+        "effective_date": "2026-09-30",
+    }
+    assert ledger.cost(rate, input_tokens=1000000, output_tokens=1000000, cache_hit_tokens=1000000) == 4575000
