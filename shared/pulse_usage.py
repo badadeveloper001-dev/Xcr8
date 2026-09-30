@@ -289,11 +289,19 @@ def chat_call(client, provider, kwargs, fallback=False):
     params["max_completion_tokens" if provider == "openai" else "max_tokens"] = output_bound
     def measured(response):
         usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", None)
+        output_tokens = getattr(usage, "completion_tokens", None)
+        details = getattr(usage, "prompt_tokens_details", None)
+        cached_tokens = getattr(details, "cached_tokens", None)
+        cache_hit = getattr(usage, "prompt_cache_hit_tokens", cached_tokens)
+        cache_miss = getattr(usage, "prompt_cache_miss_tokens", None)
+        if cache_miss is None and prompt_tokens is not None and cache_hit is not None:
+            cache_miss = max(0, prompt_tokens - cache_hit)
         return {
-            "input_tokens": getattr(usage, "prompt_tokens", None),
-            "output_tokens": getattr(usage, "completion_tokens", None),
-            "cache_hit_tokens": getattr(usage, "prompt_cache_hit_tokens", None),
-            "cache_miss_tokens": getattr(usage, "prompt_cache_miss_tokens", None),
+            "input_tokens": prompt_tokens,
+            "output_tokens": output_tokens,
+            "cache_hit_tokens": cache_hit,
+            "cache_miss_tokens": cache_miss,
         }
     return provider_call(provider, params["model"], lambda: client.with_options(max_retries=0).chat.completions.create(**params),
         fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound}, measured=measured)
