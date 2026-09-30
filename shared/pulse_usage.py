@@ -146,11 +146,11 @@ def cost(rate, *, input_tokens=None, output_tokens=None, cache_hit_tokens=None, 
     elif characters is not None and "per_character" in rate:
         amount = Decimal(str(rate["per_character"])) * characters * 1000000
     elif input_tokens is not None and output_tokens is not None:
-        if "input_cache_hit_per_million" in rate and "input_cache_miss_per_million" in rate:
+        if "input_cache_hit_per_million" in rate:
             hit = cache_hit_tokens if cache_hit_tokens is not None else 0
             miss = cache_miss_tokens if cache_miss_tokens is not None else input_tokens - hit
             hit_rate = Decimal(str(rate["input_cache_hit_per_million"]))
-            miss_rate = Decimal(str(rate["input_cache_miss_per_million"]))
+            miss_rate = Decimal(str(rate.get("input_cache_miss_per_million", rate.get("input_per_million", "0"))))
             output_rate = Decimal(str(rate.get("output_per_million", "0")))
             # DeepSeek peak rates are explicit in the catalog; callers pass the actual request timestamp.
             if at is not None and _is_deepseek_peak(at):
