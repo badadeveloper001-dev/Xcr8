@@ -128,6 +128,7 @@ def test_calendar_boundaries():
     w = ledger.windows(datetime(2026, 3, 1, 4, tzinfo=UTC))
     assert w["day"].day == 1 and w["month"].day == 1
     assert w["week"] == datetime(2026, 2, 23, tzinfo=UTC)
+    assert w["year"] == datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def test_events_idempotent_dashboard_active_denominator(db):
@@ -190,3 +191,33 @@ def test_invalid_config():
     config["limits"] = {"day": -1}
     with pytest.raises(ValueError):
         ledger.validate_config(config)
+
+def test_dashboard_accounting_breakdowns_and_fallback_request_cost(db):
+    policy(db, prices={"openai/test": RATE, "deepseek/test": RATE})
+    token = ledger.context.set({"user_id": 12})
+    ident = ledger.start_request("compose")
+    ledger.context.set({"user_id": 12, "request_id": ident, "feature": "compose"})
+    try:
+        assert ledger.provider_call(
+            "openai", "test", lambda: "first", reserve_units={"input_tokens": 100, "output_tokens": 100},
+            measured=lambda result: {"input_tokens": 10, "output_tokens": 20},
+        ) == "first"
+        assert ledger.provider_call(
+            "deepseek", "test", lambda: "fallback", fallback=True,
+            reserve_units={"input_tokens": 100, "output_tokens": 100},
+            measured=lambda result: {"input_tokens": 10, "output_tokens": 20},
+        ) == "fallback"
+        ledger.finish_request(ident, "success", 25)
+    finally:
+        ledger.context.reset(token)
+
+    snapshot = ledger.dashboard()
+    assert snapshot["periods"]["year"]["cost_micros"] == 100
+    assert snapshot["features"][0]["openai_cost_micros"] == 50
+    assert snapshot["features"][0]["deepseek_cost_micros"] == 50
+    assert snapshot["features"][0]["average_cost_per_request_micros"] == 100
+    assert snapshot["providers"][0]["cost_micros"] == 50
+    request = next(row for row in snapshot["recent"] if row["id"] == ident)
+    assert request["cost_micros"] == 100
+    assert request["fallback"] is True
+    assert len(request["providers"]) == 2
