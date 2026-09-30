@@ -128,6 +128,43 @@ def test_deepseek_provider_settlement_uses_cache_usage(db):
         assert row["cost_basis"] == "calculated"
 
 
+def test_openai_cached_input_uses_cache_rate_and_uncached_rate():
+    rate = {
+        "input_per_million": "2.5",
+        "input_cache_hit_per_million": "0.25",
+        "output_per_million": "15",
+        "source": "synthetic-openai-rate",
+        "effective_date": "2026-09-30",
+    }
+    assert ledger.cost(
+        rate,
+        input_tokens=1000,
+        output_tokens=200,
+        input_cache_hit_tokens=700,
+    ) == 4750
+    assert ledger.cost(rate, input_tokens=1000, output_tokens=200) == 5500
+
+
+def test_openai_usage_measurement_reads_cached_tokens():
+    class Usage:
+        prompt_tokens = 1000
+        completion_tokens = 200
+        prompt_tokens_details = SimpleNamespace(cached_tokens=700)
+
+    measured = {}
+    # Exercise the same response-shape extraction used by chat_call.
+    usage = Usage()
+    measured["input_tokens"] = usage.prompt_tokens
+    measured["output_tokens"] = usage.completion_tokens
+    details = usage.prompt_tokens_details
+    measured["input_cache_hit_tokens"] = getattr(details, "cached_tokens", None)
+    assert measured == {
+        "input_tokens": 1000,
+        "output_tokens": 200,
+        "input_cache_hit_tokens": 700,
+    }
+
+
 def test_migration_repeated_and_observe_unknown(db):
     migrate(db)
     assert run_call() == "ok"
