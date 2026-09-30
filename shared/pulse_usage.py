@@ -33,7 +33,9 @@ attempts = Table("pulse_ai_attempts", metadata,
     Column("provider", String(32), nullable=False), Column("model", String(120), nullable=False),
     Column("fallback", Integer, nullable=False), Column("status", String(20), nullable=False),
     Column("input_tokens", BigInteger), Column("output_tokens", BigInteger),
+    Column("cache_hit_tokens", BigInteger), Column("cache_miss_tokens", BigInteger),
     Column("characters", BigInteger), Column("images", Integer), Column("duration_ms", Integer),
+    Column("billing_period", String(16)),
     Column("cost_micros", BigInteger), Column("reserved_micros", BigInteger, nullable=False),
     Column("price_snapshot", JSON, nullable=False), Column("cost_basis", String(32)),
     Column("error_type", String(80)), Column("created_at", DateTime(timezone=True), nullable=False))
@@ -85,7 +87,7 @@ def now():
 def windows(at=None):
     at = at or now()
     day = at.replace(hour=0, minute=0, second=0, microsecond=0)
-    return {"day": day, "week": day - timedelta(days=day.weekday()), "month": day.replace(day=1)}
+    return {"day": day, "week": day - timedelta(days=day.weekday()), "month": day.replace(day=1), "year": day.replace(month=1, day=1)}
 
 
 def read_config(conn):
@@ -118,7 +120,7 @@ def validate_config(value):
             limit_set(limits)
     if not isinstance(value["prices"], dict) or len(value["prices"]) > 100:
         raise ValueError("Invalid price catalog.")
-    allowed = {"input_per_million", "output_per_million", "per_character", "per_image", "source", "effective_date"}
+    allowed = {"input_per_million", "output_per_million", "input_cache_hit_per_million", "input_cache_miss_per_million", "output_peak_per_million", "input_cache_hit_peak_per_million", "input_cache_miss_peak_per_million", "per_character", "per_image", "source", "effective_date", "peak_start_utc", "peak_end_utc"}
     for key, rate in value["prices"].items():
         if "/" not in key or not isinstance(rate, dict) or set(rate) - allowed:
             raise ValueError("Prices require provider/model keys and documented rate fields.")
@@ -131,19 +133,42 @@ def validate_config(value):
     return value
 
 
-def cost(rate, *, input_tokens=None, output_tokens=None, characters=None, images=None):
+def cost(rate, *, input_tokens=None, output_tokens=None, cache_hit_tokens=None, cache_miss_tokens=None,
+         characters=None, images=None, at=None):
     if not rate:
         return None
-    # Per-image prices are explicitly estimates for a configured size/quality.
+    # Per-image and per-character prices remain estimates for configured units.
     if images is not None and "per_image" in rate:
         amount = Decimal(str(rate["per_image"])) * images * 1000000
     elif characters is not None and "per_character" in rate:
         amount = Decimal(str(rate["per_character"])) * characters * 1000000
-    elif input_tokens is not None and output_tokens is not None and all(k in rate for k in ("input_per_million", "output_per_million")):
-        amount = Decimal(str(rate["input_per_million"])) * input_tokens + Decimal(str(rate["output_per_million"])) * output_tokens
+    elif input_tokens is not None and output_tokens is not None:
+        if "input_cache_hit_per_million" in rate and "input_cache_miss_per_million" in rate:
+            hit = cache_hit_tokens if cache_hit_tokens is not None else 0
+            miss = cache_miss_tokens if cache_miss_tokens is not None else input_tokens - hit
+            hit_rate = Decimal(str(rate["input_cache_hit_per_million"]))
+            miss_rate = Decimal(str(rate["input_cache_miss_per_million"]))
+            output_rate = Decimal(str(rate.get("output_per_million", "0")))
+            # DeepSeek peak rates are explicit in the catalog; callers pass the actual request timestamp.
+            if at is not None and _is_deepseek_peak(at):
+                hit_rate = Decimal(str(rate.get("input_cache_hit_peak_per_million", hit_rate)))
+                miss_rate = Decimal(str(rate.get("input_cache_miss_peak_per_million", miss_rate)))
+                output_rate = Decimal(str(rate.get("output_peak_per_million", output_rate)))
+            amount = hit_rate * hit + miss_rate * miss + output_rate * output_tokens
+        elif all(k in rate for k in ("input_per_million", "output_per_million")):
+            amount = Decimal(str(rate["input_per_million"])) * input_tokens + Decimal(str(rate["output_per_million"])) * output_tokens
+        else:
+            return None
     else:
         return None
     return int(amount.to_integral_value(rounding=ROUND_CEILING))
+
+def _is_deepseek_peak(at):
+    value = at if isinstance(at, datetime) else datetime.now(UTC)
+    value = value.astimezone(UTC)
+    if value.weekday() >= 5:
+        return False
+    return (1 <= value.hour < 4) or (6 <= value.hour < 10)
 
 
 def start_request(feature):
@@ -194,7 +219,7 @@ def begin_attempt(provider, model, fallback, units):
             raise UsageBlocked("AI usage tracking needs its migration.", 503)
         cfg = read_config(conn)
         rate = cfg["prices"].get(f"{provider}/{model}", {})
-        reserve = cost(rate, **units)
+        reserve = cost(rate, **units, at=now())
         if cfg["mode"] == "enforce" and reserve is None:
             raise UsageBlocked("This AI tool is temporarily unavailable while its usage rate is configured.", 503)
         scopes = [(cfg["limits"], None),
@@ -234,9 +259,8 @@ def provider_call(provider, model, call, *, fallback=False, reserve_units=None, 
                 units = measured(result) if result is not None and measured else {}
             except Exception:
                 units = {}
-            amount = cost(rate, **units) if result is not None else None
-            values = dict(status="failure" if failure else "success", duration_ms=int((perf_counter()-started)*1000),
-                          error_type=failure, cost_micros=amount, cost_basis=("estimated" if "images" in units or "characters" in units else "calculated") if amount is not None else "unknown", **units)
+            settled_at = now()\n            amount = cost(rate, **units, at=settled_at) if result is not None else None\n            values = dict(status="failure" if failure else "success", duration_ms=int((perf_counter()-started)*1000),
+                          error_type=failure, cost_micros=amount, billing_period=("peak" if _is_deepseek_peak(settled_at) else "off_peak") if provider == "deepseek" else None, cost_basis=("estimated" if "images" in units or "characters" in units else "calculated") if amount is not None else "unknown", **units)
             try:
                 with engine().begin() as conn:
                     conn.execute(update(attempts).where(attempts.c.id == ident).values(**values))
@@ -262,7 +286,12 @@ def chat_call(client, provider, kwargs, fallback=False):
     params["max_completion_tokens" if provider == "openai" else "max_tokens"] = output_bound
     def measured(response):
         usage = getattr(response, "usage", None)
-        return {"input_tokens": getattr(usage, "prompt_tokens", None), "output_tokens": getattr(usage, "completion_tokens", None)}
+        return {
+            "input_tokens": getattr(usage, "prompt_tokens", None),
+            "output_tokens": getattr(usage, "completion_tokens", None),
+            "cache_hit_tokens": getattr(usage, "prompt_cache_hit_tokens", None),
+            "cache_miss_tokens": getattr(usage, "prompt_cache_miss_tokens", None),
+        }
     return provider_call(provider, params["model"], lambda: client.with_options(max_retries=0).chat.completions.create(**params),
         fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound}, measured=measured)
 
@@ -282,6 +311,7 @@ def dashboard():
                              "active_users": active, "cost_per_active_user_micros": round(spend[0]/active) if active else None}
         start = windows()["month"]
         def grouped(column):
+
             return [dict(r) for r in conn.execute(select(column.label("name"),
                 func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
                 func.count().label("attempts"), func.sum(attempts.c.fallback).label("fallbacks"),
