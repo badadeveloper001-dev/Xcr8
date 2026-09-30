@@ -44,16 +44,17 @@ def migration_files() -> list[tuple[str, Path]]:
     return files
 
 
-def ensure_ledger(cur) -> None:
+def require_ledger(cur) -> None:
     cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS public.schema_migrations (
-            version varchar(32) PRIMARY KEY,
-            name varchar(180) NOT NULL,
-            applied_at timestamptz NOT NULL DEFAULT now()
-        )
+        SELECT to_regclass('public.schema_migrations')
         """
     )
+    if cur.fetchone()[0] is None:
+        raise RuntimeError(
+            "public.schema_migrations is missing. Apply the one-time migration "
+            "ledger baseline before running application migrations."
+        )
 
 
 def applied_versions(cur) -> set[str]:
@@ -79,7 +80,7 @@ def main() -> None:
         conn.autocommit = True
 
         with conn.cursor() as cur:
-            ensure_ledger(cur)
+            require_ledger(cur)
             applied = applied_versions(cur)
 
             for version, path in migrations:
