@@ -1,0 +1,25 @@
+name: Pulse Accounting Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pulse:
+    name: Pulse — focused pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r backend/requirements.txt -r ai-services/requirements.txt pytest
+
+      - name: Run focused Pulse tests
+        run: PYTHONPATH=backend pytest -q backend/tests/test_pulse_costs.py
