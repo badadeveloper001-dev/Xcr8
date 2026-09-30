@@ -3,136 +3,473 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Period = { cost_micros: number; active_users: number; cost_per_active_user_micros: number | null; unknown_attempts: number; unsettled_micros: number };
-type Group = { name: string | number; cost_micros: number; attempts: number; fallbacks: number; unknown_attempts: number };
+type Period = {
+  cost_micros: number;
+  active_users: number;
+  cost_per_active_user_micros: number | null;
+  unknown_attempts: number;
+  unsettled_micros: number;
+};
+type Feature = {
+  name: string;
+  cost_micros: number;
+  attempts: number;
+  requests: number;
+  known_requests: number;
+  fallbacks: number;
+  unknown_attempts: number;
+  average_cost_per_request_micros: number | null;
+  openai_cost_micros: number;
+  deepseek_cost_micros: number;
+};
+type Provider = {
+  provider: string;
+  model: string;
+  cost_micros: number;
+  attempts: number;
+  requests: number;
+  unknown_attempts: number;
+  fallbacks: number;
+};
+type User = {
+  user_id: number;
+  cost_micros: number;
+  requests: number;
+  attempts: number;
+  known_requests: number;
+  unknown_attempts: number;
+  average_cost_per_request_micros: number | null;
+};
+type UserFeature = {
+  user_id: number;
+  feature: string;
+  cost_micros: number;
+  requests: number;
+  unknown_attempts: number;
+};
+type RequestRow = {
+  id: string;
+  user_id: number;
+  feature: string;
+  status: string;
+  duration_ms: number | null;
+  attempts: number;
+  unknown_attempts: number;
+  fallback: boolean;
+  cost_micros: number | null;
+  providers: {
+    provider: string;
+    model: string;
+    cost_micros: number | null;
+    fallback: boolean;
+    status: string;
+  }[];
+};
 type Snapshot = {
-  periods: Record<"day" | "week" | "month", Period>; features: Group[]; users: Group[]; revision: number;
-  config: Record<string, unknown>;
+  config: unknown;
+  periods: Record<"day" | "week" | "month" | "year", Period>;
+  features: Feature[];
+  providers: Provider[];
+  users: User[];
+  user_features: UserFeature[];
   value_events: { feature: string; event: string; source: string; count: number }[];
-  recent: { id: string; user_id: number; feature: string; provider: string; model: string; status: string; fallback: number; cost_micros: number | null; duration_ms: number | null; input_tokens: number | null; output_tokens: number | null; characters: number | null; images: number | null }[];
+  recent: RequestRow[];
 };
-const numberOr = (value: unknown, fallback = 0) => {
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) ? number : fallback;
-};
-const nullableNumber = (value: unknown) => value === null || value === undefined ? null : numberOr(value, 0);
-const normalizeSnapshot = (body: unknown): Snapshot => {
-  if (!body || typeof body !== "object") throw new Error("Pulse returned an invalid response.");
-  const value = body as Record<string, unknown>;
-  const periods = value.periods;
-  if (!periods || typeof periods !== "object") throw new Error("Pulse response is missing period data.");
-  const periodObject = periods as Record<string, unknown>;
-  for (const key of ["day", "week", "month"]) {
-    if (!periodObject[key] || typeof periodObject[key] !== "object") throw new Error(`Pulse response is missing ${key} period data.`);
-  }
-  const normalizePeriod = (input: unknown): Period => {
-    const p = input as Record<string, unknown>;
-    return {
-      cost_micros: numberOr(p.cost_micros),
-      active_users: numberOr(p.active_users),
-      cost_per_active_user_micros: nullableNumber(p.cost_per_active_user_micros),
-      unknown_attempts: numberOr(p.unknown_attempts),
-      unsettled_micros: numberOr(p.unsettled_micros),
-    };
-  };
-  const normalizeGroups = (input: unknown): Group[] => {
-    if (!Array.isArray(input)) throw new Error("Pulse response contains invalid grouped usage data.");
-    return input.map((row) => {
-      const item = row as Record<string, unknown>;
-      return {
-        name: typeof item.name === "string" || typeof item.name === "number" ? item.name : "Unknown",
-        cost_micros: numberOr(item.cost_micros),
-        attempts: numberOr(item.attempts),
-        fallbacks: numberOr(item.fallbacks),
-        unknown_attempts: numberOr(item.unknown_attempts),
-      };
-    });
-  };
-  const valueEvents = Array.isArray(value.value_events) ? value.value_events.map((event) => {
-    const item = event as Record<string, unknown>;
-    return {
-      feature: String(item.feature ?? "unknown"),
-      event: String(item.event ?? "unknown"),
-      source: String(item.source ?? "unknown"),
-      count: numberOr(item.count),
-    };
-  }) : [];
-  const recent = Array.isArray(value.recent) ? value.recent.map((attempt) => {
-    const item = attempt as Record<string, unknown>;
-    return {
-      id: String(item.id ?? crypto.randomUUID()),
-      user_id: numberOr(item.user_id),
-      feature: String(item.feature ?? "unknown"),
-      provider: String(item.provider ?? "unknown"),
-      model: String(item.model ?? "unknown"),
-      status: String(item.status ?? "unknown"),
-      fallback: numberOr(item.fallback),
-      cost_micros: nullableNumber(item.cost_micros),
-      duration_ms: nullableNumber(item.duration_ms),
-      input_tokens: nullableNumber(item.input_tokens),
-      output_tokens: nullableNumber(item.output_tokens),
-      characters: nullableNumber(item.characters),
-      images: nullableNumber(item.images),
-    };
-  }) : [];
-  if (!value.config || typeof value.config !== "object") throw new Error("Pulse response is missing policy configuration.");
-  return {
-    periods: {
-      day: normalizePeriod(periodObject.day),
-      week: normalizePeriod(periodObject.week),
-      month: normalizePeriod(periodObject.month),
-    },
-    features: normalizeGroups(value.features),
-    users: normalizeGroups(value.users),
-    revision: numberOr(value.revision),
-    config: value.config as Record<string, unknown>,
-    value_events: valueEvents,
-    recent,
-  };
-};
-const money = (value: number | null) => value === null ? "Unknown" : `$${(value / 1000000).toFixed(4)}`;
+
+const money = (value: number | null) =>
+  value === null ? "Unknown" : "$" + (value / 1_000_000).toFixed(4);
+const accountedMoney = (value: number | null, unknown: number) =>
+  unknown > 0 ? "Unknown" : money(value);
 const panel = "rounded-2xl border border-white/10 bg-white/5 p-5";
+const cell = "px-3 py-3";
+const tabs = ["overview", "users", "requests"] as const;
+
+const redactConfig = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(redactConfig);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => {
+        const sensitive = /api[_-]?key|secret|token|password|credential|authorization/i.test(key);
+        return [key, sensitive ? "[REDACTED]" : redactConfig(entry)];
+      }),
+    );
+  }
+  return value;
+};
+
+const configJson = (value: unknown) => JSON.stringify(redactConfig(value), null, 2);
 
 export default function PulseCostsPage() {
   const [data, setData] = useState<Snapshot | null>(null);
-  const [policy, setPolicy] = useState("");
+  const [tab, setTab] = useState<(typeof tabs)[number]>("overview");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const headers = () => ({ "Content-Type": "application/json" });
+  const [showConfig, setShowConfig] = useState(false);
+  const [copiedConfig, setCopiedConfig] = useState(false);
+
   const refresh = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
-      const response = await fetch("/admin/data/pulse-costs", { headers: headers(), cache: "no-store" });
+      const response = await fetch("/admin/data/pulse-costs", {
+        cache: "no-store",
+      });
       const body = await response.json();
-      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Unable to load cockpit.");
-      const snapshot = normalizeSnapshot(body);
-      setData(snapshot); setPolicy(JSON.stringify(snapshot.config, null, 2));
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load cockpit."); }
-    finally { setBusy(false); }
+      if (!response.ok) {
+        throw new Error(
+          typeof body.detail === "string"
+            ? body.detail
+            : "Unable to load AI cost accounting.",
+        );
+      }
+      setData(body);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to load AI cost accounting.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
-  useEffect(() => { void refresh(); }, []);
-  const save = async () => {
-    if (!data) return;
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const response = await fetch("/admin/data/pulse-costs", { method: "PATCH", headers: headers(), body: JSON.stringify({ revision: data.revision, config: JSON.parse(policy) }) });
-      const body = await response.json();
-      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Check the policy fields.");
-      setNotice("Policy saved. New requests use these rates and limits."); await refresh();
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to save policy."); }
-    finally { setBusy(false); }
-  };
-  const groups = (title: string, rows: Group[]) => <section className={panel}><h2 className="mb-3 font-semibold">{title} · this month</h2><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Name", "Cost", "Attempts", "Fallbacks", "Unknown"].map(x => <th key={x} className="p-2">{x}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={row.name}>{[row.name, money(row.cost_micros), row.attempts, row.fallbacks, row.unknown_attempts].map((x,i) => <td key={i} className="p-2">{x}</td>)}</tr>)}</tbody></table>{!rows.length && <p className="p-2 text-slate-400">No usage recorded yet.</p>}</div></section>;
-  return <div className="space-y-5 text-slate-100 light:text-slate-900">
-    <header className="flex flex-wrap items-center justify-between gap-3"><div><Link href="/admin/dashboard/pulse" className="text-cyan-400">← Pulse</Link><h1 className="text-2xl font-semibold">Usage & cost cockpit</h1><p className="text-sm text-slate-400">Pilot · USD estimates · UTC calendar periods · week starts Monday</p></div><button disabled={busy} onClick={() => void refresh()} className="rounded-lg bg-cyan-600 px-4 py-2 disabled:opacity-50">{busy ? "Working…" : "Refresh"}</button></header>
-    {error && <p role="alert" className="rounded-xl bg-red-900/30 p-4">{error}</p>}{notice && <p role="status">{notice}</p>}
-    {data && <><div className="grid gap-4 md:grid-cols-3">{([["day", "Today"], ["week", "This week"], ["month", "This month"]] as const).map(([key, label]) => { const p = data.periods[key]; return <section key={key} className={panel}><h2>{label}</h2><p className="my-2 text-3xl font-semibold">{money(p.cost_micros)}</p><p>{p.active_users} active AI users · {p.active_users ? money(p.cost_per_active_user_micros) : "—"} / user</p><p className="mt-2 text-sm text-amber-400">{p.unknown_attempts} unknown attempts · {money(p.unsettled_micros)} reserved / unresolved</p></section>; })}</div>
-    <p className="text-sm text-slate-400">Active user = a user with a successful AI request in that period. Unknown amounts are excluded from calculated spend. Failed or interrupted calls may still be billed by the provider.</p>
-    {groups("Per-feature costs", data.features)}{groups("Top users by cost (user ID)", data.users)}
-    <section className={panel}><h2 className="mb-3 font-semibold">Product value · this month</h2><p className="mb-3 text-sm text-slate-400">Generated outputs and unique download reports by feature. Published counts are server-confirmed post/platform events; they are not attributed to AI unless a generation link is available.</p><div className="grid gap-2 md:grid-cols-3">{data.value_events.map(v => <div key={`${v.feature}:${v.event}:${v.source}`} className="rounded-lg border border-white/10 p-3"><strong>{v.count} {v.event}</strong><p>{v.feature}</p><small>{v.source}</small></div>)}</div>{!data.value_events.length && <p>No value events recorded yet.</p>}</section>
-    <section className={panel}><h2 className="mb-3 font-semibold">Recent provider attempts</h2><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr>{["User / feature", "Provider / model", "Result", "Units", "Duration", "Cost"].map(x => <th key={x} className="p-2">{x}</th>)}</tr></thead><tbody>{data.recent.map(r => <tr key={r.id}><td className="p-2">{r.user_id} / {r.feature}</td><td className="p-2">{r.provider} / {r.model}{r.fallback ? " (fallback)" : ""}</td><td className="p-2">{r.status}</td><td className="p-2">{r.input_tokens ?? "?"} in / {r.output_tokens ?? "?"} out; {r.characters ?? "—"} chars; {r.images ?? "—"} images</td><td className="p-2">{r.duration_ms ?? "—"} ms</td><td className="p-2">{money(r.cost_micros)}</td></tr>)}</tbody></table></div></section>
-    <section className={panel}><h2 className="font-semibold">Budget policy & price catalog</h2><p className="my-3 text-sm text-slate-400">Observe records usage; enforce checks global, feature and user caps before each provider attempt. Limits are integer USD microdollars (1 USD = 1,000,000). Use user_limits.default for the default user cap. Unknown rates block paid calls in enforce mode. Image/character rates are estimates; verify current provider pricing before enforcing.</p><label htmlFor="policy" className="sr-only">Budget policy JSON</label><textarea id="policy" value={policy} onChange={e => setPolicy(e.target.value)} rows={18} spellCheck={false} className="w-full rounded-lg border border-slate-600 bg-slate-950 p-3 font-mono text-sm text-slate-100"/><button disabled={busy} onClick={() => void save()} className="mt-3 rounded-lg bg-cyan-600 px-4 py-2 disabled:opacity-50">Save policy</button></section>
-    </> }
-  </div>;
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  return (
+    <div className="space-y-5 text-slate-100 light:text-slate-900">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Link href="/admin/dashboard/pulse" className="text-sm text-cyan-400">
+            ← Pulse
+          </Link>
+          <h1 className="mt-1 text-2xl font-semibold">AI Cost Accounting</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            What Xcr8 spends on AI, by period, feature, provider, user and request.
+          </p>
+        </div>
+        <button
+          disabled={busy}
+          onClick={() => void refresh()}
+          className="rounded-lg bg-cyan-600 px-4 py-2 disabled:opacity-50"
+        >
+          {busy ? "Refreshing…" : "Refresh"}
+        </button>
+      </header>
+
+      {error && (
+        <p role="alert" className="rounded-xl bg-red-900/30 p-4">
+          {error}
+        </p>
+      )}
+
+      {data && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {(
+              [
+                ["day", "Today"],
+                ["week", "This week"],
+                ["month", "This month"],
+                ["year", "This year"],
+              ] as const
+            ).map(([key, label]) => {
+              const period = data.periods[key];
+              return (
+                <section key={key} className={panel}>
+                  <p className="text-sm text-slate-400">{label}</p>
+                  <p className="mt-2 text-3xl font-semibold">
+                    {accountedMoney(period.cost_micros, period.unknown_attempts)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {period.active_users} active users
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {period.unknown_attempts > 0
+                      ? "Known spend: " + money(period.cost_micros) + " · "
+                      : ""}
+                    {period.unknown_attempts} unknown ·{" "}
+                    {money(period.unsettled_micros)} unresolved
+                  </p>
+                </section>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+            {tabs.map((item) => (
+              <button
+                key={item}
+                onClick={() => setTab(item)}
+                className={
+                  "rounded-lg px-4 py-2 text-sm capitalize " +
+                  (tab === item ? "bg-cyan-600 text-white" : "text-slate-400")
+                }
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+
+          {tab === "overview" && (
+            <div className="space-y-5">
+              <section className={panel}>
+                <div className="mb-4">
+                  <h2 className="font-semibold">Cost by feature · this month</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Request averages use only requests whose provider costs are fully known.
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[850px] text-left text-sm">
+                    <thead className="text-slate-400">
+                      <tr>
+                        {["Feature", "Total", "Requests", "Avg / request", "OpenAI", "DeepSeek", "Fallbacks"].map((x) => (
+                          <th key={x} className={cell}>{x}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.features.map((row) => (
+                        <tr key={row.name} className="border-t border-white/5">
+                          <td className={cell + " font-medium"}>{row.name}</td>
+                          <td className={cell}>
+                            <span>{accountedMoney(row.cost_micros, row.unknown_attempts)}</span>
+                            {row.unknown_attempts > 0 && (
+                              <span className="ml-2 text-xs text-slate-500">known {money(row.cost_micros)}</span>
+                            )}
+                          </td>
+                          <td className={cell}>{row.requests}</td>
+                          <td className={cell}>{money(row.average_cost_per_request_micros)}</td>
+                          <td className={cell}>{money(row.openai_cost_micros)}</td>
+                          <td className={cell}>{money(row.deepseek_cost_micros)}</td>
+                          <td className={cell}>{row.fallbacks ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!data.features.length && <p className="text-sm text-slate-400">No AI usage recorded yet.</p>}
+                </div>
+              </section>
+
+              <section className={panel}>
+                <div className="mb-4">
+                  <h2 className="font-semibold">Provider & model spend · this month</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Shows exactly where the recorded AI spend went.
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[650px] text-left text-sm">
+                    <thead className="text-slate-400">
+                      <tr>
+                        {["Provider", "Model", "Cost", "Requests", "Attempts", "Fallbacks"].map((x) => (
+                          <th key={x} className={cell}>{x}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.providers.map((row) => (
+                        <tr key={row.provider + "/" + row.model} className="border-t border-white/5">
+                          <td className={cell}>{row.provider}</td>
+                          <td className={cell}>{row.model}</td>
+                          <td className={cell}>{accountedMoney(row.cost_micros, row.unknown_attempts)}</td>
+                          <td className={cell}>{row.requests}</td>
+                          <td className={cell}>{row.attempts}</td>
+                          <td className={cell}>{row.fallbacks ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className={panel}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold">Pricing configuration</h2>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Read-only diagnostic view of the pricing policy returned by the accounting API.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowConfig((visible) => !visible);
+                      setCopiedConfig(false);
+                    }}
+                    className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
+                  >
+                    {showConfig ? "Hide configuration" : "View configuration"}
+                  </button>
+                </div>
+                {showConfig && (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs text-amber-400">
+                        Diagnostic only · read-only · sensitive keys are redacted
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(configJson(data.config));
+                          setCopiedConfig(true);
+                        }}
+                        className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5"
+                      >
+                        {copiedConfig ? "Copied" : "Copy JSON"}
+                      </button>
+                    </div>
+                    <pre className="max-h-[480px] overflow-auto rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-5 text-slate-300">
+                      {configJson(data.config)}
+                    </pre>
+                  </div>
+                )}
+              </section>
+
+              <section className={panel}>
+                <h2 className="font-semibold">Product value · this month</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Value events stay secondary to financial accounting.
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.value_events.map((value) => (
+                    <div
+                      key={value.feature + ":" + value.event + ":" + value.source}
+                      className="rounded-lg border border-white/10 p-3"
+                    >
+                      <strong>{value.count} {value.event}</strong>
+                      <p className="text-sm">{value.feature}</p>
+                      <small className="text-slate-500">{value.source}</small>
+                    </div>
+                  ))}
+                </div>
+                {!data.value_events.length && (
+                  <p className="mt-3 text-sm text-slate-400">No value events recorded yet.</p>
+                )}
+              </section>
+            </div>
+          )}
+
+          {tab === "users" && (
+            <div className="space-y-5">
+              <section className={panel}>
+                <div className="mb-4">
+                  <h2 className="font-semibold">Cost by user · this month</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    User IDs are shown because the accounting ledger stores the internal user ID.
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-left text-sm">
+                    <thead className="text-slate-400">
+                      <tr>
+                        {["User ID", "Total cost", "Requests", "Avg / request", "Unknown"].map((x) => (
+                          <th key={x} className={cell}>{x}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.users.map((row) => (
+                        <tr key={row.user_id} className="border-t border-white/5">
+                          <td className={cell}>{row.user_id}</td>
+                          <td className={cell}>{money(row.cost_micros)}</td>
+                          <td className={cell}>{row.requests}</td>
+                          <td className={cell}>{money(row.average_cost_per_request_micros)}</td>
+                          <td className={cell}>{row.unknown_attempts}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className={panel}>
+                <h2 className="mb-4 font-semibold">User cost by feature · this month</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[650px] text-left text-sm">
+                    <thead className="text-slate-400">
+                      <tr>
+                        {["User ID", "Feature", "Cost", "Requests", "Unknown"].map((x) => (
+                          <th key={x} className={cell}>{x}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.user_features.map((row) => (
+                        <tr key={row.user_id + ":" + row.feature} className="border-t border-white/5">
+                          <td className={cell}>{row.user_id}</td>
+                          <td className={cell}>{row.feature}</td>
+                          <td className={cell}>{accountedMoney(row.cost_micros, row.unknown_attempts)}</td>
+                          <td className={cell}>{row.requests}</td>
+                          <td className={cell}>{row.unknown_attempts}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {tab === "requests" && (
+            <section className={panel}>
+              <div className="mb-4">
+                <h2 className="font-semibold">Recent AI requests</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  A request with fallback includes every provider attempt. Its total is the sum of all known attempt costs.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {data.recent.map((row) => (
+                  <details key={row.id} className="rounded-xl border border-white/10 bg-black/10">
+                    <summary className="cursor-pointer list-none p-4">
+                      <div className="grid gap-2 md:grid-cols-[1fr_auto_auto_auto] md:items-center">
+                        <div>
+                          <p className="font-medium">{row.feature} · user {row.user_id}</p>
+                          <p className="text-xs text-slate-500">{row.id}</p>
+                        </div>
+                        <span className="text-sm">{row.status}</span>
+                        <span className="text-sm">{row.fallback ? "Fallback used" : row.attempts + " attempt" + (row.attempts === 1 ? "" : "s")}</span>
+                        <span className="font-semibold">{money(row.cost_micros)}</span>
+                      </div>
+                    </summary>
+                    <div className="border-t border-white/10 p-4">
+                      {row.unknown_attempts > 0 && (
+                        <p className="mb-3 text-sm text-amber-400">
+                          {row.unknown_attempts} attempt cost is unknown, so the request total is not presented as a complete dollar amount.
+                        </p>
+                      )}
+                      <div className="space-y-2">
+                        {row.providers.map((attempt, index) => (
+                          <div key={attempt.provider + "/" + attempt.model + "/" + index} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/5 p-3 text-sm">
+                            <span>
+                              {attempt.provider} / {attempt.model}
+                              {attempt.fallback ? " · fallback" : ""}
+                            </span>
+                            <span>{attempt.status}</span>
+                            <span>{money(attempt.cost_micros)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-3 text-xs text-slate-500">
+                        Duration: {row.duration_ms ?? "—"} ms
+                      </p>
+                    </div>
+                  </details>
+                ))}
+                {!data.recent.length && (
+                  <p className="text-sm text-slate-400">No AI requests recorded yet.</p>
+                )}
+              </div>
+            </section>
+          )}
+
+          <p className="text-xs text-slate-500">
+            Amounts are USD microdollar calculations from the stored provider price snapshot. Unknown provider usage is never silently counted as $0.
+          </p>
+        </>
+      )}
+    </div>
+  );
 }
