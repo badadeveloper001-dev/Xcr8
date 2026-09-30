@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 
 CREATE INDEX IF NOT EXISTS ix_workspaces_name ON workspaces (name);
-CREATE INDEX IF NOT EXISTS ix_workspaces_slug ON workspaces (slug);
 
 CREATE TABLE IF NOT EXISTS workspace_memberships (
   id integer PRIMARY KEY,
@@ -31,7 +30,7 @@ CREATE TABLE IF NOT EXISTS workspace_memberships (
   user_id integer NOT NULL REFERENCES users(id),
   role varchar(32) NOT NULL,
   is_owner boolean NOT NULL,
-  created_at timestamptz DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS ix_workspace_memberships_workspace_id
