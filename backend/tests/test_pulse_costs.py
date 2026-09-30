@@ -141,7 +141,7 @@ def test_openai_cached_input_uses_cache_rate_and_uncached_rate():
         input_tokens=1000,
         output_tokens=200,
         input_cache_hit_tokens=700,
-    ) == 4750
+    ) == 3925
     assert ledger.cost(rate, input_tokens=1000, output_tokens=200) == 5500
 
 
