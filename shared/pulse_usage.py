@@ -277,25 +277,177 @@ def dashboard():
         cfg = read_config(conn)
         periods = {}
         for name, start in windows().items():
-            spend = conn.execute(select(func.coalesce(func.sum(attempts.c.cost_micros), 0),
+            spend = conn.execute(select(
+                func.coalesce(func.sum(attempts.c.cost_micros), 0),
                 func.count().filter(attempts.c.cost_micros.is_(None)),
-                func.coalesce(func.sum(case((attempts.c.cost_micros.is_(None), attempts.c.reserved_micros), else_=0)), 0)
-                ).where(attempts.c.created_at >= start)).one()
+                func.coalesce(func.sum(case(
+                    (attempts.c.cost_micros.is_(None), attempts.c.reserved_micros),
+                    else_=0,
+                )), 0),
+            ).where(attempts.c.created_at >= start)).one()
             active = conn.execute(select(func.count(func.distinct(requests.c.user_id))).where(
-                requests.c.created_at >= start, requests.c.status == "success")).scalar_one()
-            periods[name] = {"cost_micros": spend[0], "unknown_attempts": spend[1], "unsettled_micros": spend[2],
-                             "active_users": active, "cost_per_active_user_micros": round(spend[0]/active) if active else None}
+                requests.c.created_at >= start, requests.c.status == "success"
+            )).scalar_one()
+            periods[name] = {
+                "cost_micros": spend[0],
+                "unknown_attempts": spend[1],
+                "unsettled_micros": spend[2],
+                "active_users": active,
+                "cost_per_active_user_micros": round(spend[0] / active) if active else None,
+            }
+
         start = windows()["month"]
-        def grouped(column):
-            return [dict(r) for r in conn.execute(select(column.label("name"),
+        request_costs = (
+            select(
+                attempts.c.request_id.label("request_id"),
+                attempts.c.user_id.label("user_id"),
+                attempts.c.feature.label("feature"),
+                func.coalesce(func.sum(attempts.c.cost_micros), 0).label("known_cost_micros"),
+                func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts"),
+            )
+            .where(attempts.c.created_at >= start)
+            .group_by(attempts.c.request_id, attempts.c.user_id, attempts.c.feature)
+            .subquery()
+        )
+
+        feature_rows = [
+            dict(r) for r in conn.execute(select(
+                attempts.c.feature.label("name"),
                 func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
-                func.count().label("attempts"), func.sum(attempts.c.fallback).label("fallbacks"),
-                func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
-                ).where(attempts.c.created_at >= start).group_by(column).order_by(func.sum(attempts.c.cost_micros).desc()).limit(50)).mappings()]
-        values = [dict(r) for r in conn.execute(select(events.c.feature, events.c.event, events.c.source,
-            func.count().label("count")).where(events.c.created_at >= start).group_by(events.c.feature, events.c.event, events.c.source)).mappings()]
-        recent = [dict(r) for r in conn.execute(select(attempts).order_by(attempts.c.created_at.desc()).limit(50)).mappings()]
-        features, users = grouped(attempts.c.feature), grouped(attempts.c.user_id)
+                func.count().label("attempts"),
+                func.count(func.distinct(attempts.c.request_id)).label("requests"),
+                func.sum(attempts.c.fallback).label("fallbacks"),
+                func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts"),
+                func.coalesce(func.sum(case((attempts.c.provider == "openai", attempts.c.cost_micros), else_=0)), 0).label("openai_cost_micros"),
+                func.coalesce(func.sum(case((attempts.c.provider == "deepseek", attempts.c.cost_micros), else_=0)), 0).label("deepseek_cost_micros"),
+            ).where(attempts.c.created_at >= start)
+             .group_by(attempts.c.feature)
+             .order_by(func.sum(attempts.c.cost_micros).desc()).limit(50)).mappings()
+        ]
+        feature_avg = {
+            r["feature"]: r for r in conn.execute(select(
+                request_costs.c.feature.label("feature"),
+                func.count().filter(request_costs.c.unknown_attempts == 0).label("known_requests"),
+                func.avg(case((request_costs.c.unknown_attempts == 0, request_costs.c.known_cost_micros), else_=None)).label("average_cost_per_request_micros"),
+            ).group_by(request_costs.c.feature)).mappings()
+        }
+        for row in feature_rows:
+            avg = feature_avg.get(row["name"], {})
+            row["known_requests"] = avg.get("known_requests", 0)
+            row["average_cost_per_request_micros"] = avg.get("average_cost_per_request_micros")
+
+        user_rows = [
+            dict(r) for r in conn.execute(select(
+                attempts.c.user_id.label("user_id"),
+                func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+                func.count(func.distinct(attempts.c.request_id)).label("requests"),
+                func.count().label("attempts"),
+                func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts"),
+            ).where(attempts.c.created_at >= start)
+             .group_by(attempts.c.user_id)
+             .order_by(func.sum(attempts.c.cost_micros).desc()).limit(50)).mappings()
+        ]
+        user_avg = {
+            r["user_id"]: r for r in conn.execute(select(
+                request_costs.c.user_id.label("user_id"),
+                func.count().filter(request_costs.c.unknown_attempts == 0).label("known_requests"),
+                func.avg(case((request_costs.c.unknown_attempts == 0, request_costs.c.known_cost_micros), else_=None)).label("average_cost_per_request_micros"),
+            ).group_by(request_costs.c.user_id)).mappings()
+        }
+        for row in user_rows:
+            avg = user_avg.get(row["user_id"], {})
+            row["known_requests"] = avg.get("known_requests", 0)
+            row["average_cost_per_request_micros"] = avg.get("average_cost_per_request_micros")
+
+        user_features = [
+            dict(r) for r in conn.execute(select(
+                attempts.c.user_id.label("user_id"),
+                attempts.c.feature.label("feature"),
+                func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+                func.count(func.distinct(attempts.c.request_id)).label("requests"),
+                func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts"),
+            ).where(attempts.c.created_at >= start)
+             .group_by(attempts.c.user_id, attempts.c.feature)
+             .order_by(func.sum(attempts.c.cost_micros).desc()).limit(100)).mappings()
+        ]
+
+        providers = [
+            dict(r) for r in conn.execute(select(
+                attempts.c.provider.label("provider"),
+                attempts.c.model.label("model"),
+                func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+                func.count().label("attempts"),
+                func.count(func.distinct(attempts.c.request_id)).label("requests"),
+                func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts"),
+                func.sum(attempts.c.fallback).label("fallbacks"),
+            ).where(attempts.c.created_at >= start)
+             .group_by(attempts.c.provider, attempts.c.model)
+             .order_by(func.sum(attempts.c.cost_micros).desc()).limit(50)).mappings()
+        ]
+
+        values = [
+            dict(r) for r in conn.execute(select(
+                events.c.feature, events.c.event, events.c.source, func.count().label("count")
+            ).where(events.c.created_at >= start)
+             .group_by(events.c.feature, events.c.event, events.c.source)).mappings()
+        ]
+
+        recent_requests = [
+            dict(r) for r in conn.execute(
+                select(requests).order_by(requests.c.created_at.desc()).limit(100)
+            ).mappings()
+        ]
+        request_ids = [r["id"] for r in recent_requests]
+        attempt_rows = []
+        if request_ids:
+            attempt_rows = [
+                dict(r) for r in conn.execute(select(
+                    attempts.c.id, attempts.c.request_id, attempts.c.provider, attempts.c.model,
+                    attempts.c.status, attempts.c.fallback, attempts.c.cost_micros,
+                ).where(attempts.c.request_id.in_(request_ids))
+                 .order_by(attempts.c.created_at.asc())).mappings()
+            ]
+        attempts_by_request = {}
+        for attempt in attempt_rows:
+            attempts_by_request.setdefault(attempt["request_id"], []).append(attempt)
+
+        recent = []
+        for request in recent_requests:
+            request_attempts = attempts_by_request.get(request["id"], [])
+            unknown = sum(1 for a in request_attempts if a["cost_micros"] is None)
+            total = None if unknown or not request_attempts else sum(a["cost_micros"] for a in request_attempts)
+            recent.append({
+                "id": request["id"],
+                "user_id": request["user_id"],
+                "feature": request["feature"],
+                "status": request["status"],
+                "duration_ms": request["duration_ms"],
+                "attempts": len(request_attempts),
+                "unknown_attempts": unknown,
+                "fallback": any(a["fallback"] for a in request_attempts),
+                "cost_micros": total,
+                "providers": [
+                    {
+                        "provider": a["provider"],
+                        "model": a["model"],
+                        "cost_micros": a["cost_micros"],
+                        "fallback": bool(a["fallback"]),
+                        "status": a["status"],
+                    }
+                    for a in request_attempts
+                ],
+            })
+
         revision = conn.execute(select(policy.c.revision).where(policy.c.id == 1)).scalar_one()
-    return {"periods": periods, "features": features, "users": users, "value_events": values,
-            "recent": recent, "config": cfg, "revision": revision}
+
+    return {
+        "periods": periods,
+        "features": feature_rows,
+        "providers": providers,
+        "users": user_rows,
+        "user_features": user_features,
+        "value_events": values,
+        "recent": recent,
+        "config": cfg,
+        "revision": revision,
+    }
