@@ -6,8 +6,8 @@ ALTER TABLE pulse_ai_attempts ADD COLUMN IF NOT EXISTS cache_miss_tokens bigint;
 ALTER TABLE pulse_ai_attempts ADD COLUMN IF NOT EXISTS billing_period varchar(16);
 CREATE INDEX IF NOT EXISTS ix_pulse_attempts_provider_model_time ON pulse_ai_attempts (provider, model, created_at);
 
--- Seed the current configured model rates. Existing custom price entries win because
--- this merge only fills the models Xcr8 currently routes to.
+-- Seed the current configured model rates for the models Xcr8 currently routes to.
+-- These values are versioned here so accounting is reproducible for this migration.
 UPDATE pulse_cost_policy
 SET revision = revision + 1,
     config = jsonb_set(
