@@ -33,7 +33,9 @@ attempts = Table("pulse_ai_attempts", metadata,
     Column("provider", String(32), nullable=False), Column("model", String(120), nullable=False),
     Column("fallback", Integer, nullable=False), Column("status", String(20), nullable=False),
     Column("input_tokens", BigInteger), Column("output_tokens", BigInteger),
+    Column("cache_hit_tokens", BigInteger), Column("cache_miss_tokens", BigInteger),
     Column("characters", BigInteger), Column("images", Integer), Column("duration_ms", Integer),
+    Column("billing_period", String(16)),
     Column("cost_micros", BigInteger), Column("reserved_micros", BigInteger, nullable=False),
     Column("price_snapshot", JSON, nullable=False), Column("cost_basis", String(32)),
     Column("error_type", String(80)), Column("created_at", DateTime(timezone=True), nullable=False))
@@ -85,7 +87,7 @@ def now():
 def windows(at=None):
     at = at or now()
     day = at.replace(hour=0, minute=0, second=0, microsecond=0)
-    return {"day": day, "week": day - timedelta(days=day.weekday()), "month": day.replace(day=1)}
+    return {"day": day, "week": day - timedelta(days=day.weekday()), "month": day.replace(day=1), "year": day.replace(month=1, day=1)}
 
 
 def read_config(conn):
@@ -118,32 +120,58 @@ def validate_config(value):
             limit_set(limits)
     if not isinstance(value["prices"], dict) or len(value["prices"]) > 100:
         raise ValueError("Invalid price catalog.")
-    allowed = {"input_per_million", "output_per_million", "per_character", "per_image", "source", "effective_date"}
+    allowed = {"input_per_million", "output_per_million", "input_cache_hit_per_million", "input_cache_miss_per_million", "output_peak_per_million", "input_cache_hit_peak_per_million", "input_cache_miss_peak_per_million", "per_character", "per_image", "source", "effective_date", "peak_start_utc", "peak_end_utc"}
     for key, rate in value["prices"].items():
         if "/" not in key or not isinstance(rate, dict) or set(rate) - allowed:
             raise ValueError("Prices require provider/model keys and documented rate fields.")
         if not rate.get("source") or not rate.get("effective_date"):
             raise ValueError("Each price needs its source and effective_date.")
-        for field in set(rate) - {"source", "effective_date"}:
+        numeric_fields = {"input_per_million", "output_per_million", "input_cache_hit_per_million", "input_cache_miss_per_million", "output_peak_per_million", "input_cache_hit_peak_per_million", "input_cache_miss_peak_per_million", "per_character", "per_image"}
+        for field in set(rate) - {"source", "effective_date", "peak_start_utc", "peak_end_utc"}:
+            if field not in numeric_fields:
+                raise ValueError("Invalid price field.")
             number = Decimal(str(rate[field]))
             if not number.is_finite() or not 0 <= number <= 1000000:
                 raise ValueError("Invalid price.")
     return value
 
 
-def cost(rate, *, input_tokens=None, output_tokens=None, characters=None, images=None):
+def cost(rate, *, input_tokens=None, output_tokens=None, cache_hit_tokens=None, cache_miss_tokens=None,
+         characters=None, images=None, at=None):
     if not rate:
         return None
-    # Per-image prices are explicitly estimates for a configured size/quality.
+    # Per-image and per-character prices remain estimates for configured units.
     if images is not None and "per_image" in rate:
         amount = Decimal(str(rate["per_image"])) * images * 1000000
     elif characters is not None and "per_character" in rate:
         amount = Decimal(str(rate["per_character"])) * characters * 1000000
-    elif input_tokens is not None and output_tokens is not None and all(k in rate for k in ("input_per_million", "output_per_million")):
-        amount = Decimal(str(rate["input_per_million"])) * input_tokens + Decimal(str(rate["output_per_million"])) * output_tokens
+    elif input_tokens is not None and output_tokens is not None:
+        if "input_cache_hit_per_million" in rate:
+            hit = cache_hit_tokens if cache_hit_tokens is not None else 0
+            miss = cache_miss_tokens if cache_miss_tokens is not None else input_tokens - hit
+            hit_rate = Decimal(str(rate["input_cache_hit_per_million"]))
+            miss_rate = Decimal(str(rate.get("input_cache_miss_per_million", rate.get("input_per_million", "0"))))
+            output_rate = Decimal(str(rate.get("output_per_million", "0")))
+            # DeepSeek peak rates are explicit in the catalog; callers pass the actual request timestamp.
+            if at is not None and _is_deepseek_peak(at):
+                hit_rate = Decimal(str(rate.get("input_cache_hit_peak_per_million", hit_rate)))
+                miss_rate = Decimal(str(rate.get("input_cache_miss_peak_per_million", miss_rate)))
+                output_rate = Decimal(str(rate.get("output_peak_per_million", output_rate)))
+            amount = hit_rate * hit + miss_rate * miss + output_rate * output_tokens
+        elif all(k in rate for k in ("input_per_million", "output_per_million")):
+            amount = Decimal(str(rate["input_per_million"])) * input_tokens + Decimal(str(rate["output_per_million"])) * output_tokens
+        else:
+            return None
     else:
         return None
     return int(amount.to_integral_value(rounding=ROUND_CEILING))
+
+def _is_deepseek_peak(at):
+    value = at if isinstance(at, datetime) else datetime.now(UTC)
+    value = value.astimezone(UTC)
+    if value.weekday() >= 5:
+        return False
+    return (1 <= value.hour < 4) or (6 <= value.hour < 10)
 
 
 def start_request(feature):
@@ -194,7 +222,7 @@ def begin_attempt(provider, model, fallback, units):
             raise UsageBlocked("AI usage tracking needs its migration.", 503)
         cfg = read_config(conn)
         rate = cfg["prices"].get(f"{provider}/{model}", {})
-        reserve = cost(rate, **units)
+        reserve = cost(rate, **units, at=now())
         if cfg["mode"] == "enforce" and reserve is None:
             raise UsageBlocked("This AI tool is temporarily unavailable while its usage rate is configured.", 503)
         scopes = [(cfg["limits"], None),
@@ -234,9 +262,10 @@ def provider_call(provider, model, call, *, fallback=False, reserve_units=None, 
                 units = measured(result) if result is not None and measured else {}
             except Exception:
                 units = {}
-            amount = cost(rate, **units) if result is not None else None
+            settled_at = now()
+            amount = cost(rate, **units, at=settled_at) if result is not None else None
             values = dict(status="failure" if failure else "success", duration_ms=int((perf_counter()-started)*1000),
-                          error_type=failure, cost_micros=amount, cost_basis=("estimated" if "images" in units or "characters" in units else "calculated") if amount is not None else "unknown", **units)
+                          error_type=failure, cost_micros=amount, billing_period=("peak" if _is_deepseek_peak(settled_at) else "off_peak") if provider == "deepseek" else None, cost_basis=("estimated" if "images" in units or "characters" in units else "calculated") if amount is not None else "unknown", **units)
             try:
                 with engine().begin() as conn:
                     conn.execute(update(attempts).where(attempts.c.id == ident).values(**values))
@@ -262,7 +291,20 @@ def chat_call(client, provider, kwargs, fallback=False):
     params["max_completion_tokens" if provider == "openai" else "max_tokens"] = output_bound
     def measured(response):
         usage = getattr(response, "usage", None)
-        return {"input_tokens": getattr(usage, "prompt_tokens", None), "output_tokens": getattr(usage, "completion_tokens", None)}
+        prompt_tokens = getattr(usage, "prompt_tokens", None)
+        output_tokens = getattr(usage, "completion_tokens", None)
+        details = getattr(usage, "prompt_tokens_details", None)
+        cached_tokens = getattr(details, "cached_tokens", None)
+        cache_hit = getattr(usage, "prompt_cache_hit_tokens", cached_tokens)
+        cache_miss = getattr(usage, "prompt_cache_miss_tokens", None)
+        if cache_miss is None and prompt_tokens is not None and cache_hit is not None:
+            cache_miss = max(0, prompt_tokens - cache_hit)
+        return {
+            "input_tokens": prompt_tokens,
+            "output_tokens": output_tokens,
+            "cache_hit_tokens": cache_hit,
+            "cache_miss_tokens": cache_miss,
+        }
     return provider_call(provider, params["model"], lambda: client.with_options(max_retries=0).chat.completions.create(**params),
         fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound}, measured=measured)
 
@@ -271,26 +313,99 @@ def dashboard():
     with engine().connect() as conn:
         cfg = read_config(conn)
         periods = {}
-        for name, start in windows().items():
-            spend = conn.execute(select(func.coalesce(func.sum(attempts.c.cost_micros), 0),
+        for name, start_at in windows().items():
+            spend = conn.execute(select(
+                func.coalesce(func.sum(attempts.c.cost_micros), 0),
                 func.count().filter(attempts.c.cost_micros.is_(None)),
                 func.coalesce(func.sum(case((attempts.c.cost_micros.is_(None), attempts.c.reserved_micros), else_=0)), 0)
-                ).where(attempts.c.created_at >= start)).one()
+            ).where(attempts.c.created_at >= start_at)).one()
             active = conn.execute(select(func.count(func.distinct(requests.c.user_id))).where(
-                requests.c.created_at >= start, requests.c.status == "success")).scalar_one()
-            periods[name] = {"cost_micros": spend[0], "unknown_attempts": spend[1], "unsettled_micros": spend[2],
-                             "active_users": active, "cost_per_active_user_micros": round(spend[0]/active) if active else None}
-        start = windows()["month"]
+                requests.c.created_at >= start_at, requests.c.status == "success"
+            )).scalar_one()
+            periods[name] = {
+                "cost_micros": spend[0],
+                "unknown_attempts": spend[1],
+                "unsettled_micros": spend[2],
+                "active_users": active,
+                "cost_per_active_user_micros": round(spend[0] / active) if active else None,
+            }
+
+        start_at = windows()["month"]
+
         def grouped(column):
-            return [dict(r) for r in conn.execute(select(column.label("name"),
+            return [dict(r) for r in conn.execute(select(
+                column.label("name"),
                 func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
-                func.count().label("attempts"), func.sum(attempts.c.fallback).label("fallbacks"),
+                func.count().label("attempts"),
+                func.sum(attempts.c.fallback).label("fallbacks"),
                 func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
-                ).where(attempts.c.created_at >= start).group_by(column).order_by(func.sum(attempts.c.cost_micros).desc()).limit(50)).mappings()]
-        values = [dict(r) for r in conn.execute(select(events.c.feature, events.c.event, events.c.source,
-            func.count().label("count")).where(events.c.created_at >= start).group_by(events.c.feature, events.c.event, events.c.source)).mappings()]
-        recent = [dict(r) for r in conn.execute(select(attempts).order_by(attempts.c.created_at.desc()).limit(50)).mappings()]
-        features, users = grouped(attempts.c.feature), grouped(attempts.c.user_id)
+            ).where(attempts.c.created_at >= start_at)
+             .group_by(column)
+             .order_by(func.sum(attempts.c.cost_micros).desc())
+             .limit(50)).mappings()]
+
+        values = [dict(r) for r in conn.execute(select(
+            events.c.feature, events.c.event, events.c.source, func.count().label("count")
+        ).where(events.c.created_at >= start_at)
+         .group_by(events.c.feature, events.c.event, events.c.source)).mappings()]
+
+        recent = [dict(r) for r in conn.execute(
+            select(attempts).order_by(attempts.c.created_at.desc()).limit(50)
+        ).mappings()]
+
+        features = grouped(attempts.c.feature)
+        users = grouped(attempts.c.user_id)
+
+        provider_models = [dict(r) for r in conn.execute(select(
+            attempts.c.provider.label("provider"),
+            attempts.c.model.label("model"),
+            func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+            func.count().label("attempts"),
+            func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
+        ).where(attempts.c.created_at >= start_at)
+         .group_by(attempts.c.provider, attempts.c.model)
+         .order_by(func.sum(attempts.c.cost_micros).desc()).limit(100)).mappings()]
+
+        user_features = [dict(r) for r in conn.execute(select(
+            attempts.c.user_id.label("user_id"),
+            attempts.c.feature.label("feature"),
+            func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+            func.count().label("attempts"),
+            func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
+        ).where(attempts.c.created_at >= start_at)
+         .group_by(attempts.c.user_id, attempts.c.feature)
+         .order_by(func.sum(attempts.c.cost_micros).desc()).limit(100)).mappings()]
+
+        year_start = windows()["year"]
+        request_rows = [dict(r) for r in conn.execute(select(
+            requests.c.id.label("request_id"),
+            requests.c.user_id,
+            requests.c.feature,
+            requests.c.status,
+            requests.c.created_at,
+            requests.c.duration_ms,
+            func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+            func.count(attempts.c.id).label("attempts"),
+            func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
+        ).select_from(
+            requests.outerjoin(attempts, requests.c.id == attempts.c.request_id)
+        ).where(requests.c.created_at >= year_start)
+         .group_by(
+             requests.c.id, requests.c.user_id, requests.c.feature,
+             requests.c.status, requests.c.created_at, requests.c.duration_ms
+         ).order_by(requests.c.created_at.desc()).limit(100)).mappings()]
+
         revision = conn.execute(select(policy.c.revision).where(policy.c.id == 1)).scalar_one()
-    return {"periods": periods, "features": features, "users": users, "value_events": values,
-            "recent": recent, "config": cfg, "revision": revision}
+
+    return {
+        "periods": periods,
+        "features": features,
+        "users": users,
+        "provider_models": provider_models,
+        "user_features": user_features,
+        "value_events": values,
+        "recent": recent,
+        "requests": request_rows,
+        "config": cfg,
+        "revision": revision,
+    }
