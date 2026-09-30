@@ -26,6 +26,11 @@ import psycopg2
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS_DIR = ROOT / "migrations"
 MIGRATION_RE = re.compile(r"^(?P<version>\d+)_.*\.sql$")
+LEGACY_MIGRATION_VERSIONS = {
+    "20260925_pulse_usage.sql": "001",
+    "20260930_schema_reliability.sql": "002",
+}
+BASELINE_FILE = "20260930_migration_ledger.sql"
 
 
 def database_url() -> str:
@@ -37,10 +42,24 @@ def database_url() -> str:
 
 def migration_files() -> list[tuple[str, Path]]:
     files: list[tuple[str, Path]] = []
+    seen_versions: set[str] = set()
+
     for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-        match = MIGRATION_RE.match(path.name)
-        if match:
-            files.append((match.group("version"), path))
+        if path.name == BASELINE_FILE:
+            continue
+
+        version = LEGACY_MIGRATION_VERSIONS.get(path.name)
+        if version is None:
+            match = MIGRATION_RE.match(path.name)
+            if not match:
+                continue
+            version = match.group("version")
+
+        if version in seen_versions:
+            raise RuntimeError(f"Duplicate migration version: {version}")
+        seen_versions.add(version)
+        files.append((version, path))
+
     return files
 
 
