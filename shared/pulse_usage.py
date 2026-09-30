@@ -126,7 +126,10 @@ def validate_config(value):
             raise ValueError("Prices require provider/model keys and documented rate fields.")
         if not rate.get("source") or not rate.get("effective_date"):
             raise ValueError("Each price needs its source and effective_date.")
-        for field in set(rate) - {"source", "effective_date"}:
+        numeric_fields = {"input_per_million", "output_per_million", "input_cache_hit_per_million", "input_cache_miss_per_million", "output_peak_per_million", "input_cache_hit_peak_per_million", "input_cache_miss_peak_per_million", "per_character", "per_image"}
+        for field in set(rate) - {"source", "effective_date", "peak_start_utc", "peak_end_utc"}:
+            if field not in numeric_fields:
+                raise ValueError("Invalid price field.")
             number = Decimal(str(rate[field]))
             if not number.is_finite() or not 0 <= number <= 1000000:
                 raise ValueError("Invalid price.")
@@ -321,6 +324,13 @@ def dashboard():
             func.count().label("count")).where(events.c.created_at >= start).group_by(events.c.feature, events.c.event, events.c.source)).mappings()]
         recent = [dict(r) for r in conn.execute(select(attempts).order_by(attempts.c.created_at.desc()).limit(50)).mappings()]
         features, users = grouped(attempts.c.feature), grouped(attempts.c.user_id)
+        provider_models = [dict(r) for r in conn.execute(select(
+            attempts.c.provider.label("provider"), attempts.c.model.label("model"),
+            func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+            func.count().label("attempts"),
+            func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
+        ).where(attempts.c.created_at >= start).group_by(attempts.c.provider, attempts.c.model)
+        .order_by(func.sum(attempts.c.cost_micros).desc()).limit(100)).mappings()]
         revision = conn.execute(select(policy.c.revision).where(policy.c.id == 1)).scalar_one()
     return {"periods": periods, "features": features, "users": users, "value_events": values,
             "recent": recent, "config": cfg, "revision": revision}
