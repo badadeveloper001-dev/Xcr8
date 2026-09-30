@@ -11,7 +11,6 @@ import {
   LogOut,
   Menu,
   Settings2,
-  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
@@ -23,7 +22,6 @@ const primaryItems = [
   ["/admin/dashboard/creators", "Creators", Users],
   ["/admin/dashboard/content", "Content", FileWarning],
   ["/admin/dashboard/system", "System", Settings2],
-  ["/admin/dashboard/security", "Security", ShieldCheck],
 ] as const;
 
 const pulseItems = [
