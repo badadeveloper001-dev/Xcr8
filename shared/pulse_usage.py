@@ -262,7 +262,9 @@ def provider_call(provider, model, call, *, fallback=False, reserve_units=None, 
                 units = measured(result) if result is not None and measured else {}
             except Exception:
                 units = {}
-            settled_at = now()\n            amount = cost(rate, **units, at=settled_at) if result is not None else None\n            values = dict(status="failure" if failure else "success", duration_ms=int((perf_counter()-started)*1000),
+            settled_at = now()
+            amount = cost(rate, **units, at=settled_at) if result is not None else None
+            values = dict(status="failure" if failure else "success", duration_ms=int((perf_counter()-started)*1000),
                           error_type=failure, cost_micros=amount, billing_period=("peak" if _is_deepseek_peak(settled_at) else "off_peak") if provider == "deepseek" else None, cost_basis=("estimated" if "images" in units or "characters" in units else "calculated") if amount is not None else "unknown", **units)
             try:
                 with engine().begin() as conn:
