@@ -85,7 +85,12 @@ def now():
 def windows(at=None):
     at = at or now()
     day = at.replace(hour=0, minute=0, second=0, microsecond=0)
-    return {"day": day, "week": day - timedelta(days=day.weekday()), "month": day.replace(day=1)}
+    return {
+        "day": day,
+        "week": day - timedelta(days=day.weekday()),
+        "month": day.replace(day=1),
+        "year": day.replace(month=1, day=1),
+    }
 
 
 def read_config(conn):
