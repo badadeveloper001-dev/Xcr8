@@ -311,34 +311,99 @@ def dashboard():
     with engine().connect() as conn:
         cfg = read_config(conn)
         periods = {}
-        for name, start in windows().items():
-            spend = conn.execute(select(func.coalesce(func.sum(attempts.c.cost_micros), 0),
+        for name, start_at in windows().items():
+            spend = conn.execute(select(
+                func.coalesce(func.sum(attempts.c.cost_micros), 0),
                 func.count().filter(attempts.c.cost_micros.is_(None)),
                 func.coalesce(func.sum(case((attempts.c.cost_micros.is_(None), attempts.c.reserved_micros), else_=0)), 0)
-                ).where(attempts.c.created_at >= start)).one()
+            ).where(attempts.c.created_at >= start_at)).one()
             active = conn.execute(select(func.count(func.distinct(requests.c.user_id))).where(
-                requests.c.created_at >= start, requests.c.status == "success")).scalar_one()
-            periods[name] = {"cost_micros": spend[0], "unknown_attempts": spend[1], "unsettled_micros": spend[2],
-                             "active_users": active, "cost_per_active_user_micros": round(spend[0]/active) if active else None}
-        start = windows()["month"]
-        def grouped(column):
+                requests.c.created_at >= start_at, requests.c.status == "success"
+            )).scalar_one()
+            periods[name] = {
+                "cost_micros": spend[0],
+                "unknown_attempts": spend[1],
+                "unsettled_micros": spend[2],
+                "active_users": active,
+                "cost_per_active_user_micros": round(spend[0] / active) if active else None,
+            }
 
-            return [dict(r) for r in conn.execute(select(column.label("name"),
+        start_at = windows()["month"]
+
+        def grouped(column):
+            return [dict(r) for r in conn.execute(select(
+                column.label("name"),
                 func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
-                func.count().label("attempts"), func.sum(attempts.c.fallback).label("fallbacks"),
+                func.count().label("attempts"),
+                func.sum(attempts.c.fallback).label("fallbacks"),
                 func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
-                ).where(attempts.c.created_at >= start).group_by(column).order_by(func.sum(attempts.c.cost_micros).desc()).limit(50)).mappings()]
-        values = [dict(r) for r in conn.execute(select(events.c.feature, events.c.event, events.c.source,
-            func.count().label("count")).where(events.c.created_at >= start).group_by(events.c.feature, events.c.event, events.c.source)).mappings()]
-        recent = [dict(r) for r in conn.execute(select(attempts).order_by(attempts.c.created_at.desc()).limit(50)).mappings()]
-        features, users = grouped(attempts.c.feature), grouped(attempts.c.user_id)
+            ).where(attempts.c.created_at >= start_at)
+             .group_by(column)
+             .order_by(func.sum(attempts.c.cost_micros).desc())
+             .limit(50)).mappings()]
+
+        values = [dict(r) for r in conn.execute(select(
+            events.c.feature, events.c.event, events.c.source, func.count().label("count")
+        ).where(events.c.created_at >= start_at)
+         .group_by(events.c.feature, events.c.event, events.c.source)).mappings()]
+
+        recent = [dict(r) for r in conn.execute(
+            select(attempts).order_by(attempts.c.created_at.desc()).limit(50)
+        ).mappings()]
+
+        features = grouped(attempts.c.feature)
+        users = grouped(attempts.c.user_id)
+
         provider_models = [dict(r) for r in conn.execute(select(
-            attempts.c.provider.label("provider"), attempts.c.model.label("model"),
+            attempts.c.provider.label("provider"),
+            attempts.c.model.label("model"),
             func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
             func.count().label("attempts"),
             func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
-        ).where(attempts.c.created_at >= start).group_by(attempts.c.provider, attempts.c.model)
-        .order_by(func.sum(attempts.c.cost_micros).desc()).limit(100)).mappings()]
+        ).where(attempts.c.created_at >= start_at)
+         .group_by(attempts.c.provider, attempts.c.model)
+         .order_by(func.sum(attempts.c.cost_micros).desc()).limit(100)).mappings()]
+
+        user_features = [dict(r) for r in conn.execute(select(
+            attempts.c.user_id.label("user_id"),
+            attempts.c.feature.label("feature"),
+            func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+            func.count().label("attempts"),
+            func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
+        ).where(attempts.c.created_at >= start_at)
+         .group_by(attempts.c.user_id, attempts.c.feature)
+         .order_by(func.sum(attempts.c.cost_micros).desc()).limit(100)).mappings()]
+
+        year_start = windows()["year"]
+        request_rows = [dict(r) for r in conn.execute(select(
+            requests.c.id.label("request_id"),
+            requests.c.user_id,
+            requests.c.feature,
+            requests.c.status,
+            requests.c.created_at,
+            requests.c.duration_ms,
+            func.coalesce(func.sum(attempts.c.cost_micros), 0).label("cost_micros"),
+            func.count(attempts.c.id).label("attempts"),
+            func.count().filter(attempts.c.cost_micros.is_(None)).label("unknown_attempts")
+        ).select_from(
+            requests.outerjoin(attempts, requests.c.id == attempts.c.request_id)
+        ).where(requests.c.created_at >= year_start)
+         .group_by(
+             requests.c.id, requests.c.user_id, requests.c.feature,
+             requests.c.status, requests.c.created_at, requests.c.duration_ms
+         ).order_by(requests.c.created_at.desc()).limit(100)).mappings()]
+
         revision = conn.execute(select(policy.c.revision).where(policy.c.id == 1)).scalar_one()
-    return {"periods": periods, "features": features, "users": users, "value_events": values,
-            "recent": recent, "config": cfg, "revision": revision}
+
+    return {
+        "periods": periods,
+        "features": features,
+        "users": users,
+        "provider_models": provider_models,
+        "user_features": user_features,
+        "value_events": values,
+        "recent": recent,
+        "requests": request_rows,
+        "config": cfg,
+        "revision": revision,
+    }
