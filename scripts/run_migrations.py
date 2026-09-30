@@ -1,0 +1,109 @@
+"""Run application database migrations explicitly.
+
+This runner is intentionally separate from FastAPI startup. It applies migration
+files in lexical order and records successful migrations in public.schema_migrations.
+
+Production baseline migrations 001 and 002 are recorded by
+migrations/20260930_migration_ledger.sql and are therefore skipped once that
+ledger exists.
+
+Usage:
+    python scripts/run_migrations.py
+
+The DATABASE_URL environment variable must point to the privileged migration
+connection. Do not use the Supabase browser/anon credentials.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from pathlib import Path
+
+import psycopg2
+
+
+ROOT = Path(__file__).resolve().parents[1]
+MIGRATIONS_DIR = ROOT / "migrations"
+MIGRATION_RE = re.compile(r"^(?P<version>\d+)_.*\.sql$")
+
+
+def database_url() -> str:
+    value = os.getenv("DATABASE_URL", "").strip()
+    if not value:
+        raise RuntimeError("DATABASE_URL is required")
+    return value
+
+
+def migration_files() -> list[tuple[str, Path]]:
+    files: list[tuple[str, Path]] = []
+    for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        match = MIGRATION_RE.match(path.name)
+        if match:
+            files.append((match.group("version"), path))
+    return files
+
+
+def ensure_ledger(cur) -> None:
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS public.schema_migrations (
+            version varchar(32) PRIMARY KEY,
+            name varchar(180) NOT NULL,
+            applied_at timestamptz NOT NULL DEFAULT now()
+        )
+        """
+    )
+
+
+def applied_versions(cur) -> set[str]:
+    cur.execute("SELECT version FROM public.schema_migrations")
+    return {row[0] for row in cur.fetchall()}
+
+
+def migration_name(path: Path) -> str:
+    stem = path.stem
+    return stem.split("_", 1)[1] if "_" in stem else stem
+
+
+def main() -> None:
+    migrations = migration_files()
+    if not migrations:
+        print("No migrations found.")
+        return
+
+    with psycopg2.connect(database_url()) as conn:
+        # Migration files may contain PostgreSQL statements such as ALTER TYPE
+        # that have version-dependent transaction restrictions. Each migration
+        # is therefore executed as its own autocommit unit.
+        conn.autocommit = True
+
+        with conn.cursor() as cur:
+            ensure_ledger(cur)
+            applied = applied_versions(cur)
+
+            for version, path in migrations:
+                if version in applied:
+                    print(f"SKIP {version}: {path.name}")
+                    continue
+
+                sql = path.read_text(encoding="utf-8").strip()
+                if not sql:
+                    raise RuntimeError(f"Migration {path.name} is empty")
+
+                print(f"APPLY {version}: {path.name}")
+                cur.execute(sql)
+                cur.execute(
+                    """
+                    INSERT INTO public.schema_migrations (version, name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (version) DO NOTHING
+                    """,
+                    (version, migration_name(path)),
+                )
+
+    print("Migration run complete.")
+
+
+if __name__ == "__main__":
+    main()
