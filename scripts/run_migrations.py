@@ -29,6 +29,7 @@ MIGRATION_RE = re.compile(r"^(?P<version>\d+)_.*\.sql$")
 LEGACY_MIGRATION_VERSIONS = {
     "20260925_pulse_usage.sql": "001",
     "20260930_schema_reliability.sql": "002",
+    "20260930_pulse_accounting.sql": "003",
 }
 BASELINE_FILE = "20260930_migration_ledger.sql"
 
