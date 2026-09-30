@@ -66,6 +66,7 @@ type RequestRow = {
   }[];
 };
 type Snapshot = {
+  config: unknown;
   periods: Record<"day" | "week" | "month" | "year", Period>;
   features: Feature[];
   providers: Provider[];
@@ -83,11 +84,28 @@ const panel = "rounded-2xl border border-white/10 bg-white/5 p-5";
 const cell = "px-3 py-3";
 const tabs = ["overview", "users", "requests"] as const;
 
+const redactConfig = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(redactConfig);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => {
+        const sensitive = /api[_-]?key|secret|token|password|credential|authorization/i.test(key);
+        return [key, sensitive ? "[REDACTED]" : redactConfig(entry)];
+      }),
+    );
+  }
+  return value;
+};
+
+const configJson = (value: unknown) => JSON.stringify(redactConfig(value), null, 2);
+
 export default function PulseCostsPage() {
   const [data, setData] = useState<Snapshot | null>(null);
   const [tab, setTab] = useState<(typeof tabs)[number]>("overview");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
+  const [copiedConfig, setCopiedConfig] = useState(false);
 
   const refresh = async () => {
     setBusy(true);
@@ -264,6 +282,49 @@ export default function PulseCostsPage() {
                     </tbody>
                   </table>
                 </div>
+              </section>
+
+              <section className={panel}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold">Pricing configuration</h2>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Read-only diagnostic view of the pricing policy returned by the accounting API.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowConfig((visible) => !visible);
+                      setCopiedConfig(false);
+                    }}
+                    className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
+                  >
+                    {showConfig ? "Hide configuration" : "View configuration"}
+                  </button>
+                </div>
+                {showConfig && (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs text-amber-400">
+                        Diagnostic only · read-only · sensitive keys are redacted
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(configJson(data.config));
+                          setCopiedConfig(true);
+                        }}
+                        className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5"
+                      >
+                        {copiedConfig ? "Copied" : "Copy JSON"}
+                      </button>
+                    </div>
+                    <pre className="max-h-[480px] overflow-auto rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-5 text-slate-300">
+                      {configJson(data.config)}
+                    </pre>
+                  </div>
+                )}
               </section>
 
               <section className={panel}>
