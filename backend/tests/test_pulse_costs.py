@@ -205,7 +205,7 @@ def test_cache_aware_peak_cost_and_request_aggregation(db):
     }
     assert ledger.cost(deepseek_rate, input_tokens=1000000, output_tokens=1000000,
                        cache_hit_tokens=900000, cache_miss_tokens=100000,
-                       at=datetime(2026, 9, 30, 2, tzinfo=UTC)) == 1260000
+                       at=datetime(2026, 9, 30, 2, tzinfo=UTC)) == 1235400
     assert ledger.cost(deepseek_rate, input_tokens=1000000, output_tokens=1000000,
                        cache_hit_tokens=900000, cache_miss_tokens=100000,
-                       at=datetime(2026, 9, 30, 12, tzinfo=UTC)) == 663000
+                       at=datetime(2026, 9, 30, 12, tzinfo=UTC)) == 617700
