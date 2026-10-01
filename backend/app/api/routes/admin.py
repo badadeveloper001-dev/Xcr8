@@ -272,20 +272,14 @@ def _create_unique_referral_code(
         )
         db.add(referral)
         try:
-            db.flush()
+            with db.begin_nested():
+                db.add(referral)
+                db.flush()
             return referral
         except IntegrityError:
-            db.rollback()
             if requested:
                 raise HTTPException(status_code=409, detail="That referral code is already in use.")
     raise HTTPException(status_code=503, detail="Could not allocate a unique referral code. Try again.")
-
-
-def _admin_system_user_id(db: Session) -> int:
-    user_id = db.scalar(select(User.id).order_by(User.id.asc()).limit(1))
-    if user_id is None:
-        raise HTTPException(status_code=503, detail="No system user is available for Growth ownership.")
-    return int(user_id)
 
 
 @router.post("/growth/campaigns", response_model=dict, status_code=201)
@@ -315,7 +309,7 @@ def admin_create_growth_campaign(
         campaign_code=campaign_code,
         name=payload.name.strip(),
         attribution_window_days=payload.attribution_window_days,
-        created_by_user_id=_admin_system_user_id(db),
+        created_by_user_id=None,
     )
     db.add(campaign)
     try:
