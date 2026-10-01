@@ -325,6 +325,9 @@ def _billing_window(user: User, now: datetime | None = None) -> tuple[str, datet
     anchor = user.plan_started_at
     if anchor.tzinfo is None:
         anchor = anchor.replace(tzinfo=UTC)
+    # Paystack monthly subscriptions created on the 29th-31st bill on the 28th
+    # thereafter, so normalize the entitlement anchor to the same boundary.
+    anchor = anchor.replace(day=min(anchor.day, 28))
     if anchor > current:
         anchor = current
 
