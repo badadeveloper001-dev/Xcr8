@@ -17,6 +17,7 @@ from app.db.deps import get_db
 from app.db.models import PaymentEvent, PlanTier, UsageLedger, User
 from app.schemas.mvp import PaystackVerifyRequest, PlanUpgradeRequest
 from app.services.entitlements import PLAN_CONFIG, normalize_plan_id, serialize_plan, usage_snapshot
+from app.services.growth_attribution import record_growth_event
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 PAID_WEBHOOK_STATUSES = {"paid", "succeeded", "active", "completed"}
@@ -233,6 +234,14 @@ def _activate_paystack_payment(
             "reference": event_id,
         }
 
+    previous_rank = plan_rank.get(current_plan, 0)
+    new_rank = plan_rank[normalized_plan]
+    lifecycle_event = (
+        "subscription_started" if not active_subscription
+        else "subscription_upgraded" if new_rank > previous_rank
+        else "subscription_renewed"
+    )
+
     recurring = bool(previous_meta.get("paystack_subscription_code"))
     if recurring and user.plan_expires_at and user.plan_expires_at > now:
         base = user.plan_expires_at
@@ -290,6 +299,10 @@ def _activate_paystack_payment(
     )
     db.add(user)
     db.commit()
+    try:
+        record_growth_event(db, user.id, lifecycle_event, metadata={"provider": "paystack", "reference": event_id, "plan": normalized_plan, "billing_cycle": billing_cycle, "currency": currency, "amount_minor": int(amount_minor)})
+    except Exception:
+        db.rollback()
     return {"processed": True, "duplicate": False, "user_id": user.id, "plan": normalized_plan, "reference": event_id}
 
 
