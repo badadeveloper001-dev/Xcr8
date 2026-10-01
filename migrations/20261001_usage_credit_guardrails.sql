@@ -19,7 +19,7 @@ ALTER TABLE usage_ledger
     ADD COLUMN IF NOT EXISTS feature_type VARCHAR(64),
     ADD COLUMN IF NOT EXISTS provider VARCHAR(80),
     ADD COLUMN IF NOT EXISTS model VARCHAR(160),
-    ADD COLUMN IF NOT EXISTS estimated_external_cost DOUBLE PRECISION;
+    ADD COLUMN IF NOT EXISTS estimated_external_cost NUMERIC(20, 8);
 
 -- Backfill legacy calendar-month periods without deleting or rewriting usage.
 UPDATE usage_periods
