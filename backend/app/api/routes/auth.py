@@ -29,6 +29,7 @@ from app.schemas.mvp import (
     SignupResponse,
 )
 from app.services.entitlements import effective_plan_id
+from app.services.growth_attribution import attach_user_attribution
 from app.services.auth import (
     SupabaseAuthError,
     stable_fallback_user_id,
@@ -252,6 +253,7 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
                 **(profile.preferences or {}),
                 "email_code_verified": False,
                 "email_verification_method": "pending",
+                "attribution_token": str(payload.attribution_token or "").strip() or None,
             }
             code = generate_signup_email_code()
             profile.preferences = {
@@ -397,6 +399,15 @@ def signup_verify_code(payload: AuthSignupCodeVerifyRequest, db: Session = Depen
     }
     db.add(profile)
     db.commit()
+
+    attribution_token = str(preferences.get("attribution_token") or "").strip() or None
+    if attribution_token:
+        attach_user_attribution(
+            db,
+            user.id,
+            tracking_id=attribution_token,
+            event_type="signup_completed",
+        )
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
