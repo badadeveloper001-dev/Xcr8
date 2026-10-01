@@ -16,6 +16,7 @@ class AuthSignupRequest(BaseModel):
     confirm_password: str = Field(min_length=8, max_length=128)
     language: str = "english"
     timezone: str = "Africa/Lagos"
+    attribution_token: str | None = Field(default=None, min_length=16, max_length=160)
 
 
 class AuthSignupCodeVerifyRequest(BaseModel):
