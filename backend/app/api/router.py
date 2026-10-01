@@ -6,6 +6,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.distribution import router as distribution_router
+from app.api.routes.growth_attribution import router as growth_attribution_router
 from app.api.routes.health import router as health_router
 from app.api.routes.intelligence import router as intelligence_router
 from app.api.routes.memory import router as memory_router
@@ -16,6 +17,7 @@ from app.api.routes.social_publish import router as social_router
 from app.api.routes.upload import router as upload_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.api.routes.plans import router as plans_router
+from app.api.routes.pulse_costs import router as pulse_costs_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -35,6 +37,4 @@ api_router.include_router(upload_router)
 api_router.include_router(workspaces_router)
 api_router.include_router(plans_router)
 api_router.include_router(growth_attribution_router)
-from app.api.routes.pulse_costs import router as pulse_costs_router
 api_router.include_router(pulse_costs_router)
-
