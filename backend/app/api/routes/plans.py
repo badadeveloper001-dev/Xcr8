@@ -58,12 +58,23 @@ def list_plans(request: Request, response: Response) -> list:
 
 
 @router.get("/{user_id}/usage", response_model=dict)
-def get_usage(user_id: int, db: Session = Depends(get_db)) -> dict:
+def get_usage(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    user_id = _require_request_user_id(request, user_id)
     return usage_snapshot(db, user_id)
 
 
 @router.get("/{user_id}/ledger", response_model=list)
-def get_usage_ledger(user_id: int, limit: int = 100, db: Session = Depends(get_db)) -> list:
+def get_usage_ledger(
+    user_id: int,
+    request: Request,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> list:
+    user_id = _require_request_user_id(request, user_id)
     if not db.get(User, user_id):
         raise HTTPException(status_code=404, detail="User not found")
     rows = db.scalars(
