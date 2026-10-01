@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.services.usage_config import VOICEOVER_MAX_CHARACTERS
+
 
 class AuthSignupRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
@@ -455,7 +457,7 @@ class AIVoiceoverRequest(BaseModel):
 
 class AIVoiceoverAudioRequest(BaseModel):
     user_id: int
-    text: str = Field(min_length=3, max_length=500)
+    text: str = Field(min_length=3, max_length=VOICEOVER_MAX_CHARACTERS)
     topic: str | None = Field(default=None, max_length=220)
     language: str = Field(default="english", max_length=32)
     pace: str = Field(default="steady", max_length=40)
