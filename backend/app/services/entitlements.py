@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Literal
@@ -273,6 +274,45 @@ def _period_key(now: datetime | None = None) -> str:
     return current.strftime("%Y-%m")
 
 
+def _add_months(value: datetime, months: int) -> datetime:
+    total = value.year * 12 + (value.month - 1) + months
+    year, month_index = divmod(total, 12)
+    month = month_index + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
+
+
+def _billing_window(user: User, now: datetime | None = None) -> tuple[str, datetime, datetime, str | None]:
+    """Resolve the active monthly entitlement window from subscription state.
+
+    Paid plans use the subscription start as the monthly billing anchor. Free users
+    use the calendar month because they do not have a paid subscription period.
+    """
+    current = now or datetime.now(tz=UTC)
+    plan = plan_for_user(user)
+    if plan.id == "free" or user.plan_started_at is None:
+        start = current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = _add_months(start, 1)
+        return start.strftime("%Y-%m"), start, end, None
+
+    anchor = user.plan_started_at
+    if anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=UTC)
+    if anchor > current:
+        anchor = current
+
+    months = (current.year - anchor.year) * 12 + (current.month - anchor.month)
+    start = _add_months(anchor, months)
+    if start > current:
+        months -= 1
+        start = _add_months(anchor, max(0, months))
+    end = _add_months(start, 1)
+    subscription_id = str((user.billing_meta or {}).get("subscription_id") or "").strip() or None
+    identity = subscription_id or f"{plan.id}:{anchor.isoformat()}"
+    key = f"{identity}:{start.isoformat()}"
+    return key[:64], start, end, subscription_id
+
+
 def _lock_user(db: Session, user_id: int) -> User:
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
     if not user:
@@ -281,18 +321,27 @@ def _lock_user(db: Session, user_id: int) -> User:
 
 
 def _usage_period(db: Session, user: User) -> UsagePeriod:
-    key = _period_key()
+    key, period_start, period_end, subscription_id = _billing_window(user)
     period = db.scalar(
         select(UsagePeriod)
         .where(UsagePeriod.user_id == user.id, UsagePeriod.period_key == key)
         .with_for_update()
     )
     if period:
+        if period.period_start is None:
+            period.period_start = period_start
+        if period.period_end is None:
+            period.period_end = period_end
+        if period.subscription_id is None:
+            period.subscription_id = subscription_id
         return period
 
     period = UsagePeriod(
         user_id=user.id,
         period_key=key,
+        period_start=period_start,
+        period_end=period_end,
+        subscription_id=subscription_id,
         credits_granted=plan_for_user(user).monthly_credits,
     )
     db.add(period)
@@ -450,6 +499,146 @@ def consume_usage(
     return ledger
 
 
+def reserve_usage(
+    db: Session,
+    user_id: int,
+    metric: UsageMetric,
+    *,
+    quantity: int = 1,
+    idempotency_key: str | None = None,
+    workspace_id: int | None = None,
+    feature_type: str | None = None,
+    event_meta: dict | None = None,
+) -> UsageLedger:
+    """Atomically authorize and reserve usage before a billable provider call."""
+    if quantity <= 0:
+        raise ValueError("Usage quantity must be positive.")
+
+    raw_key = str(idempotency_key or "").strip()[:100]
+    clean_key = f"{user_id}:{metric}:{raw_key}" if raw_key else None
+    if clean_key:
+        existing = db.scalar(
+            select(UsageLedger).where(UsageLedger.idempotency_key == clean_key)
+        )
+        if existing:
+            return existing
+
+    user = _lock_user(db, user_id)
+    expire_plan_if_needed(db, user, commit=False)
+    plan = plan_for_user(user)
+    period = _usage_period(db, user)
+
+    if period.credits_granted < plan.monthly_credits:
+        period.credits_granted = plan.monthly_credits
+
+    if metric in {"image_generation", "high_quality_image"} and plan.image_generations <= 0:
+        db.rollback()
+        raise _feature_error(plan, "image_generation")
+    if metric == "voiceover" and plan.voiceovers <= 0:
+        db.rollback()
+        raise _feature_error(plan, "voiceover")
+    if metric == "high_quality_image" and plan.high_quality_images <= 0:
+        db.rollback()
+        raise _feature_error(plan, "high_quality_image")
+
+    counter_field = _COUNTER_FIELDS[metric]
+    current_count = int(getattr(period, counter_field) or 0)
+    limit = int(getattr(plan, counter_field))
+    if current_count + quantity > limit:
+        db.rollback()
+        raise _quota_error(plan, counter_field, limit)
+
+    if metric == "high_quality_image" and period.image_generations + quantity > plan.image_generations:
+        db.rollback()
+        raise _quota_error(plan, "image_generations", plan.image_generations)
+
+    credit_cost = CREDIT_COSTS[metric] * quantity
+    remaining = max(0, int(period.credits_granted or 0) - int(period.credits_used or 0))
+    if credit_cost > remaining:
+        db.rollback()
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "monthly_credits_exhausted",
+                "plan": plan.id,
+                "required": credit_cost,
+                "remaining": remaining,
+                "message": "Monthly credits exhausted. Upgrade or wait for the next billing period.",
+            },
+        )
+
+    setattr(period, counter_field, current_count + quantity)
+    if metric == "high_quality_image":
+        period.image_generations += quantity
+    period.credits_used += credit_cost
+
+    meta = dict(event_meta or {})
+    meta.setdefault("reservation", True)
+    ledger = UsageLedger(
+        user_id=user.id,
+        workspace_id=workspace_id,
+        subscription_id=period.subscription_id,
+        period_key=period.period_key,
+        feature_type=feature_type or metric,
+        event_type=metric,
+        quantity=quantity,
+        credits_delta=credit_cost,
+        balance_after=period.credits_granted - period.credits_used,
+        idempotency_key=clean_key,
+        status="reserved",
+        event_meta=meta,
+    )
+    db.add(period)
+    db.add(ledger)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if clean_key:
+            existing = db.scalar(
+                select(UsageLedger).where(UsageLedger.idempotency_key == clean_key)
+            )
+            if existing:
+                return existing
+        raise
+    db.refresh(ledger)
+    return ledger
+
+
+def finalize_usage(
+    db: Session,
+    ledger_or_id: UsageLedger | int,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    estimated_external_cost: float | None = None,
+    event_meta: dict | None = None,
+) -> UsageLedger | None:
+    """Finalize a successful reservation without changing its entitlement cost."""
+    ledger_id = ledger_or_id.id if isinstance(ledger_or_id, UsageLedger) else int(ledger_or_id)
+    ledger = db.scalar(
+        select(UsageLedger).where(UsageLedger.id == ledger_id).with_for_update()
+    )
+    if not ledger:
+        db.rollback()
+        return None
+    if ledger.status == "completed":
+        return ledger
+    if ledger.status != "reserved":
+        db.rollback()
+        return None
+
+    ledger.status = "completed"
+    ledger.provider = str(provider).strip()[:80] if provider else ledger.provider
+    ledger.model = str(model).strip()[:160] if model else ledger.model
+    ledger.estimated_external_cost = estimated_external_cost
+    ledger.event_meta = {**(ledger.event_meta or {}), **(event_meta or {})}
+    db.add(ledger)
+    db.commit()
+    db.refresh(ledger)
+    return ledger
+
+
 def refund_usage(
     db: Session,
     ledger_or_id: UsageLedger | int,
@@ -462,7 +651,7 @@ def refund_usage(
     original = db.scalar(
         select(UsageLedger).where(UsageLedger.id == ledger_id).with_for_update()
     )
-    if not original or original.status != "consumed":
+    if not original or original.status not in {"consumed", "reserved"}:
         db.rollback()
         return None
 
