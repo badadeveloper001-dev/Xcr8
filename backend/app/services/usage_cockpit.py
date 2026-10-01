@@ -92,8 +92,6 @@ def refund_blocked(ctx):
 def install(app):
     @app.middleware("http")
     async def usage_identity(request, call_next):
-        if not ledger.enabled():
-            return await call_next(request)
         path = request.url.path.rstrip("/")
         is_ai = request.method == "POST" and (path.startswith("/api/v1/ai/") or path.startswith("/api/v1/distribution"))
         is_event = path == "/api/v1/pulse/value-event"
@@ -111,7 +109,8 @@ def install(app):
                 header_user = request.headers.get("x-xcr8-user-id")
                 if (claimed is not None and str(claimed) != str(user_id)) or (header_user and header_user != str(user_id)):
                     return JSONResponse({"detail": "This request belongs to another account."}, status_code=403)
-                ctx_token = ledger.context.set({"user_id": user_id})
+                if ledger.enabled():
+                    ctx_token = ledger.context.set({"user_id": user_id})
             response = await call_next(request)
             ctx = ledger.context.get()
             if ctx and ctx.get("last_request_id"):
