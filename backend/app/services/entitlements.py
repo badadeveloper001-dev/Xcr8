@@ -150,7 +150,7 @@ LEGACY_PLAN_ALIASES = {
 _COUNTER_FIELDS: dict[UsageMetric, str] = {
     "text_generation": "text_generations",
     "advanced_ai_generation": "text_generations",
-    "ai_content_analysis": "text_generations",
+    "ai_content_analysis": None,
     "image_generation": "image_generations",
     "high_quality_image": "high_quality_images",
     "voiceover": "voiceovers",
@@ -445,9 +445,9 @@ def consume_usage(
         raise _feature_error(plan, "high_quality_image")
 
     counter_field = _COUNTER_FIELDS[metric]
-    current_count = int(getattr(period, counter_field) or 0)
-    limit = int(getattr(plan, counter_field))
-    if current_count + quantity > limit:
+    current_count = int(getattr(period, counter_field) or 0) if counter_field else 0
+    limit = int(getattr(plan, counter_field)) if counter_field else 0
+    if counter_field and current_count + quantity > limit:
         db.rollback()
         raise _quota_error(plan, counter_field, limit)
 
@@ -472,7 +472,8 @@ def consume_usage(
             },
         )
 
-    setattr(period, counter_field, current_count + quantity)
+    if counter_field:
+        setattr(period, counter_field, current_count + quantity)
     if metric == "high_quality_image":
         period.image_generations += quantity
     period.credits_used += credit_cost
