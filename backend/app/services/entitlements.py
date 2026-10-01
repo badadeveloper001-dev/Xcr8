@@ -474,6 +474,7 @@ def consume_usage(
         period.image_generations += quantity
     period.credits_used += credit_cost
 
+    ledger_meta = {**(event_meta or {}), "plan": plan.id}
     ledger = UsageLedger(
         user_id=user.id,
         subscription_id=period.subscription_id,
@@ -485,7 +486,7 @@ def consume_usage(
         balance_after=period.credits_granted - period.credits_used,
         idempotency_key=clean_key,
         status="consumed",
-        event_meta=event_meta or {},
+        event_meta=ledger_meta,
     )
     db.add(period)
     db.add(ledger)
@@ -580,6 +581,7 @@ def reserve_usage(
     period.credits_used += credit_cost
 
     meta = dict(event_meta or {})
+    meta.setdefault("plan", plan.id)
     meta.setdefault("reservation", True)
     ledger = UsageLedger(
         user_id=user.id,
