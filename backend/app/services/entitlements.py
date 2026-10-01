@@ -568,9 +568,9 @@ def reserve_usage(
         raise _feature_error(plan, "high_quality_image")
 
     counter_field = _COUNTER_FIELDS[metric]
-    current_count = int(getattr(period, counter_field) or 0)
-    limit = int(getattr(plan, counter_field))
-    if current_count + quantity > limit:
+    current_count = int(getattr(period, counter_field) or 0) if counter_field else 0
+    limit = int(getattr(plan, counter_field)) if counter_field else 0
+    if counter_field and current_count + quantity > limit:
         db.rollback()
         raise _quota_error(plan, counter_field, limit)
 
@@ -593,7 +593,8 @@ def reserve_usage(
             },
         )
 
-    setattr(period, counter_field, current_count + quantity)
+    if counter_field:
+        setattr(period, counter_field, current_count + quantity)
     if metric == "high_quality_image":
         period.image_generations += quantity
     period.credits_used += credit_cost
