@@ -245,7 +245,9 @@ def _activate_paystack_payment(
         billing_anchor = datetime.fromisoformat(anchor_raw.replace("Z", "+00:00")) if anchor_raw else None
     except ValueError:
         billing_anchor = None
-    if billing_anchor is None or billing_anchor.tzinfo is None:
+    if not active_subscription:
+        billing_anchor = now
+    elif billing_anchor is None or billing_anchor.tzinfo is None:
         billing_anchor = now if billing_anchor is None else billing_anchor.replace(tzinfo=UTC)
 
     user.plan_tier = PlanTier(normalized_plan)
