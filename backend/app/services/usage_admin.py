@@ -115,6 +115,7 @@ def admin_usage_snapshot(db: Session) -> dict:
             "today": float(today),
             "month": float(month),
             "known_historical": float(known_cost),
+            "average_known_cost_per_account": float(known_cost) / total_users if total_users else 0.0,
         },
         "usage": {
             "credits": int(sum(int(row.credits_delta or 0) for row in rows)),
