@@ -794,14 +794,31 @@ def usage_snapshot(db: Session, user_id: int) -> dict:
     plan = plan_for_user(user)
     period = _usage_period(db, user)
     account = db.scalar(select(UsageAccount).where(UsageAccount.user_id == user.id))
+    granted = max(int(period.credits_granted or 0), plan.monthly_credits)
+    used = max(0, int(period.credits_used or 0))
+    remaining = max(0, granted - used)
+    consumed_percent = 100 if granted <= 0 else min(100, int((used * 100) / granted))
+    warning = (
+        "exhausted"
+        if consumed_percent >= 100
+        else "critical"
+        if consumed_percent >= 90
+        else "warning"
+        if consumed_percent >= 75
+        else None
+    )
     payload = {
         "user_id": user.id,
         "plan": serialize_plan(plan),
         "period": period.period_key,
+        "period_start": period.period_start,
+        "period_end": period.period_end,
         "credits": {
-            "granted": max(period.credits_granted, plan.monthly_credits),
-            "used": period.credits_used,
-            "remaining": max(0, max(period.credits_granted, plan.monthly_credits) - period.credits_used),
+            "granted": granted,
+            "used": used,
+            "remaining": remaining,
+            "consumed_percent": consumed_percent,
+            "warning": warning,
         },
         "usage": {
             "text_generations": period.text_generations,
