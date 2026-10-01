@@ -295,6 +295,18 @@ def test_invalid_config():
     with pytest.raises(ValueError):
         ledger.validate_config(config)
 
+    config = deepcopy(ledger.DEFAULT_CONFIG)
+    config["prices"] = {
+        "openai/test": {
+            "input_cache_hit_per_million": "0.25",
+            "output_per_million": "15",
+            "source": "synthetic-invalid-rate",
+            "effective_date": "2026-09-30",
+        }
+    }
+    with pytest.raises(ValueError):
+        ledger.validate_config(config)
+
 
 
 def test_dashboard_accounting_breakdowns_and_fallback_request_cost(db):
