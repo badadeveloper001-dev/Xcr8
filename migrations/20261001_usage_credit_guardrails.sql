@@ -60,3 +60,17 @@ CREATE INDEX IF NOT EXISTS ix_usage_ledger_provider_model
 
 CREATE INDEX IF NOT EXISTS ix_usage_ledger_created_status
     ON usage_ledger (created_at, status);
+
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_usage_ledger_workspace'
+    ) THEN
+        ALTER TABLE usage_ledger
+            ADD CONSTRAINT fk_usage_ledger_workspace
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id);
+    END IF;
+END $$;
