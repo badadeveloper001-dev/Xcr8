@@ -625,6 +625,10 @@ def reserve_usage(
                 return existing
         raise
     db.refresh(ledger)
+    from app.usage import ledger as pulse_ledger
+    ctx = pulse_ledger.context.get()
+    if pulse_ledger.enabled() and ctx is not None:
+        ctx["new_credit_debit"] = (db, ledger.id)
     return ledger
 
 
