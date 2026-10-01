@@ -19,7 +19,7 @@ from app.schemas.mvp import (
 )
 from app.services.pulse import resolve_pulse_incident
 from app.services.usage_admin import admin_usage_snapshot
-from app.services.growth_reporting import growth_snapshot
+from app.services.growth_reporting import growth_snapshot, growth_source_details
 from app.services.pulse import record_pulse_event
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -235,6 +235,24 @@ def admin_growth(
     if days < 1 or days > 3650:
         raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
     return growth_snapshot(db, days=days)
+
+
+@router.get("/growth/sources", response_model=dict)
+def admin_growth_sources(
+    request: Request,
+    days: int = 30,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
+    now = datetime.now(tz=UTC)
+    start = now - timedelta(days=days)
+    return {
+        "window": {"days": days, "start": start.isoformat(), "end": now.isoformat()},
+        **growth_source_details(db, start, now),
+    }
 
 
 @router.get("/usage", response_model=dict)
