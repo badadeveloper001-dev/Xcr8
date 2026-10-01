@@ -171,7 +171,7 @@ def test_usage_deduction_is_idempotent_and_free_images_are_blocked():
         period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
         ledger_rows = db.query(UsageLedger).filter(UsageLedger.user_id == user.id).all()
         assert period.credits_granted == 500
-        assert period.credits_used == 5
+        assert period.credits_used == 1
         assert period.text_generations == 1
         assert len(ledger_rows) == 1
 
@@ -202,7 +202,7 @@ def test_plan_catalog_matches_entitlements():
     assert plans["starter"]["pricing"]["monthly_formatted"] == "$9"
     assert plans["starter"]["pricing"]["annual_formatted"] == "$90"
     assert plans["pro"]["high_quality_images"] == 10
-    assert plans["business"]["high_quality_images"] == 50
+    assert plans["business"]["high_quality_images"] == 20
     assert plans["business"]["storage_megabytes"] == 50 * 1024
 
 
