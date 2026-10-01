@@ -52,6 +52,14 @@ PLAN_USAGE: Final[dict[str, PlanUsageConfig]] = {
 }
 
 
+PLAN_PRICING: Final[dict[str, PlanPricing]] = {
+    "free": PlanPricing(0, 0, 0, 0),
+    "starter": PlanPricing(900, 9_000, 750_000, 7_500_000),
+    "pro": PlanPricing(2_900, 29_000, 2_000_000, 20_000_000),
+    "business": PlanPricing(9_900, 99_000, 5_000_000, 50_000_000),
+}
+
+
 CREDIT_WEIGHTS: Final[dict[str, int]] = {
     "basic_text_generation": 1,
     "advanced_ai_generation": 4,
