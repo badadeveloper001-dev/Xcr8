@@ -385,6 +385,58 @@ def admin_create_growth_influencer(
     }
 
 
+@router.get("/growth/referrals", response_model=dict)
+def admin_growth_referrals(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+
+    campaigns = db.scalars(
+        select(GrowthCampaign).order_by(desc(GrowthCampaign.created_at))
+    ).all()
+    influencers = db.scalars(
+        select(InfluencerReferral).order_by(desc(InfluencerReferral.created_at))
+    ).all()
+
+    influencer_codes = {
+        referral.id: code
+        for referral, code in db.execute(
+            select(InfluencerReferral, ReferralCode.code)
+            .join(ReferralCode, ReferralCode.influencer_referral_id == InfluencerReferral.id)
+            .where(ReferralCode.active.is_(True))
+        ).all()
+    }
+
+    return {
+        "campaigns": [
+            {
+                "id": campaign.id,
+                "name": campaign.name,
+                "code": campaign.campaign_code,
+                "status": campaign.status,
+                "attribution_window_days": campaign.attribution_window_days,
+                "url": _growth_public_url(f"campaign/{campaign.campaign_code}"),
+            }
+            for campaign in campaigns
+        ],
+        "influencers": [
+            {
+                "id": influencer.id,
+                "name": influencer.influencer_name,
+                "code": influencer_codes.get(influencer.id),
+                "status": influencer.status,
+                "campaign_id": influencer.campaign_id,
+                "attribution_window_days": influencer.attribution_window_days,
+                "url": _growth_public_url(f"r/{influencer_codes[influencer.id]}"),
+            }
+            for influencer in influencers
+            if influencer.id in influencer_codes
+        ],
+    }
+
+
 @router.get("/growth", response_model=dict)
 def admin_growth(
     request: Request,
