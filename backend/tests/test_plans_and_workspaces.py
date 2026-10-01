@@ -1078,4 +1078,5 @@ def test_concurrent_reservations_cannot_overspend_postgres():
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(attempt, [1, 2]))
 
-    assert sorted(results) == [200, "reserved"]
+    assert results.count("reserved") == 1
+    assert results.count(429) == 1
