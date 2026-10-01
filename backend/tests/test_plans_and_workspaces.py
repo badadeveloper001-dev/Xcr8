@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import httpx
 import json
 import sys
 import time
@@ -1121,5 +1122,38 @@ def test_free_user_cannot_generate_standard_images(monkeypatch):
         assert response.status_code == 403
         assert response.json()["detail"]["code"] == "feature_not_in_plan"
         assert called is False
+    finally:
+        db.close()
+
+
+
+def test_provider_failure_refunds_reserved_image_credits(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(email="image-refund@test.local", display_name="Image Refund", plan_tier=PlanTier.starter)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        def fail_provider(*args, **kwargs):
+            raise httpx.RequestError("provider unavailable")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_provider)
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/image/generate",
+            json={"user_id": user.id, "prompt": "A test image", "quality": "standard"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "image-refund-1"},
+        )
+        assert response.status_code == 502
+
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.credits_used == 0
+        assert period.image_generations == 0
+        ledger_rows = db.query(UsageLedger).filter(UsageLedger.user_id == user.id).order_by(UsageLedger.id).all()
+        assert [row.status for row in ledger_rows] == ["refunded", "refunded"]
     finally:
         db.close()
