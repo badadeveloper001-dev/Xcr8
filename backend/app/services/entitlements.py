@@ -476,7 +476,9 @@ def consume_usage(
 
     ledger = UsageLedger(
         user_id=user.id,
+        subscription_id=period.subscription_id,
         period_key=period.period_key,
+        feature_type=metric,
         event_type=metric,
         quantity=quantity,
         credits_delta=credit_cost,
