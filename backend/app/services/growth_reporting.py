@@ -11,6 +11,7 @@ from app.db.models import (
     GrowthCampaign,
     InfluencerReferral,
     ReferralRelationship,
+    ReferralCode,
     WatermarkLink,
     PaymentEvent,
     UsageLedger,
@@ -65,25 +66,33 @@ def _source_breakdown(db: Session, start: datetime, end: datetime) -> list[dict]
         for row in rows
     ]
 
-    organic_users = int(
-        db.scalar(
-            select(func.count(User.id)).where(
-                User.created_at >= start,
-                User.created_at < end,
-                ~select(AcquisitionAttribution.user_id).where(
-                    AcquisitionAttribution.user_id == User.id
-                ).exists(),
-            )
+    organic_users, organic_activated, organic_paid = db.execute(
+        select(
+            func.count(User.id).label("users"),
+            func.count(
+                case((AcquisitionAttribution.activation_at.is_not(None), User.id))
+            ).label("activated"),
+            func.count(
+                case((AcquisitionAttribution.first_paid_at.is_not(None), User.id))
+            ).label("paid"),
         )
-        or 0
-    )
+        .outerjoin(
+            AcquisitionAttribution,
+            AcquisitionAttribution.user_id == User.id,
+        )
+        .where(
+            User.created_at >= start,
+            User.created_at < end,
+            AcquisitionAttribution.id.is_(None),
+        )
+    ).one()
     if organic_users:
         result.append(
             {
                 "source_type": "organic",
-                "users": organic_users,
-                "activated": 0,
-                "paid": 0,
+                "users": int(organic_users or 0),
+                "activated": int(organic_activated or 0),
+                "paid": int(organic_paid or 0),
             }
         )
 
@@ -266,7 +275,9 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         if event.watermark_id in watermarks:
             watermarks[event.watermark_id]["clicks"] += 1
         if event.referrer_user_id:
-            user_click_counts[event.referrer_user_id] = user_click_counts.get(event.referrer_user_id, 0) + 1
+            user_click_counts[event.referrer_user_id] = (
+                user_click_counts.get(event.referrer_user_id, 0) + 1
+            )
 
     attributions = list(
         db.scalars(
@@ -291,20 +302,30 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         rel.referred_user_id: rel
         for rel in relationships
     }
+    referral_code_owners = {
+        code.code: code.owner_user_id
+        for code in db.scalars(
+            select(ReferralCode).where(
+                ReferralCode.owner_user_id.is_not(None),
+                ReferralCode.active.is_(True),
+            )
+        )
+        if code.code
+    }
+    relationship_user_ids = (
+        {rel.referrer_user_id for rel in relationships}
+        | {rel.referred_user_id for rel in relationships}
+    )
+    user_ids_needed = relationship_user_ids | set(user_click_counts)
     users_by_id = {
         user.id: user
         for user in db.scalars(
-            select(User).where(
-                User.id.in_(
-                    {rel.referrer_user_id for rel in relationships}
-                    | {rel.referred_user_id for rel in relationships}
-                )
-            )
+            select(User).where(User.id.in_(user_ids_needed or {-1}))
         )
-    } if relationships else {}
+    }
 
     for referrer_user_id, click_count in user_click_counts.items():
-        referrer = db.get(User, referrer_user_id)
+        referrer = users_by_id.get(referrer_user_id)
         user_sources.setdefault(
             referrer_user_id,
             _source_metric_template(
@@ -322,12 +343,16 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         elif row.first_touch_type == "watermark" and row.first_touch_watermark_id in watermarks:
             target = watermarks[row.first_touch_watermark_id]
         elif row.first_touch_type == "user_referral" and row.first_touch_referral_code:
-            relationship = relationship_by_code.get(row.first_touch_referral_code)
-            if not relationship:
+            referrer_user_id = referral_code_owners.get(row.first_touch_referral_code)
+            if not referrer_user_id:
                 continue
-            referrer = users_by_id.get(relationship.referrer_user_id)
+            referrer = users_by_id.get(referrer_user_id)
+            if not referrer:
+                referrer = db.get(User, referrer_user_id)
+                if referrer:
+                    users_by_id[referrer_user_id] = referrer
             target = user_sources.setdefault(
-                relationship.referrer_user_id,
+                referrer_user_id,
                 _source_metric_template(
                     (referrer.display_name if referrer else f"User {relationship.referrer_user_id}"),
                     "user_referral",
@@ -342,17 +367,27 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         if row.first_paid_at is not None:
             target["paid_users"] += 1
 
-    payment_rows = db.scalars(
-        select(PaymentEvent).where(
-            PaymentEvent.signature_verified.is_(True),
-            PaymentEvent.amount_minor.is_not(None),
-            PaymentEvent.processed_at >= start,
-            PaymentEvent.processed_at < end,
+    payment_rows = list(
+        db.scalars(
+            select(PaymentEvent).where(
+                PaymentEvent.signature_verified.is_(True),
+                PaymentEvent.amount_minor.is_not(None),
+                PaymentEvent.processed_at >= start,
+                PaymentEvent.processed_at < end,
+            )
+        )
+    )
+    payment_user_ids = {payment.user_id for payment in payment_rows if payment.user_id is not None}
+    payment_attributions = list(
+        db.scalars(
+            select(AcquisitionAttribution).where(
+                AcquisitionAttribution.user_id.in_(payment_user_ids or {-1})
+            )
         )
     )
     attribution_by_user = {
         row.user_id: row
-        for row in attributions
+        for row in [*attributions, *payment_attributions]
     }
     for payment in payment_rows:
         attribution = attribution_by_user.get(payment.user_id)
@@ -366,9 +401,19 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         elif attribution.first_touch_type == "watermark":
             target = watermarks.get(attribution.first_touch_watermark_id)
         elif attribution.first_touch_type == "user_referral" and attribution.first_touch_referral_code:
-            relationship = relationship_by_code.get(attribution.first_touch_referral_code)
-            if relationship:
-                target = user_sources.get(relationship.referrer_user_id)
+            referrer_user_id = referral_code_owners.get(attribution.first_touch_referral_code)
+            if referrer_user_id:
+                referrer = users_by_id.get(referrer_user_id) or db.get(User, referrer_user_id)
+                if referrer:
+                    users_by_id[referrer_user_id] = referrer
+                    target = user_sources.setdefault(
+                        referrer_user_id,
+                        _source_metric_template(
+                            referrer.display_name or f"User {referrer_user_id}",
+                            "user_referral",
+                            referrer_user_id,
+                        ),
+                    )
         if target:
             _add_revenue(target, payment.currency, payment.amount_minor)
 
