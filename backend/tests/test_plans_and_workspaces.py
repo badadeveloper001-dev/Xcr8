@@ -1127,6 +1127,60 @@ def test_free_user_cannot_generate_standard_images(monkeypatch):
 
 
 
+def test_assistant_fallback_counts_as_completed_usage(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(
+            email="assistant-fallback@test.local",
+            display_name="Assistant Fallback",
+            plan_tier=PlanTier.pro,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        def fail_provider(*args, **kwargs):
+            raise RuntimeError("provider unavailable")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_provider)
+
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/assistant",
+            json={
+                "user_id": user.id,
+                "message": "Help me plan my content for this week",
+            },
+            headers={
+                "X-Xcr8-User-Id": str(user.id),
+                "Idempotency-Key": "assistant-fallback-1",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["model"] == "backend-local-assistant-fallback"
+
+        db.expire_all()
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.credits_used == 4
+
+        ledger_rows = (
+            db.query(UsageLedger)
+            .filter(UsageLedger.user_id == user.id)
+            .order_by(UsageLedger.id)
+            .all()
+        )
+        assert len(ledger_rows) == 1
+        assert ledger_rows[0].status == "completed"
+        assert ledger_rows[0].provider == "backend-local"
+        assert ledger_rows[0].model == "backend-local-assistant-fallback"
+    finally:
+        db.close()
+
+
 def test_provider_failure_refunds_reserved_image_credits(monkeypatch):
     monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
     db = SessionLocal()
