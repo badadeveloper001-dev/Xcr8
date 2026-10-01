@@ -967,7 +967,7 @@ def test_insufficient_credits_blocks_compose_before_provider_call(monkeypatch):
 
         period = UsagePeriod(
             user_id=user.id,
-            period_key="2026-10-credit-denial",
+            period_key=datetime.now(tz=UTC).strftime("%Y-%m"),
             credits_granted=15_000,
             credits_used=14_999,
         )
