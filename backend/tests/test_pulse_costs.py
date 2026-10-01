@@ -128,6 +128,49 @@ def test_deepseek_provider_settlement_uses_cache_usage(db):
         assert row["cost_basis"] == "calculated"
 
 
+def test_deepseek_chat_settlement_uses_one_peak_snapshot(db, monkeypatch):
+    policy(db, prices={"deepseek/test": DEEPSEEK_RATE})
+    monkeypatch.setattr(ledger, "deepseek_peak", lambda: True)
+
+    class Usage:
+        prompt_tokens = 1000
+        completion_tokens = 200
+        prompt_cache_hit_tokens = 700
+        prompt_cache_miss_tokens = 300
+
+    class Response:
+        usage = Usage()
+
+    class Completions:
+        def create(self, **kwargs):
+            return Response()
+
+    class Chat:
+        completions = Completions()
+
+    class Client:
+        chat = Chat()
+        def with_options(self, **kwargs):
+            return self
+
+    token = ledger.context.set({"user_id": 1})
+    ident = ledger.start_request("compose")
+    ledger.context.set({"user_id": 1, "request_id": ident, "feature": "compose"})
+    try:
+        assert ledger.chat_call(Client(), "deepseek", {
+            "model": "test",
+            "messages": [{"role": "user", "content": "hello"}],
+            "max_tokens": 200,
+        }) is not None
+    finally:
+        ledger.context.reset(token)
+
+    with db.connect() as conn:
+        row = conn.execute(select(ledger.attempts)).mappings().one()
+        assert row["cost_micros"] == 335
+        assert row["cost_basis"] == "calculated"
+
+
 def test_openai_cached_input_uses_cache_rate_and_uncached_rate():
     rate = {
         "input_per_million": "2.5",
