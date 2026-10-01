@@ -459,3 +459,14 @@ def dashboard():
                 ).where(attempts.c.request_id.in_(request_ids))
                  .order_by(attempts.c.created_at.asc())).mappings()
             ]
+return {
+        "periods": periods,
+        "features": feature_rows,
+        "providers": providers,
+        "users": user_rows,
+        "user_features": user_features,
+        "value_events": values,
+        "recent": recent,
+        "config": cfg,
+        "revision": revision,
+    }
