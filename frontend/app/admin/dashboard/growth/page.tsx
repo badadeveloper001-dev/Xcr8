@@ -412,11 +412,6 @@ export default function GrowthDashboard() {
             Window: {new Date(snapshot.window.start).toLocaleDateString()} → {new Date(snapshot.window.end).toLocaleDateString()}. Revenue is shown in original currencies; mixed currencies are not combined.
           </p>
 
-              <label className="text-sm">Attribution window (days)<input type="number" min="1" max="3650" value={createAttributionDays} onChange={(e) => setCreateAttributionDays(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2" /></label>
-              {createError && <p role="alert" className="rounded-lg bg-red-900/30 p-3 text-sm">{createError}</p>}
-              <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-white/10 px-4 py-2 text-sm">Cancel</button><button type="button" disabled={createBusy || createName.trim().length < 2} onClick={() => void submitReferral()} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm disabled:opacity-50">{createBusy ? "Creating…" : "Create"}</button></div>
-            </div>
-          </div>
         </div>
       )}
         </>
