@@ -12,7 +12,7 @@ function normalizeBaseUrl(value: string): string {
 export async function proxyGrowthAttribution(request: NextRequest, backendPath: string): Promise<Response> {
   const baseUrl = BACKEND_API_URL ? normalizeBaseUrl(BACKEND_API_URL) : "";
   if (!baseUrl) return Response.json({ detail: "Backend API is not configured." }, { status: 503 });
-  const target = new URL(`${baseUrl}${backendPath}`);
+  const target = new URL(`${baseUrl}/api/v1${backendPath}`);
   request.nextUrl.searchParams.forEach((value, key) => target.searchParams.set(key, value));
   const headers = new Headers(request.headers);
   for (const name of Array.from(headers.keys())) {
