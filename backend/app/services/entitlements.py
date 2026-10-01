@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Literal
@@ -312,8 +313,9 @@ def _billing_window(user: User, now: datetime | None = None) -> tuple[str, datet
     end = _add_months(start, 1)
     subscription_id = str((user.billing_meta or {}).get("subscription_id") or "").strip() or None
     identity = subscription_id or f"{plan.id}:{anchor.isoformat()}"
-    key = f"{identity}:{start.isoformat()}"
-    return key[:64], start, end, subscription_id
+    digest = hashlib.sha256(f"{identity}:{start.isoformat()}".encode()).hexdigest()[:24]
+    key = f"billing:{start.strftime('%Y%m%d')}:{digest}"
+    return key, start, end, subscription_id
 
 
 def _lock_user(db: Session, user_id: int) -> User:
