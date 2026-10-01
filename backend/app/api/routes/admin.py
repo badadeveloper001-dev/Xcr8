@@ -19,6 +19,7 @@ from app.schemas.mvp import (
 )
 from app.services.pulse import resolve_pulse_incident
 from app.services.usage_admin import admin_usage_snapshot
+from app.services.growth_reporting import growth_snapshot
 from app.services.pulse import record_pulse_event
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -221,6 +222,19 @@ def _require_admin_access(x_admin_code: str | None, request: Request) -> None:
         _record_failed_attempt(client_id)
         raise HTTPException(status_code=401, detail="Invalid admin access code")
     _clear_attempts(client_id)
+
+
+@router.get("/growth", response_model=dict)
+def admin_growth(
+    request: Request,
+    days: int = 30,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
+    return growth_snapshot(db, days=days)
 
 
 @router.get("/usage", response_model=dict)
