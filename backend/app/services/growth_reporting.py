@@ -272,16 +272,20 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         )
     )
     user_sources: dict[int, dict] = {}
-    referrer_ids = {
-        row.first_touch_referral_code: None
-        for row in attributions
-        if row.first_touch_type == "user_referral" and row.first_touch_referral_code
-    }
     relationships = list(
         db.scalars(
             select(ReferralRelationship).order_by(ReferralRelationship.created_at)
         )
     )
+    relationship_by_code = {
+        rel.referral_code: rel
+        for rel in relationships
+        if rel.referral_code
+    }
+    relationship_by_referred = {
+        rel.referred_user_id: rel
+        for rel in relationships
+    }
     users_by_id = {
         user.id: user
         for user in db.scalars(
@@ -302,10 +306,7 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         elif row.first_touch_type == "watermark" and row.first_touch_watermark_id in watermarks:
             target = watermarks[row.first_touch_watermark_id]
         elif row.first_touch_type == "user_referral" and row.first_touch_referral_code:
-            relationship = next(
-                (rel for rel in relationships if rel.referral_code == row.first_touch_referral_code),
-                None,
-            )
+            relationship = relationship_by_code.get(row.first_touch_referral_code)
             if not relationship:
                 continue
             referrer = users_by_id.get(relationship.referrer_user_id)
@@ -349,10 +350,7 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         elif attribution.first_touch_type == "watermark":
             target = watermarks.get(attribution.first_touch_watermark_id)
         elif attribution.first_touch_type == "user_referral" and attribution.first_touch_referral_code:
-            relationship = next(
-                (rel for rel in relationships if rel.referral_code == attribution.first_touch_referral_code),
-                None,
-            )
+            relationship = relationship_by_code.get(attribution.first_touch_referral_code)
             if relationship:
                 target = user_sources.get(relationship.referrer_user_id)
         if target:
@@ -370,9 +368,9 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         depth = 1
         seen = {rel.referred_user_id}
         current = rel.referrer_user_id
-        while current in {r.referred_user_id for r in relationships} and current not in seen:
+        while current in relationship_by_referred and current not in seen:
             seen.add(current)
-            parent = next((r for r in relationships if r.referred_user_id == current), None)
+            parent = relationship_by_referred.get(current)
             if not parent:
                 break
             depth += 1
