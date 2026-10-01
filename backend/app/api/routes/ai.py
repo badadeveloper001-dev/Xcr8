@@ -46,7 +46,7 @@ from app.schemas.mvp import (
     AITrendSignal,
 )
 from app.services.ai_adapter import generate_composed_content, generate_content_ideas, post_ai_service
-from app.services.entitlements import consume_usage, plan_for_user, refund_usage, require_feature
+from app.services.entitlements import consume_usage, finalize_usage, plan_for_user, refund_usage, require_feature, reserve_usage
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
@@ -1093,26 +1093,33 @@ def image_generate(
     plan = plan_for_user(user)
     require_feature(db, user.id, "image_generation")
     requested_quality = payload.quality.strip().lower()
-    actual_quality = requested_quality
-    metric = "image_generation"
     if requested_quality in {"high", "hd"}:
-        if plan.high_quality_allowed:
-            actual_quality = "high"
-            metric = "high_quality_image"
-        else:
-            # Starter includes images but explicitly excludes high-quality generation.
-            actual_quality = "standard"
+        requested_quality = "hq"
+    if requested_quality not in {"preview", "standard", "hq"}:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_image_mode", "message": "Image mode must be preview, standard, or hq."},
+        )
 
-    usage_ledger = consume_usage(
+    metric = "high_quality_image" if requested_quality == "hq" else "image_generation"
+    if requested_quality == "hq" and not plan.high_quality_allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "feature_not_in_plan",
+                "resource": "high_quality_image",
+                "plan": plan.id,
+                "message": f"High-quality images are not included in the {plan.name} plan.",
+            },
+        )
+
+    usage_ledger = reserve_usage(
         db,
         user.id,
         metric,
         idempotency_key=idempotency_key,
-        event_meta={
-            "route": "/ai/image/generate",
-            "requested_quality": requested_quality,
-            "actual_quality": actual_quality,
-        },
+        feature_type="hq_image_generation" if requested_quality == "hq" else "standard_image_generation",
+        event_meta={"route": "/ai/image/generate", "requested_quality": requested_quality},
     )
 
     try:
@@ -1122,11 +1129,19 @@ def image_generate(
                 "prompt": payload.prompt,
                 "width": payload.width,
                 "height": payload.height,
-                "quality": actual_quality,
+                "quality": requested_quality,
             },
             timeout=120.0,
         )
-        return response.json()
+        result = response.json()
+        finalize_usage(
+            db,
+            usage_ledger,
+            provider="ai-service",
+            model=str(result.get("model") or "") or None,
+            event_meta={"provider_result": "completed"},
+        )
+        return result
     except httpx.HTTPStatusError as exc:
         refund_usage(db, usage_ledger, reason="image_provider_rejected_request", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Image provider rejected the request")
@@ -1146,11 +1161,12 @@ def voiceover(
         raise HTTPException(status_code=404, detail="User not found")
 
     require_feature(db, payload.user_id, "voiceover")
-    usage_ledger = consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
-        "text_generation",
+        "voiceover",
         idempotency_key=idempotency_key,
+        feature_type="short_voiceover",
         event_meta={"route": "/ai/voiceover", "feature": "voiceover_script"},
     )
 
@@ -1196,7 +1212,9 @@ def voiceover(
         refund_usage(db, usage_ledger, reason="voiceover_script_provider_unavailable")
         raise HTTPException(status_code=502, detail="Voiceover provider is unavailable. No Xcr8 credits were used.") from exc
 
-    return AIVoiceoverResponse(**result.json())
+    parsed = AIVoiceoverResponse(**result.json())
+    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed"})
+    return parsed
 
 
 @router.post("/voiceover/audio")
@@ -1209,12 +1227,16 @@ def voiceover_audio(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    usage_ledger = consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
         "voiceover",
         idempotency_key=idempotency_key,
-        event_meta={"route": "/ai/voiceover/audio"},
+        feature_type="short_voiceover",
+        event_meta={
+            "route": "/ai/voiceover/audio",
+            "voiceover_characters": len(payload.text),
+        },
     )
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
@@ -1259,6 +1281,7 @@ def voiceover_audio(
         refund_usage(db, usage_ledger, reason="voiceover_audio_provider_unavailable")
         raise HTTPException(status_code=502, detail="Voiceover audio provider is unavailable. No Xcr8 credits were used.") from exc
 
+    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed", "voiceover_characters": len(payload.text)})
     return Response(content=result.content, media_type=result.headers.get("content-type", "audio/mpeg"))
 
 
