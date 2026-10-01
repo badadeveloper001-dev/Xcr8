@@ -47,6 +47,7 @@ from app.schemas.mvp import (
 )
 from app.services.ai_adapter import generate_composed_content, generate_content_ideas, post_ai_service
 from app.services.entitlements import consume_usage, finalize_usage, plan_for_user, refund_usage, require_feature, reserve_usage
+from app.services.usage_config import IMAGE_MODES
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
@@ -1121,7 +1122,7 @@ def image_generate(
     requested_quality = payload.quality.strip().lower()
     if requested_quality in {"high", "hd"}:
         requested_quality = "hq"
-    if requested_quality not in {"preview", "standard", "hq"}:
+    if requested_quality not in IMAGE_MODES:
         raise HTTPException(
             status_code=400,
             detail={"code": "invalid_image_mode", "message": "Image mode must be preview, standard, or hq."},
