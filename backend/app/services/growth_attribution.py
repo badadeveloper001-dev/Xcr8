@@ -186,7 +186,7 @@ def capture_visit(
             watermark_id=source.watermark_id,
             referrer_user_id=source.referrer_user_id,
             event_time=datetime.now(tz=UTC),
-            metadata={"source_type": source.source_type, "tracking_id": tracking_id},
+            event_metadata={"source_type": source.source_type, "tracking_id": tracking_id},
         )
     )
     db.commit()
@@ -331,7 +331,7 @@ def attach_user_attribution(
             watermark_id=source.watermark_id,
             event_type=event_type,
             event_time=now,
-            metadata={"tracking_id": visit.tracking_id, "source_type": source.source_type},
+            event_metadata={"tracking_id": visit.tracking_id, "source_type": source.source_type},
         )
     )
     db.commit()
