@@ -694,7 +694,10 @@ def refund_usage(
     refund_key = f"refund:{original.id}"
     refund = UsageLedger(
         user_id=original.user_id,
+        workspace_id=original.workspace_id,
+        subscription_id=original.subscription_id,
         period_key=original.period_key,
+        feature_type=original.feature_type or metric,
         event_type=f"{metric}_refund",
         quantity=quantity,
         credits_delta=-int(original.credits_delta or 0),
