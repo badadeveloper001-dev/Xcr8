@@ -385,6 +385,35 @@ def admin_create_growth_influencer(
     }
 
 
+@router.post("/growth/referrals/{source_type}/{source_id}/status", response_model=dict)
+def admin_growth_referral_status(
+    source_type: str,
+    source_id: int,
+    request: Request,
+    status: str,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+    normalized = status.strip().lower()
+    if normalized not in {"active", "inactive"}:
+        raise HTTPException(status_code=422, detail="Status must be active or inactive.")
+
+    if source_type == "campaign":
+        source = db.get(GrowthCampaign, source_id)
+    elif source_type == "influencer":
+        source = db.get(InfluencerReferral, source_id)
+    else:
+        raise HTTPException(status_code=422, detail="Source type must be campaign or influencer.")
+    if not source:
+        raise HTTPException(status_code=404, detail="Referral source not found.")
+
+    source.status = normalized
+    db.add(source)
+    db.commit()
+    return {"id": source.id, "source_type": source_type, "status": source.status}
+
+
 @router.get("/growth/referrals", response_model=dict)
 def admin_growth_referrals(
     request: Request,
