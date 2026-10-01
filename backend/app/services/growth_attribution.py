@@ -203,22 +203,23 @@ def _source_from_visit(db: Session, visit: AttributionVisit) -> AttributionSourc
             raise ValueError("Watermark source is no longer active.")
         return AttributionSource(source_type="watermark", watermark_id=watermark.id)
 
-    if visit.referral_code:
-        try:
-            return resolve_referral_code(db, visit.referral_code)
-        except ValueError:
-            return resolve_campaign(db, visit.referral_code)
+    if visit.influencer_referral_id is not None and visit.referral_code:
+        return resolve_referral_code(db, visit.referral_code)
 
     if visit.campaign_id is not None:
         campaign = db.get(GrowthCampaign, visit.campaign_id)
         if not campaign or campaign.status != "active":
             raise ValueError("Campaign source is no longer active.")
-        return AttributionSource(
-            source_type="campaign",
-            referral_code=campaign.campaign_code,
-            campaign_id=campaign.id,
-            attribution_window_days=_bounded_window(campaign.attribution_window_days),
-        )
+        if visit.referral_code == campaign.campaign_code:
+            return AttributionSource(
+                source_type="campaign",
+                referral_code=campaign.campaign_code,
+                campaign_id=campaign.id,
+                attribution_window_days=_bounded_window(campaign.attribution_window_days),
+            )
+
+    if visit.referral_code:
+        return resolve_referral_code(db, visit.referral_code)
 
     raise ValueError("Attribution visit has no resolvable source.")
 
