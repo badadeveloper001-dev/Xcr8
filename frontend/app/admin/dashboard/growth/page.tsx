@@ -108,6 +108,27 @@ function SourceTable({ rows, empty }: { rows: SourceRow[]; empty: string }) {
         </tbody>
       </table>
       {!rows.length && <p className="py-3 text-sm text-slate-400">{empty}</p>}
+      {showCreate && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="create-referral-title" className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="xcr8-eyebrow">Growth</p><h2 id="create-referral-title" className="mt-1 text-xl font-semibold">Create Referral</h2></div>
+              <button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-white/10 px-3 py-1 text-sm">Close</button>
+            </div>
+            <div className="mt-5 grid gap-4">
+              <label className="text-sm">Type<select value={createType} onChange={(e) => { setCreateType(e.target.value as "campaign" | "influencer"); resetCreateForm(); }} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2"><option value="campaign">Campaign</option><option value="influencer">Influencer</option></select></label>
+              <label className="text-sm">{createType === "campaign" ? "Campaign name" : "Influencer name"}<input value={createName} onChange={(e) => setCreateName(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2" placeholder={createType === "campaign" ? "October Creator Campaign" : "Amina"} /></label>
+              <label className="text-sm">{createType === "campaign" ? "Campaign code (optional)" : "Referral code (optional)"}<input value={createCode} onChange={(e) => setCreateCode(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2" placeholder="Leave blank to generate" /></label>
+              {createType === "influencer" && (
+                <label className="text-sm">Campaign (optional)<select value={createCampaignId} onChange={(e) => setCreateCampaignId(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2"><option value="">No campaign</option>{sources.campaigns.map((row) => <option key={row.source_id} value={row.source_id}>{row.name}</option>)}</select></label>
+              )}
+              <label className="text-sm">Attribution window (days)<input type="number" min="1" max="3650" value={createAttributionDays} onChange={(e) => setCreateAttributionDays(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2" /></label>
+              {createError && <p role="alert" className="rounded-lg bg-red-900/30 p-3 text-sm">{createError}</p>}
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-white/10 px-4 py-2 text-sm">Cancel</button><button type="button" disabled={createBusy || createName.trim().length < 2} onClick={() => void submitReferral()} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm disabled:opacity-50">{createBusy ? "Creating…" : "Create"}</button></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -119,6 +140,17 @@ export default function GrowthDashboard() {
   const [tab, setTab] = useState<"overview" | "sources" | "network">("overview");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [createType, setCreateType] = useState<"campaign" | "influencer">("campaign");
+  const [createName, setCreateName] = useState("");
+  const [createCode, setCreateCode] = useState("");
+  const [createCampaignId, setCreateCampaignId] = useState("");
+  const [createAttributionDays, setCreateAttributionDays] = useState("30");
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [createdReferral, setCreatedReferral] = useState<{ name: string; url: string; code: string } | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState("");
+
 
   const refresh = async () => {
     setBusy(true);
@@ -142,6 +174,55 @@ export default function GrowthDashboard() {
   };
 
   useEffect(() => { void refresh(); }, [days]);
+  const resetCreateForm = () => {
+    setCreateName("");
+    setCreateCode("");
+    setCreateCampaignId("");
+    setCreateAttributionDays("30");
+    setCreateError("");
+    setCreatedReferral(null);
+  };
+
+  const submitReferral = async () => {
+    setCreateBusy(true);
+    setCreateError("");
+    setCreatedReferral(null);
+    try {
+      const endpoint = createType === "campaign" ? "/admin/data/growth/campaigns" : "/admin/data/growth/influencers";
+      const body = createType === "campaign"
+        ? { name: createName.trim(), campaign_code: createCode.trim() || undefined, attribution_window_days: Number(createAttributionDays) }
+        : {
+            influencer_name: createName.trim(),
+            referral_code: createCode.trim() || undefined,
+            campaign_id: createCampaignId ? Number(createCampaignId) : undefined,
+            attribution_window_days: Number(createAttributionDays),
+          };
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || "Unable to create referral.");
+      setCreatedReferral({
+        name: createType === "campaign" ? result.name : result.influencer_name,
+        url: result.url,
+        code: createType === "campaign" ? result.campaign_code : result.referral_code,
+      });
+      await refresh();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Unable to create referral.");
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
+  const copyReferral = async (url: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopiedUrl(url);
+    window.setTimeout(() => setCopiedUrl(""), 1800);
+  };
+
 
   const lifecycle = useMemo(
     () => Object.entries(snapshot?.lifecycle_events ?? {}),
@@ -170,6 +251,13 @@ export default function GrowthDashboard() {
             <option value={90}>90 days</option>
             <option value={365}>365 days</option>
           </select>
+          <button
+            type="button"
+            onClick={() => { resetCreateForm(); setShowCreate(true); }}
+            className="rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-300"
+          >
+            + Create Referral
+          </button>
           <button disabled={busy} onClick={() => void refresh()} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm disabled:opacity-50">
             {busy ? "Refreshing…" : "Refresh"}
           </button>
@@ -255,6 +343,23 @@ export default function GrowthDashboard() {
 
           {tab === "sources" && sources && (
             <div className="space-y-5">
+              <section className={panel}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div><h2 className="font-semibold">Referral management</h2><p className="mt-1 text-sm text-slate-400">Create campaign and influencer links for acquisition tracking.</p></div>
+                  <button type="button" onClick={() => { resetCreateForm(); setShowCreate(true); }} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm">Create Referral</button>
+                </div>
+                {createdReferral && (
+                  <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4">
+                    <p className="font-medium text-emerald-300">Referral created</p>
+                    <p className="mt-1 text-sm">{createdReferral.name} · {createdReferral.code}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <code className="min-w-0 flex-1 rounded-lg bg-black/20 px-3 py-2 text-xs break-all">{createdReferral.url}</code>
+                      <button type="button" onClick={() => void copyReferral(createdReferral.url)} className="rounded-lg border border-white/10 px-3 py-2 text-xs">{copiedUrl === createdReferral.url ? "Copied" : "Copy Link"}</button>
+                    </div>
+                  </div>
+                )}
+              </section>
+
               <section className={panel}><h2 className="mb-4 font-semibold">Campaigns</h2><SourceTable rows={sources.campaigns} empty="No campaign activity in this window." /></section>
               <section className={panel}><h2 className="mb-4 font-semibold">Influencers</h2><SourceTable rows={sources.influencers} empty="No influencer activity in this window." /></section>
               <section className={panel}><h2 className="mb-4 font-semibold">User referrals</h2><SourceTable rows={sources.user_referrals} empty="No user referral activity in this window." /></section>
