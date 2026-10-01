@@ -750,3 +750,89 @@ def test_paystack_checkout_requires_matching_xcr8_account_context(monkeypatch):
         assert mismatched.status_code == 403
     finally:
         db.close()
+
+
+
+def test_usage_reservation_finalization_and_refund():
+    from app.services.entitlements import finalize_usage, reserve_usage
+
+    db = SessionLocal()
+    try:
+        user = User(
+            email="reservation@test.local",
+            display_name="Reservation Tester",
+            plan_tier=PlanTier.pro,
+            plan_started_at=datetime.now(tz=UTC),
+            plan_expires_at=datetime.now(tz=UTC) + timedelta(days=31),
+            billing_meta={"subscription_id": "sub_reservation_test"},
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        reserved = reserve_usage(
+            db,
+            user.id,
+            "advanced_ai_generation",
+            idempotency_key="reservation-1",
+            feature_type="advanced_ai_generation",
+        )
+        assert reserved.status == "reserved"
+        assert reserved.credits_delta == 4
+        assert reserved.subscription_id == "sub_reservation_test"
+
+        finalized = finalize_usage(
+            db,
+            reserved.id,
+            provider="openai",
+            model="gpt-test",
+            estimated_external_cost=0.0012,
+        )
+        assert finalized is not None
+        assert finalized.status == "completed"
+        assert finalized.provider == "openai"
+        assert finalized.model == "gpt-test"
+        assert finalized.estimated_external_cost == pytest.approx(0.0012)
+
+        failed = reserve_usage(
+            db,
+            user.id,
+            "standard_image_generation",
+            idempotency_key="reservation-2",
+            feature_type="standard_image_generation",
+        )
+        assert failed.status == "reserved"
+        refund = refund_usage(db, failed.id, reason="provider_failure")
+        assert refund is not None
+        assert refund.status == "refunded"
+
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.credits_used == 4
+        assert period.image_generations == 0
+    finally:
+        db.close()
+
+
+def test_business_usage_limits_match_shared_pool():
+    db = SessionLocal()
+    try:
+        user = User(email="business-limits@test.local", display_name="Business Limits", plan_tier=PlanTier.business)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        from app.services.entitlements import consume_usage
+
+        for _ in range(200):
+            consume_usage(db, user.id, "image_generation")
+
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.image_generations == 200
+        assert period.credits_used == 4_000
+
+        with pytest.raises(HTTPException) as exc_info:
+            consume_usage(db, user.id, "image_generation")
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.detail["code"] == "plan_quota_exceeded"
+    finally:
+        db.close()
