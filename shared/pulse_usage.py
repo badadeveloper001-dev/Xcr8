@@ -129,6 +129,8 @@ def validate_config(value):
             raise ValueError("Prices require provider/model keys and documented rate fields.")
         if not rate.get("source") or not rate.get("effective_date"):
             raise ValueError("Each price needs its source and effective_date.")
+        if "input_cache_hit_per_million" in rate and "input_cache_miss_per_million" not in rate and "input_per_million" not in rate:
+            raise ValueError("Cache-hit pricing requires an uncached input rate or a cache-miss rate.")
         for field in set(rate) - {"source", "effective_date"}:
             number = Decimal(str(rate[field]))
             if not number.is_finite() or not 0 <= number <= 1000000:
@@ -158,7 +160,8 @@ def cost(rate, *, input_tokens=None, output_tokens=None, input_cache_hit_tokens=
     elif input_tokens is not None and output_tokens is not None and "input_cache_hit_per_million" in rate:
         output_key = "output_peak_per_million" if peak and "output_peak_per_million" in rate else "output_per_million"
         output_rate = Decimal(str(rate[output_key]))
-        hit_rate = Decimal(str(rate["input_cache_hit_per_million"]))
+        hit_key = "input_cache_hit_peak_per_million" if peak and "input_cache_hit_peak_per_million" in rate else "input_cache_hit_per_million"
+        hit_rate = Decimal(str(rate[hit_key]))
         if "input_cache_miss_per_million" in rate:
             miss_key = "input_cache_miss_peak_per_million" if peak and "input_cache_miss_peak_per_million" in rate else "input_cache_miss_per_million"
             miss_rate = Decimal(str(rate[miss_key]))
