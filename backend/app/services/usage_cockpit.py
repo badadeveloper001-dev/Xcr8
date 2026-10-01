@@ -112,7 +112,7 @@ def install(app):
                     header_user = request.headers.get("x-xcr8-user-id")
                     if (claimed is not None and str(claimed) != str(user_id)) or (header_user and header_user != str(user_id)):
                         return JSONResponse({"detail": "This request belongs to another account."}, status_code=403)
-if ledger.enabled():
+                if ledger.enabled():
                     ctx_token = ledger.context.set({"user_id": user_id})
             response = await call_next(request)
             ctx = ledger.context.get()
