@@ -222,6 +222,7 @@ export default function SignupPage() {
         confirm_password: confirmPassword,
         language: "english",
         timezone: "Africa/Lagos",
+        attribution_token: attributionToken,
       });
       setNotice(response.message || "A new verification code has been sent.");
     } catch (err) {

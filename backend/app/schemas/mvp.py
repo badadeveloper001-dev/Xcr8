@@ -43,6 +43,7 @@ class AuthLoginRequest(BaseModel):
 
 class AuthGoogleTokenRequest(BaseModel):
     access_token: str = Field(min_length=20, max_length=4096)
+    attribution_token: str | None = Field(default=None, min_length=16, max_length=160)
 
 
 class PasswordResetRequest(BaseModel):
