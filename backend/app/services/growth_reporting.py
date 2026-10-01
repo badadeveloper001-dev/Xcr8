@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     AcquisitionAttribution,
     GrowthEvent,
+    GrowthCampaign,
+    InfluencerReferral,
+    ReferralRelationship,
+    WatermarkLink,
     PaymentEvent,
     UsageLedger,
     User,
@@ -205,6 +209,191 @@ def _free_economics(db: Session, start: datetime, end: datetime) -> dict:
         "note": "This is provider-cost telemetry, not a monetary valuation of network value.",
     }
 
+
+
+
+def _source_metric_template(name: str, source_type: str, source_id: int) -> dict:
+    return {
+        "source_id": source_id,
+        "name": name,
+        "source_type": source_type,
+        "clicks": 0,
+        "signups": 0,
+        "activated": 0,
+        "paid_users": 0,
+        "revenue_by_currency": {},
+    }
+
+
+def _add_revenue(row: dict, currency: str | None, amount_minor: int | None) -> None:
+    if amount_minor is None:
+        return
+    code = str(currency or "UNKNOWN").upper()
+    row["revenue_by_currency"][code] = (
+        int(row["revenue_by_currency"].get(code, 0)) + int(amount_minor)
+    )
+
+
+def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
+    campaigns = {
+        item.id: _source_metric_template(item.name, "campaign", item.id)
+        for item in db.scalars(select(GrowthCampaign).order_by(GrowthCampaign.name))
+    }
+    influencers = {
+        item.id: _source_metric_template(item.influencer_name, "influencer", item.id)
+        for item in db.scalars(select(InfluencerReferral).order_by(InfluencerReferral.influencer_name))
+    }
+    watermarks = {
+        item.id: _source_metric_template(item.public_code, "watermark", item.id)
+        for item in db.scalars(select(WatermarkLink).order_by(WatermarkLink.id))
+    }
+
+    click_rows = db.scalars(
+        select(GrowthEvent).where(
+            GrowthEvent.event_type.in_(["referral_link_clicked", "watermark_link_clicked"]),
+            GrowthEvent.event_time >= start,
+            GrowthEvent.event_time < end,
+        )
+    )
+    for event in click_rows:
+        if event.campaign_id in campaigns:
+            campaigns[event.campaign_id]["clicks"] += 1
+        if event.influencer_referral_id in influencers:
+            influencers[event.influencer_referral_id]["clicks"] += 1
+        if event.watermark_id in watermarks:
+            watermarks[event.watermark_id]["clicks"] += 1
+
+    attributions = list(
+        db.scalars(
+            select(AcquisitionAttribution).where(
+                AcquisitionAttribution.signup_at >= start,
+                AcquisitionAttribution.signup_at < end,
+            )
+        )
+    )
+    user_sources: dict[int, dict] = {}
+    referrer_ids = {
+        row.first_touch_referral_code: None
+        for row in attributions
+        if row.first_touch_type == "user_referral" and row.first_touch_referral_code
+    }
+    relationships = list(
+        db.scalars(
+            select(ReferralRelationship).order_by(ReferralRelationship.created_at)
+        )
+    )
+    users_by_id = {
+        user.id: user
+        for user in db.scalars(
+            select(User).where(
+                User.id.in_(
+                    {rel.referrer_user_id for rel in relationships}
+                    | {rel.referred_user_id for rel in relationships}
+                )
+            )
+        )
+    } if relationships else {}
+
+    for row in attributions:
+        if row.first_touch_type == "campaign" and row.first_touch_campaign_id in campaigns:
+            target = campaigns[row.first_touch_campaign_id]
+        elif row.first_touch_type == "influencer" and row.first_touch_influencer_id in influencers:
+            target = influencers[row.first_touch_influencer_id]
+        elif row.first_touch_type == "watermark" and row.first_touch_watermark_id in watermarks:
+            target = watermarks[row.first_touch_watermark_id]
+        elif row.first_touch_type == "user_referral" and row.first_touch_referral_code:
+            relationship = next(
+                (rel for rel in relationships if rel.referral_code == row.first_touch_referral_code),
+                None,
+            )
+            if not relationship:
+                continue
+            referrer = users_by_id.get(relationship.referrer_user_id)
+            target = user_sources.setdefault(
+                relationship.referrer_user_id,
+                _source_metric_template(
+                    (referrer.display_name if referrer else f"User {relationship.referrer_user_id}"),
+                    "user_referral",
+                    relationship.referrer_user_id,
+                ),
+            )
+        else:
+            continue
+        target["signups"] += 1
+        if row.activation_at is not None:
+            target["activated"] += 1
+        if row.first_paid_at is not None:
+            target["paid_users"] += 1
+
+    payment_rows = db.scalars(
+        select(PaymentEvent).where(
+            PaymentEvent.signature_verified.is_(True),
+            PaymentEvent.amount_minor.is_not(None),
+            PaymentEvent.processed_at >= start,
+            PaymentEvent.processed_at < end,
+        )
+    )
+    attribution_by_user = {
+        row.user_id: row
+        for row in attributions
+    }
+    for payment in payment_rows:
+        attribution = attribution_by_user.get(payment.user_id)
+        if not attribution:
+            continue
+        target = None
+        if attribution.first_touch_type == "campaign":
+            target = campaigns.get(attribution.first_touch_campaign_id)
+        elif attribution.first_touch_type == "influencer":
+            target = influencers.get(attribution.first_touch_influencer_id)
+        elif attribution.first_touch_type == "watermark":
+            target = watermarks.get(attribution.first_touch_watermark_id)
+        elif attribution.first_touch_type == "user_referral" and attribution.first_touch_referral_code:
+            relationship = next(
+                (rel for rel in relationships if rel.referral_code == attribution.first_touch_referral_code),
+                None,
+            )
+            if relationship:
+                target = user_sources.get(relationship.referrer_user_id)
+        if target:
+            _add_revenue(target, payment.currency, payment.amount_minor)
+
+    def finalize(items: dict[int, dict]) -> list[dict]:
+        return sorted(items.values(), key=lambda item: (-item["signups"], -item["clicks"], item["name"]))
+
+    relationship_rows = []
+    for rel in relationships:
+        if rel.created_at and not (start <= rel.created_at < end):
+            continue
+        referred = users_by_id.get(rel.referred_user_id)
+        referrer = users_by_id.get(rel.referrer_user_id)
+        depth = 1
+        seen = {rel.referred_user_id}
+        current = rel.referrer_user_id
+        while current in {r.referred_user_id for r in relationships} and current not in seen:
+            seen.add(current)
+            parent = next((r for r in relationships if r.referred_user_id == current), None)
+            if not parent:
+                break
+            depth += 1
+            current = parent.referrer_user_id
+        relationship_rows.append({
+            "referrer_user_id": rel.referrer_user_id,
+            "referrer_name": referrer.display_name if referrer else f"User {rel.referrer_user_id}",
+            "referred_user_id": rel.referred_user_id,
+            "referred_name": referred.display_name if referred else f"User {rel.referred_user_id}",
+            "referral_code": rel.referral_code,
+            "chain_depth": depth,
+            "created_at": rel.created_at.isoformat() if rel.created_at else None,
+        })
+
+    return {
+        "campaigns": finalize(campaigns),
+        "influencers": finalize(influencers),
+        "user_referrals": finalize(user_sources),
+        "watermarks": finalize(watermarks),
+        "referral_relationships": relationship_rows,
+    }
 
 def growth_snapshot(db: Session, days: int = 30) -> dict:
     start, end = _window_bounds(days)
