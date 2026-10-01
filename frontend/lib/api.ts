@@ -102,6 +102,7 @@ export type SignupPayload = {
   confirm_password: string;
   language: string;
   timezone: string;
+  attribution_token?: string;
 };
 
 export type SignupVerifyCodePayload = {
