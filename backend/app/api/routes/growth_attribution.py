@@ -77,7 +77,7 @@ def referral_entry(
     return _redirect(
         captured,
         RedirectResponse(
-            url=_frontend_target("/signup", captured.tracking_id),
+            url=_frontend_target("/auth/signup", captured.tracking_id),
             status_code=307,
         ),
     )

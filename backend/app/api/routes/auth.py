@@ -408,6 +408,12 @@ def signup_verify_code(payload: AuthSignupCodeVerifyRequest, db: Session = Depen
             tracking_id=attribution_token,
             event_type="signup_completed",
         )
+        profile.preferences = {
+            **(profile.preferences or {}),
+            "attribution_token": None,
+        }
+        db.add(profile)
+        db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
@@ -439,8 +445,14 @@ def signup_verify_link(payload: AuthSignupLinkVerifyRequest, db: Session = Depen
             "email_verified_at": datetime.now(tz=UTC).isoformat(),
             "email_verification_method": "link",
         }
+        attribution_token = str(profile.preferences.get("attribution_token") or "").strip() or None
         db.add(profile)
         db.commit()
+        if attribution_token:
+            attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+            profile.preferences = {**(profile.preferences or {}), "attribution_token": None}
+            db.add(profile)
+            db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
@@ -478,8 +490,14 @@ def signup_verify_password(
         "email_verified_at": datetime.now(tz=UTC).isoformat(),
         "email_verification_method": "password_fallback",
     }
+    attribution_token = str(profile.preferences.get("attribution_token") or "").strip() or None
     db.add(profile)
     db.commit()
+    if attribution_token:
+        attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+        profile.preferences = {**(profile.preferences or {}), "attribution_token": None}
+        db.add(profile)
+        db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
