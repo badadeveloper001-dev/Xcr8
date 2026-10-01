@@ -1009,17 +1009,17 @@ def brainstorm(
     creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
     try:
-    result = generate_content_ideas(
-        {
-            "topic": payload.topic,
-            "platform": payload.platform,
-            "language": payload.language,
-            "goal": payload.goal,
-            "tone": payload.tone,
-            "audience_location": payload.audience_location,
-            "creator_memory": creator_memory,
-        }
-    )
+        result = generate_content_ideas(
+            {
+                "topic": payload.topic,
+                "platform": payload.platform,
+                "language": payload.language,
+                "goal": payload.goal,
+                "tone": payload.tone,
+                "audience_location": payload.audience_location,
+                "creator_memory": creator_memory,
+            }
+        )
     except HTTPException:
         refund_usage(db, usage_ledger, reason="brainstorm_usage_policy_blocked")
         raise
@@ -1065,18 +1065,18 @@ def compose(
     creator_memory = _build_creator_memory(profile, payload.language, payload.prompt, recent_memories)
 
     try:
-    result = generate_composed_content(
-        {
-            "user_id": payload.user_id,
-            "prompt": payload.prompt,
-            "platform": payload.platform,
-            "language": payload.language,
-            "tone": payload.tone,
-            "audience_location": payload.audience_location,
-            "creator_memory": creator_memory,
-            "messages": [message.model_dump() for message in payload.messages],
-        }
-    )
+        result = generate_composed_content(
+            {
+                "user_id": payload.user_id,
+                "prompt": payload.prompt,
+                "platform": payload.platform,
+                "language": payload.language,
+                "tone": payload.tone,
+                "audience_location": payload.audience_location,
+                "creator_memory": creator_memory,
+                "messages": [message.model_dump() for message in payload.messages],
+            }
+        )
     except HTTPException:
         refund_usage(db, usage_ledger, reason="compose_usage_policy_blocked")
         raise
