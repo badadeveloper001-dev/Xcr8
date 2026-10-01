@@ -916,6 +916,7 @@ def test_plan_upgrade_preserves_billing_anchor_and_downgrade_is_deferred(monkeyp
 
 
 def test_image_hq_denial_happens_before_provider_call(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
     db = SessionLocal()
     try:
         user = User(
@@ -937,6 +938,8 @@ def test_image_hq_denial_happens_before_provider_call(monkeypatch):
         monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_if_called)
 
         client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
         response = client.post(
             "/api/v1/ai/image/generate",
             json={
@@ -954,6 +957,7 @@ def test_image_hq_denial_happens_before_provider_call(monkeypatch):
 
 
 def test_insufficient_credits_blocks_compose_before_provider_call(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
     db = SessionLocal()
     try:
         user = User(
@@ -984,6 +988,8 @@ def test_insufficient_credits_blocks_compose_before_provider_call(monkeypatch):
         monkeypatch.setattr("app.api.routes.ai.generate_composed_content", fail_if_called)
 
         client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
         response = client.post(
             "/api/v1/ai/compose",
             json={
