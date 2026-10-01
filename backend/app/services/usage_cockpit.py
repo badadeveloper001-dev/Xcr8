@@ -101,15 +101,18 @@ def install(app):
                 user_id = verify_user(request.cookies.get(COOKIE, ""))
                 if not user_id:
                     return JSONResponse({"detail": "Please sign in again to use AI."}, status_code=401)
-                try:
-                    body = await request.json()
-                except (ValueError, UnicodeDecodeError):
-                    return JSONResponse({"detail": "Invalid request."}, status_code=400)
-                claimed = body.get("user_id") if isinstance(body, dict) else None
-                header_user = request.headers.get("x-xcr8-user-id")
-                if (claimed is not None and str(claimed) != str(user_id)) or (header_user and header_user != str(user_id)):
-                    return JSONResponse({"detail": "This request belongs to another account."}, status_code=403)
-                if ledger.enabled():
+                # /distribution/approve has no user_id in its payload. Do not consume
+                # its body here or require a client identity field that the route does not carry.
+                if path != "/api/v1/distribution/approve":
+                    try:
+                        body = await request.json()
+                    except (ValueError, UnicodeDecodeError):
+                        return JSONResponse({"detail": "Invalid request."}, status_code=400)
+                    claimed = body.get("user_id") if isinstance(body, dict) else None
+                    header_user = request.headers.get("x-xcr8-user-id")
+                    if (claimed is not None and str(claimed) != str(user_id)) or (header_user and header_user != str(user_id)):
+                        return JSONResponse({"detail": "This request belongs to another account."}, status_code=403)
+if ledger.enabled():
                     ctx_token = ledger.context.set({"user_id": user_id})
             response = await call_next(request)
             ctx = ledger.context.get()
