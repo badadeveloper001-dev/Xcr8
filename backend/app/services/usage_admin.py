@@ -49,6 +49,7 @@ def admin_usage_snapshot(db: Session) -> dict:
     account_credits: dict[int, int] = {}
     failed = 0
     refunded = 0
+    unknown_cost_events = 0
 
     for row in rows:
         meta = row.event_meta if isinstance(row.event_meta, dict) else {}
@@ -75,6 +76,8 @@ def admin_usage_snapshot(db: Session) -> dict:
 
         if row.estimated_external_cost is not None:
             account_costs[row.user_id] = account_costs.get(row.user_id, 0.0) + cost
+        elif row.status in {"completed", "consumed"}:
+            unknown_cost_events += 1
         account_credits[row.user_id] = account_credits.get(row.user_id, 0) + credits
 
         if row.status == "refunded" and str(row.event_type or "").endswith("_refund"):
@@ -121,6 +124,7 @@ def admin_usage_snapshot(db: Session) -> dict:
             "credits": int(sum(int(row.credits_delta or 0) for row in rows)),
             "failed_generations": failed,
             "refunded_events": refunded,
+            "unknown_cost_events": unknown_cost_events,
             "accounts": total_users,
         },
         "by_plan": by_plan,
