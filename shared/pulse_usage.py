@@ -123,12 +123,14 @@ def validate_config(value):
             limit_set(limits)
     if not isinstance(value["prices"], dict) or len(value["prices"]) > 100:
         raise ValueError("Invalid price catalog.")
-    allowed = {"input_per_million", "output_per_million", "per_character", "per_image", "source", "effective_date"}
+    allowed = {"input_per_million", "output_per_million", "input_cache_hit_per_million", "input_cache_miss_per_million", "input_cache_hit_peak_per_million", "input_cache_miss_peak_per_million", "output_peak_per_million", "per_character", "per_image", "source", "effective_date"}
     for key, rate in value["prices"].items():
         if "/" not in key or not isinstance(rate, dict) or set(rate) - allowed:
             raise ValueError("Prices require provider/model keys and documented rate fields.")
         if not rate.get("source") or not rate.get("effective_date"):
             raise ValueError("Each price needs its source and effective_date.")
+        if "input_cache_hit_per_million" in rate and "input_cache_miss_per_million" not in rate and "input_per_million" not in rate:
+            raise ValueError("Cache-hit pricing requires an uncached input rate or a cache-miss rate.")
         for field in set(rate) - {"source", "effective_date"}:
             number = Decimal(str(rate[field]))
             if not number.is_finite() or not 0 <= number <= 1000000:
@@ -136,14 +138,45 @@ def validate_config(value):
     return value
 
 
-def cost(rate, *, input_tokens=None, output_tokens=None, characters=None, images=None):
+def deepseek_peak(at=None):
+    at = at or now()
+    # DeepSeek defines peak hours as 01:00-04:00 and 06:00-10:00 UTC,
+    # Monday through Friday. Chinese public holidays are treated as off-peak
+    # because Pulse has no external holiday-calendar dependency.
+    if at.weekday() >= 5:
+        return False
+    minutes = at.hour * 60 + at.minute
+    return 60 <= minutes < 240 or 360 <= minutes < 600
+
+
+def cost(rate, *, input_tokens=None, output_tokens=None, input_cache_hit_tokens=None,
+         input_cache_miss_tokens=None, characters=None, images=None, peak=False):
     if not rate:
         return None
-    # Per-image prices are explicitly estimates for a configured size/quality.
     if images is not None and "per_image" in rate:
         amount = Decimal(str(rate["per_image"])) * images * 1000000
     elif characters is not None and "per_character" in rate:
         amount = Decimal(str(rate["per_character"])) * characters * 1000000
+    elif input_tokens is not None and output_tokens is not None and "input_cache_hit_per_million" in rate:
+        output_key = "output_peak_per_million" if peak and "output_peak_per_million" in rate else "output_per_million"
+        output_rate = Decimal(str(rate[output_key]))
+        hit_key = "input_cache_hit_peak_per_million" if peak and "input_cache_hit_peak_per_million" in rate else "input_cache_hit_per_million"
+        hit_rate = Decimal(str(rate[hit_key]))
+        if "input_cache_miss_per_million" in rate:
+            miss_key = "input_cache_miss_peak_per_million" if peak and "input_cache_miss_peak_per_million" in rate else "input_cache_miss_per_million"
+            miss_rate = Decimal(str(rate[miss_key]))
+            if input_cache_hit_tokens is not None and input_cache_miss_tokens is not None:
+                amount = hit_rate * input_cache_hit_tokens + miss_rate * input_cache_miss_tokens + output_rate * output_tokens
+            else:
+                input_rate = max(hit_rate, miss_rate)
+                amount = input_rate * input_tokens + output_rate * output_tokens
+        elif input_cache_hit_tokens is not None:
+            uncached_tokens = max(0, input_tokens - input_cache_hit_tokens)
+            amount = hit_rate * input_cache_hit_tokens + Decimal(str(rate["input_per_million"])) * uncached_tokens + output_rate * output_tokens
+        elif "input_per_million" in rate:
+            amount = Decimal(str(rate["input_per_million"])) * input_tokens + output_rate * output_tokens
+        else:
+            return None
     elif input_tokens is not None and output_tokens is not None and all(k in rate for k in ("input_per_million", "output_per_million")):
         amount = Decimal(str(rate["input_per_million"])) * input_tokens + Decimal(str(rate["output_per_million"])) * output_tokens
     else:
@@ -199,7 +232,10 @@ def begin_attempt(provider, model, fallback, units):
             raise UsageBlocked("AI usage tracking needs its migration.", 503)
         cfg = read_config(conn)
         rate = cfg["prices"].get(f"{provider}/{model}", {})
-        reserve = cost(rate, **units)
+        reserve_units = dict(units or {})
+        if provider == "deepseek" and rate.get("input_cache_hit_per_million"):
+            reserve_units.setdefault("peak", deepseek_peak())
+        reserve = cost(rate, **reserve_units)
         if cfg["mode"] == "enforce" and reserve is None:
             raise UsageBlocked("This AI tool is temporarily unavailable while its usage rate is configured.", 503)
         scopes = [(cfg["limits"], None),
@@ -241,7 +277,9 @@ def provider_call(provider, model, call, *, fallback=False, reserve_units=None, 
                 units = {}
             amount = cost(rate, **units) if result is not None else None
             values = dict(status="failure" if failure else "success", duration_ms=int((perf_counter()-started)*1000),
-                          error_type=failure, cost_micros=amount, cost_basis=("estimated" if "images" in units or "characters" in units else "calculated") if amount is not None else "unknown", **units)
+                          error_type=failure, cost_micros=amount, cost_basis=("estimated" if "images" in units or "characters" in units else "calculated") if amount is not None else "unknown",
+                          **{key: value for key, value in units.items()
+                             if key not in {"input_cache_hit_tokens", "input_cache_miss_tokens", "peak"}})
             try:
                 with engine().begin() as conn:
                     conn.execute(update(attempts).where(attempts.c.id == ident).values(**values))
@@ -265,11 +303,25 @@ def chat_call(client, provider, kwargs, fallback=False):
         raise UsageBlocked("This request is too long. Please shorten it and try again.", 413)
     output_bound = min(int(params.pop("max_completion_tokens", params.pop("max_tokens", cfg["max_output_tokens"]))), cfg["max_output_tokens"])
     params["max_completion_tokens" if provider == "openai" else "max_tokens"] = output_bound
+    peak = deepseek_peak() if provider == "deepseek" else False
     def measured(response):
         usage = getattr(response, "usage", None)
-        return {"input_tokens": getattr(usage, "prompt_tokens", None), "output_tokens": getattr(usage, "completion_tokens", None)}
+        units = {
+            "input_tokens": getattr(usage, "prompt_tokens", None),
+            "output_tokens": getattr(usage, "completion_tokens", None),
+        }
+        if provider == "deepseek":
+            units.update({
+                "input_cache_hit_tokens": getattr(usage, "prompt_cache_hit_tokens", None),
+                "input_cache_miss_tokens": getattr(usage, "prompt_cache_miss_tokens", None),
+                "peak": peak,
+            })
+        elif provider == "openai":
+            details = getattr(usage, "prompt_tokens_details", None)
+            units["input_cache_hit_tokens"] = getattr(details, "cached_tokens", None) if details is not None else None
+        return units
     return provider_call(provider, params["model"], lambda: client.with_options(max_retries=0).chat.completions.create(**params),
-        fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound}, measured=measured)
+        fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound, "peak": peak}, measured=measured)
 
 
 def dashboard():

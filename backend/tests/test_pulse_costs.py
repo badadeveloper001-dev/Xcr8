@@ -37,6 +37,16 @@ def policy(db, **changes):
 
 
 RATE = {"input_per_million": "1", "output_per_million": "2", "source": "synthetic-test-rate", "effective_date": "2026-09-13"}
+DEEPSEEK_RATE = {
+    "input_cache_hit_per_million": "0.003",
+    "input_cache_miss_per_million": "0.15",
+    "input_cache_hit_peak_per_million": "0.006",
+    "input_cache_miss_peak_per_million": "0.3",
+    "output_per_million": "0.6",
+    "output_peak_per_million": "1.2",
+    "source": "synthetic-deepseek-test-rate",
+    "effective_date": "2026-09-30",
+}
 
 
 def run_call(user=1, fail=False, provider="openai", fallback=False):
@@ -60,6 +70,142 @@ def test_price_precision_and_unknown():
     assert ledger.cost({}, input_tokens=10, output_tokens=20) is None
     assert ledger.cost({"per_character": "0.000001"}, characters=7) == 7
     assert ledger.cost({"per_image": "0.04"}, images=2) == 80000
+
+
+def test_deepseek_cache_pricing_and_peak_rates():
+    config = deepcopy(ledger.DEFAULT_CONFIG)
+    config["prices"] = {"deepseek/test": DEEPSEEK_RATE}
+    ledger.validate_config(config)
+    assert ledger.cost(
+        DEEPSEEK_RATE,
+        input_tokens=1000,
+        output_tokens=200,
+        input_cache_hit_tokens=700,
+        input_cache_miss_tokens=300,
+        peak=False,
+    ) == 168
+    assert ledger.cost(
+        DEEPSEEK_RATE,
+        input_tokens=1000,
+        output_tokens=200,
+        input_cache_hit_tokens=700,
+        input_cache_miss_tokens=300,
+        peak=True,
+    ) == 335
+    assert ledger.cost(
+        DEEPSEEK_RATE,
+        input_tokens=1000,
+        output_tokens=200,
+        peak=False,
+    ) == 270
+
+
+def test_deepseek_provider_settlement_uses_cache_usage(db):
+    policy(db, prices={"deepseek/test": DEEPSEEK_RATE})
+    token = ledger.context.set({"user_id": 1})
+    ident = ledger.start_request("compose")
+    ledger.context.set({"user_id": 1, "request_id": ident, "feature": "compose"})
+    try:
+        assert ledger.provider_call(
+            "deepseek",
+            "test",
+            lambda: "ok",
+            fallback=True,
+            reserve_units={"input_tokens": 1000, "output_tokens": 200},
+            measured=lambda result: {
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "input_cache_hit_tokens": 700,
+                "input_cache_miss_tokens": 300,
+                "peak": False,
+            },
+        ) == "ok"
+    finally:
+        ledger.context.reset(token)
+    with db.connect() as conn:
+        row = conn.execute(select(ledger.attempts)).mappings().one()
+        assert row["cost_micros"] == 168
+        assert row["cost_basis"] == "calculated"
+
+
+def test_deepseek_chat_settlement_uses_one_peak_snapshot(db, monkeypatch):
+    policy(db, prices={"deepseek/test": DEEPSEEK_RATE})
+    monkeypatch.setattr(ledger, "deepseek_peak", lambda: True)
+
+    class Usage:
+        prompt_tokens = 1000
+        completion_tokens = 200
+        prompt_cache_hit_tokens = 700
+        prompt_cache_miss_tokens = 300
+
+    class Response:
+        usage = Usage()
+
+    class Completions:
+        def create(self, **kwargs):
+            return Response()
+
+    class Chat:
+        completions = Completions()
+
+    class Client:
+        chat = Chat()
+        def with_options(self, **kwargs):
+            return self
+
+    token = ledger.context.set({"user_id": 1})
+    ident = ledger.start_request("compose")
+    ledger.context.set({"user_id": 1, "request_id": ident, "feature": "compose"})
+    try:
+        assert ledger.chat_call(Client(), "deepseek", {
+            "model": "test",
+            "messages": [{"role": "user", "content": "hello"}],
+            "max_tokens": 200,
+        }) is not None
+    finally:
+        ledger.context.reset(token)
+
+    with db.connect() as conn:
+        row = conn.execute(select(ledger.attempts)).mappings().one()
+        assert row["cost_micros"] == 335
+        assert row["cost_basis"] == "calculated"
+
+
+def test_openai_cached_input_uses_cache_rate_and_uncached_rate():
+    rate = {
+        "input_per_million": "2.5",
+        "input_cache_hit_per_million": "0.25",
+        "output_per_million": "15",
+        "source": "synthetic-openai-rate",
+        "effective_date": "2026-09-30",
+    }
+    assert ledger.cost(
+        rate,
+        input_tokens=1000,
+        output_tokens=200,
+        input_cache_hit_tokens=700,
+    ) == 3925
+    assert ledger.cost(rate, input_tokens=1000, output_tokens=200) == 5500
+
+
+def test_openai_usage_measurement_reads_cached_tokens():
+    class Usage:
+        prompt_tokens = 1000
+        completion_tokens = 200
+        prompt_tokens_details = SimpleNamespace(cached_tokens=700)
+
+    measured = {}
+    # Exercise the same response-shape extraction used by chat_call.
+    usage = Usage()
+    measured["input_tokens"] = usage.prompt_tokens
+    measured["output_tokens"] = usage.completion_tokens
+    details = usage.prompt_tokens_details
+    measured["input_cache_hit_tokens"] = getattr(details, "cached_tokens", None)
+    assert measured == {
+        "input_tokens": 1000,
+        "output_tokens": 200,
+        "input_cache_hit_tokens": 700,
+    }
 
 
 def test_migration_repeated_and_observe_unknown(db):
@@ -189,6 +335,18 @@ def test_no_paid_call_when_database_unavailable(db, monkeypatch):
 def test_invalid_config():
     config = deepcopy(ledger.DEFAULT_CONFIG)
     config["limits"] = {"day": -1}
+    with pytest.raises(ValueError):
+        ledger.validate_config(config)
+
+    config = deepcopy(ledger.DEFAULT_CONFIG)
+    config["prices"] = {
+        "openai/test": {
+            "input_cache_hit_per_million": "0.25",
+            "output_per_million": "15",
+            "source": "synthetic-invalid-rate",
+            "effective_date": "2026-09-30",
+        }
+    }
     with pytest.raises(ValueError):
         ledger.validate_config(config)
 
