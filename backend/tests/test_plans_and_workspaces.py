@@ -1090,3 +1090,36 @@ def test_concurrent_reservations_cannot_overspend_postgres():
 
     assert results.count("reserved") == 1
     assert results.count(429) == 1
+
+
+
+def test_free_user_cannot_generate_standard_images(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(email="free-image@test.local", display_name="Free Image", plan_tier=PlanTier.free)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        called = False
+
+        def fail_if_called(*args, **kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("AI provider must not be called")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_if_called)
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/image/generate",
+            json={"user_id": user.id, "prompt": "A test image", "quality": "standard"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "free-image-1"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "feature_not_in_plan"
+        assert called is False
+    finally:
+        db.close()
