@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.models import User, WatermarkLink
+from app.services.entitlements import effective_plan_id
 
 
 ATTRIBUTION_TEXT = "Published with XCR8"
@@ -58,8 +59,6 @@ def watermark_url(public_code: str) -> str:
 
 
 def free_attribution(db: Session, user: User) -> dict[str, str] | None:
-    from app.services.entitlements import effective_plan_id
-
     if effective_plan_id(user) != "free":
         return None
 
