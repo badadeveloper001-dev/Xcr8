@@ -193,6 +193,26 @@ def expire_plan_if_needed(
         return False
 
     previous_meta = user.billing_meta if isinstance(user.billing_meta, dict) else {}
+    pending_plan = normalize_plan_id(previous_meta.get("pending_plan"))
+    if pending_plan != "free" and pending_plan != normalize_plan_id(user.plan_tier):
+        pending_cycle = str(previous_meta.get("pending_billing_cycle") or "monthly").lower()
+        user.plan_tier = PlanTier(pending_plan)
+        user.plan_started_at = normalized_expiry
+        user.plan_expires_at = normalized_expiry + timedelta(days=365 if pending_cycle == "annual" else 31)
+        user.billing_meta = {
+            **previous_meta,
+            "status": "active",
+            "plan": pending_plan,
+            "billing_cycle": pending_cycle,
+            "billing_anchor_at": normalized_expiry.isoformat(),
+            "pending_plan": None,
+            "pending_billing_cycle": None,
+            "plan_changed_at": current.isoformat(),
+        }
+        db.add(user)
+        db.commit()
+        return True
+
     user.plan_tier = PlanTier.free
     user.plan_started_at = None
     user.plan_expires_at = None
