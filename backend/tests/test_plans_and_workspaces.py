@@ -912,3 +912,90 @@ def test_plan_upgrade_preserves_billing_anchor_and_downgrade_is_deferred(monkeyp
         assert user.billing_meta["pending_plan"] == "starter"
     finally:
         db.close()
+
+
+
+def test_image_hq_denial_happens_before_provider_call(monkeypatch):
+    db = SessionLocal()
+    try:
+        user = User(
+            email="hq-denial@test.local",
+            display_name="HQ Denial Tester",
+            plan_tier=PlanTier.starter,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        called = False
+
+        def fail_if_called(*args, **kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("AI provider must not be called")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_if_called)
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/ai/image/generate",
+            json={
+                "user_id": user.id,
+                "prompt": "A test image",
+                "quality": "hq",
+            },
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "hq-denial-1"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "feature_not_in_plan"
+        assert called is False
+    finally:
+        db.close()
+
+
+def test_insufficient_credits_blocks_compose_before_provider_call(monkeypatch):
+    db = SessionLocal()
+    try:
+        user = User(
+            email="credit-denial@test.local",
+            display_name="Credit Denial Tester",
+            plan_tier=PlanTier.pro,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        period = UsagePeriod(
+            user_id=user.id,
+            period_key="2026-10-credit-denial",
+            credits_granted=15_000,
+            credits_used=14_999,
+        )
+        db.add(period)
+        db.commit()
+
+        called = False
+
+        def fail_if_called(*args, **kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("AI provider must not be called")
+
+        monkeypatch.setattr("app.api.routes.ai.generate_composed_content", fail_if_called)
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/ai/compose",
+            json={
+                "user_id": user.id,
+                "prompt": "Test prompt",
+                "platform": "instagram",
+                "language": "english",
+            },
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "credit-denial-1"},
+        )
+        assert response.status_code == 429
+        assert response.json()["detail"]["code"] == "monthly_credits_exhausted"
+        assert called is False
+    finally:
+        db.close()
