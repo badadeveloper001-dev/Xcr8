@@ -419,6 +419,16 @@ async def _handle_paystack_webhook(request: Request, db: Session) -> dict:
         user.billing_meta = meta
         db.add(user)
         db.commit()
+        if event == "subscription.disable":
+            try:
+                record_growth_event(
+                    db,
+                    user.id,
+                    "subscription_cancelled",
+                    metadata={"provider": "paystack", "billing_event": event},
+                )
+            except Exception:
+                db.rollback()
         return {"processed": True, "event": event, "user_id": user.id}
 
     if event in {"subscription.disable", "subscription.not_renew", "invoice.payment_failed"}:
