@@ -147,7 +147,7 @@ LEGACY_PLAN_ALIASES = {
     "agency": "business",
 }
 
-_COUNTER_FIELDS: dict[UsageMetric, str] = {
+_COUNTER_FIELDS: dict[UsageMetric, str | None] = {
     "text_generation": "text_generations",
     "advanced_ai_generation": "text_generations",
     "ai_content_analysis": None,
