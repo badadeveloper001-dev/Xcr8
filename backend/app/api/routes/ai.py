@@ -983,11 +983,12 @@ def brainstorm(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
         "text_generation",
         idempotency_key=idempotency_key,
+        feature_type="basic_text_generation",
         event_meta={"route": "/ai/brainstorm"},
     )
 
@@ -1019,7 +1020,9 @@ def brainstorm(
         }
     )
 
-    return AIBrainstormResponse(**result)
+    parsed = AIBrainstormResponse(**result)
+    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed"})
+    return parsed
 
 
 @router.post("/compose", response_model=AIComposeResponse)
@@ -1032,11 +1035,12 @@ def compose(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
-        "text_generation",
+        "advanced_ai_generation",
         idempotency_key=idempotency_key,
+        feature_type="advanced_ai_generation",
         event_meta={"route": "/ai/compose"},
     )
 
@@ -1069,7 +1073,9 @@ def compose(
         }
     )
 
-    return AIComposeResponse(**result)
+    parsed = AIComposeResponse(**result)
+    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed"})
+    return parsed
 
 
 class AIImageGenerateRequest(BaseModel):
@@ -1295,11 +1301,12 @@ def assistant(
     if not user:
         return _build_missing_user_assistant_response(payload)
 
-    usage_ledger = consume_usage(
+    usage_ledger = reserve_usage(
         db,
         user.id,
-        "text_generation",
+        "advanced_ai_generation",
         idempotency_key=idempotency_key,
+        feature_type="advanced_ai_generation",
         event_meta={"route": "/ai/assistant"},
     )
 
@@ -1382,6 +1389,13 @@ def assistant(
         )
         _persist_durable_assistant_facts(db, user.id, payload.message)
         parsed_response.chat_id = chat_id
+        finalize_usage(
+            db,
+            usage_ledger,
+            provider="ai-service",
+            model=str(parsed_response.model or "") or None,
+            event_meta={"provider_result": "completed"},
+        )
         return parsed_response
     except HTTPException:
         # Usage policy rejections must reach the caller, never masquerade as a generated answer.
