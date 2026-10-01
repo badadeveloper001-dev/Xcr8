@@ -15,6 +15,7 @@ from app.db.models import ContentPost, Platform, PostStatus, ScheduledPost
 from app.schemas.mvp import ScheduleRequest
 from app.services.entitlements import consume_usage
 from app.services.pulse import record_pulse_event
+from app.services.growth_attribution import record_growth_event
 
 router = APIRouter(prefix="/scheduling", tags=["scheduling"])
 logger = logging.getLogger(__name__)
@@ -54,6 +55,10 @@ def queue_schedule(
     post.status = PostStatus.scheduled
     db.commit()
     db.refresh(schedule)
+    try:
+        record_growth_event(db, payload.user_id, "first_schedule", metadata={"schedule_id": schedule.id, "post_id": post.id})
+    except Exception:
+        db.rollback()
 
     return {
         "schedule_id": schedule.id,
