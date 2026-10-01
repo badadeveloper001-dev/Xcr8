@@ -421,6 +421,28 @@ export default function GrowthDashboard() {
       )}
         </>
       )}
+      {showCreate && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="create-referral-title" className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs uppercase tracking-wider text-slate-500">Growth</p><h2 id="create-referral-title" className="mt-1 text-xl font-semibold">Create Referral</h2></div>
+              <button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-white/10 px-3 py-1 text-sm">Close</button>
+            </div>
+            <div className="mt-5 grid gap-4">
+              <label className="text-sm">Type<select value={createType} onChange={(e) => { setCreateType(e.target.value as "campaign" | "influencer"); resetCreateForm(); }} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2"><option value="campaign">Campaign</option><option value="influencer">Influencer</option></select></label>
+              <label className="text-sm">{createType === "campaign" ? "Campaign name" : "Influencer name"}<input value={createName} onChange={(e) => setCreateName(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2" /></label>
+              <label className="text-sm">{createType === "campaign" ? "Campaign code (optional)" : "Referral code (optional)"}<input value={createCode} onChange={(e) => setCreateCode(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2" placeholder="Leave blank to generate" /></label>
+              {createType === "influencer" && (
+                <label className="text-sm">Campaign (optional)<select value={createCampaignId} onChange={(e) => setCreateCampaignId(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2"><option value="">No campaign</option>{referrals?.campaigns.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+              )}
+              <label className="text-sm">Attribution window (days)<input type="number" min="1" max="3650" value={createAttributionDays} onChange={(e) => setCreateAttributionDays(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2" /></label>
+              {createError && <p role="alert" className="rounded-lg bg-red-900/30 p-3 text-sm">{createError}</p>}
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-white/10 px-4 py-2 text-sm">Cancel</button><button type="button" disabled={createBusy || createName.trim().length < 2} onClick={() => void submitReferral()} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm disabled:opacity-50">{createBusy ? "Creating…" : "Create"}</button></div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
