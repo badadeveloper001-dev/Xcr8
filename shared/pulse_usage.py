@@ -234,7 +234,7 @@ def begin_attempt(provider, model, fallback, units):
         rate = cfg["prices"].get(f"{provider}/{model}", {})
         reserve_units = dict(units or {})
         if provider == "deepseek" and rate.get("input_cache_hit_per_million"):
-            reserve_units["peak"] = deepseek_peak()
+            reserve_units.setdefault("peak", deepseek_peak())
         reserve = cost(rate, **reserve_units)
         if cfg["mode"] == "enforce" and reserve is None:
             raise UsageBlocked("This AI tool is temporarily unavailable while its usage rate is configured.", 503)
@@ -303,6 +303,7 @@ def chat_call(client, provider, kwargs, fallback=False):
         raise UsageBlocked("This request is too long. Please shorten it and try again.", 413)
     output_bound = min(int(params.pop("max_completion_tokens", params.pop("max_tokens", cfg["max_output_tokens"]))), cfg["max_output_tokens"])
     params["max_completion_tokens" if provider == "openai" else "max_tokens"] = output_bound
+    peak = deepseek_peak() if provider == "deepseek" else False
     def measured(response):
         usage = getattr(response, "usage", None)
         units = {
@@ -313,14 +314,14 @@ def chat_call(client, provider, kwargs, fallback=False):
             units.update({
                 "input_cache_hit_tokens": getattr(usage, "prompt_cache_hit_tokens", None),
                 "input_cache_miss_tokens": getattr(usage, "prompt_cache_miss_tokens", None),
-                "peak": deepseek_peak(),
+                "peak": peak,
             })
         elif provider == "openai":
             details = getattr(usage, "prompt_tokens_details", None)
             units["input_cache_hit_tokens"] = getattr(details, "cached_tokens", None) if details is not None else None
         return units
     return provider_call(provider, params["model"], lambda: client.with_options(max_retries=0).chat.completions.create(**params),
-        fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound}, measured=measured)
+        fallback=fallback, reserve_units={"input_tokens": input_bound, "output_tokens": output_bound, "peak": peak}, measured=measured)
 
 
 def dashboard():
@@ -458,47 +459,3 @@ def dashboard():
                 ).where(attempts.c.request_id.in_(request_ids))
                  .order_by(attempts.c.created_at.asc())).mappings()
             ]
-        attempts_by_request = {}
-        for attempt in attempt_rows:
-            attempts_by_request.setdefault(attempt["request_id"], []).append(attempt)
-
-        recent = []
-        for request in recent_requests:
-            request_attempts = attempts_by_request.get(request["id"], [])
-            unknown = sum(1 for a in request_attempts if a["cost_micros"] is None)
-            total = None if unknown or not request_attempts else sum(a["cost_micros"] for a in request_attempts)
-            recent.append({
-                "id": request["id"],
-                "user_id": request["user_id"],
-                "feature": request["feature"],
-                "status": request["status"],
-                "duration_ms": request["duration_ms"],
-                "attempts": len(request_attempts),
-                "unknown_attempts": unknown,
-                "fallback": any(a["fallback"] for a in request_attempts),
-                "cost_micros": total,
-                "providers": [
-                    {
-                        "provider": a["provider"],
-                        "model": a["model"],
-                        "cost_micros": a["cost_micros"],
-                        "fallback": bool(a["fallback"]),
-                        "status": a["status"],
-                    }
-                    for a in request_attempts
-                ],
-            })
-
-        revision = conn.execute(select(policy.c.revision).where(policy.c.id == 1)).scalar_one()
-
-    return {
-        "periods": periods,
-        "features": feature_rows,
-        "providers": providers,
-        "users": user_rows,
-        "user_features": user_features,
-        "value_events": values,
-        "recent": recent,
-        "config": cfg,
-        "revision": revision,
-    }
