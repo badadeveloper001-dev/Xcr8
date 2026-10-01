@@ -1034,7 +1034,7 @@ def brainstorm(
         raise
 
     parsed = AIBrainstormResponse(**result)
-    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed"})
+    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed", "usage": result.get("usage", {})})
     return parsed
 
 
@@ -1093,7 +1093,7 @@ def compose(
         raise
 
     parsed = AIComposeResponse(**result)
-    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed"})
+    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed", "usage": result.get("usage", {})})
     return parsed
 
 
@@ -1166,7 +1166,7 @@ def image_generate(
             usage_ledger,
             provider="ai-service",
             model=str(result.get("model") or "") or None,
-            event_meta={"provider_result": "completed"},
+            event_meta={"provider_result": "completed", "image_size": f"{payload.width}x{payload.height}", "image_quality": requested_quality},
         )
         return result
     except HTTPException:
@@ -1248,7 +1248,7 @@ def voiceover(
         raise HTTPException(status_code=502, detail="Voiceover provider is unavailable. No Xcr8 credits were used.") from exc
 
     parsed = AIVoiceoverResponse(**result.json())
-    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed"})
+    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed", "usage": result.json().get("usage", {})})
     return parsed
 
 
@@ -1321,7 +1321,7 @@ def voiceover_audio(
         refund_usage(db, usage_ledger, reason="voiceover_audio_provider_unavailable")
         raise HTTPException(status_code=502, detail="Voiceover audio provider is unavailable. No Xcr8 credits were used.") from exc
 
-    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed", "voiceover_characters": len(payload.text)})
+    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed", "voiceover_characters": len(payload.text), "usage": result.headers.get("x-usage")})
     return Response(content=result.content, media_type=result.headers.get("content-type", "audio/mpeg"))
 
 
@@ -1430,7 +1430,7 @@ def assistant(
             usage_ledger,
             provider="ai-service",
             model=str(parsed_response.model or "") or None,
-            event_meta={"provider_result": "completed"},
+            event_meta={"provider_result": "completed", "usage": parsed_response.usage},
         )
         return parsed_response
     except HTTPException:
