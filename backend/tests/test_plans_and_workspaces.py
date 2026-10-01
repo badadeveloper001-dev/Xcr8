@@ -1,7 +1,9 @@
 import hashlib
 import hmac
+import httpx
 import json
 import sys
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -171,7 +173,7 @@ def test_usage_deduction_is_idempotent_and_free_images_are_blocked():
         period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
         ledger_rows = db.query(UsageLedger).filter(UsageLedger.user_id == user.id).all()
         assert period.credits_granted == 500
-        assert period.credits_used == 5
+        assert period.credits_used == 1
         assert period.text_generations == 1
         assert len(ledger_rows) == 1
 
@@ -202,7 +204,10 @@ def test_plan_catalog_matches_entitlements():
     assert plans["starter"]["pricing"]["monthly_formatted"] == "$9"
     assert plans["starter"]["pricing"]["annual_formatted"] == "$90"
     assert plans["pro"]["high_quality_images"] == 10
-    assert plans["business"]["high_quality_images"] == 50
+    assert plans["business"]["text_generations"] == 5_000
+    assert plans["business"]["image_generations"] == 200
+    assert plans["business"]["high_quality_images"] == 20
+    assert plans["business"]["voiceovers"] == 100
     assert plans["business"]["storage_megabytes"] == 50 * 1024
 
 
@@ -748,5 +753,461 @@ def test_paystack_checkout_requires_matching_xcr8_account_context(monkeypatch):
             headers={"X-Xcr8-User-Id": str(user.id + 1)}, json={"plan": "starter"},
         )
         assert mismatched.status_code == 403
+    finally:
+        db.close()
+
+
+
+def test_usage_reservation_finalization_and_refund():
+    from app.services.entitlements import finalize_usage, reserve_usage
+
+    db = SessionLocal()
+    try:
+        user = User(
+            email="reservation@test.local",
+            display_name="Reservation Tester",
+            plan_tier=PlanTier.pro,
+            plan_started_at=datetime.now(tz=UTC),
+            plan_expires_at=datetime.now(tz=UTC) + timedelta(days=31),
+            billing_meta={"subscription_id": "sub_reservation_test"},
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        reserved = reserve_usage(
+            db,
+            user.id,
+            "advanced_ai_generation",
+            idempotency_key="reservation-1",
+            feature_type="advanced_ai_generation",
+        )
+        assert reserved.status == "reserved"
+        assert reserved.credits_delta == 4
+        assert reserved.subscription_id == "sub_reservation_test"
+
+        finalized = finalize_usage(
+            db,
+            reserved.id,
+            provider="openai",
+            model="gpt-test",
+            estimated_external_cost=0.0012,
+        )
+        assert finalized is not None
+        assert finalized.status == "completed"
+        assert finalized.provider == "openai"
+        assert finalized.model == "gpt-test"
+        assert finalized.estimated_external_cost == pytest.approx(0.0012)
+
+        failed = reserve_usage(
+            db,
+            user.id,
+            "standard_image_generation",
+            idempotency_key="reservation-2",
+            feature_type="standard_image_generation",
+        )
+        assert failed.status == "reserved"
+        refund = refund_usage(db, failed.id, reason="provider_failure")
+        assert refund is not None
+        assert refund.status == "refunded"
+
+        analysis = reserve_usage(
+            db,
+            user.id,
+            "ai_content_analysis",
+            idempotency_key="reservation-analysis",
+            feature_type="ai_content_analysis",
+        )
+        assert analysis.credits_delta == 4
+        refund_usage(db, analysis.id, reason="analysis_provider_failure")
+
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.credits_used == 4
+        assert period.image_generations == 0
+    finally:
+        db.close()
+
+
+def test_business_usage_limits_match_shared_pool():
+    db = SessionLocal()
+    try:
+        user = User(email="business-limits@test.local", display_name="Business Limits", plan_tier=PlanTier.business)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        from app.services.entitlements import consume_usage
+
+        for _ in range(200):
+            consume_usage(db, user.id, "image_generation")
+
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.image_generations == 200
+        assert period.credits_used == 4_000
+
+        with pytest.raises(HTTPException) as exc_info:
+            consume_usage(db, user.id, "image_generation")
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.detail["code"] == "plan_quota_exceeded"
+    finally:
+        db.close()
+
+
+
+def test_plan_upgrade_preserves_billing_anchor_and_downgrade_is_deferred(monkeypatch):
+    db = SessionLocal()
+    try:
+        monkeypatch.setattr(settings, "billing_webhook_secret", "test-billing-secret")
+        anchor = datetime.now(tz=UTC) - timedelta(days=10)
+        user = User(
+            email="plan-change@test.local",
+            display_name="Plan Change Tester",
+            plan_tier=PlanTier.starter,
+            plan_started_at=anchor,
+            plan_expires_at=anchor + timedelta(days=21),
+            billing_meta={
+                "billing_anchor_at": anchor.isoformat(),
+                "subscription_id": "sub-plan-change",
+            },
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        client = TestClient(app)
+
+        upgrade_payload = {
+            "event_id": "evt_upgrade_preserve_anchor",
+            "user_id": user.id,
+            "plan": "pro",
+            "status": "paid",
+            "currency": "USD",
+            "billing_cycle": "monthly",
+            "amount_minor": 2900,
+            "subscription_id": "sub-plan-change",
+        }
+        raw = json.dumps(upgrade_payload, separators=(",", ":")).encode()
+        signature = hmac.new(b"test-billing-secret", raw, hashlib.sha256).hexdigest()
+        response = client.post(
+            "/api/v1/plans/webhook/test-provider",
+            content=raw,
+            headers={"X-Xcr8-Signature": signature},
+        )
+        assert response.status_code == 200
+
+        db.refresh(user)
+        assert user.plan_tier == PlanTier.pro
+        assert user.plan_started_at == anchor
+        assert user.billing_meta["billing_anchor_at"] == anchor.isoformat()
+
+        downgrade_payload = {
+            "event_id": "evt_downgrade_deferred",
+            "user_id": user.id,
+            "plan": "starter",
+            "status": "paid",
+            "currency": "USD",
+            "billing_cycle": "monthly",
+            "amount_minor": 900,
+            "subscription_id": "sub-plan-change",
+        }
+        raw = json.dumps(downgrade_payload, separators=(",", ":")).encode()
+        signature = hmac.new(b"test-billing-secret", raw, hashlib.sha256).hexdigest()
+        response = client.post(
+            "/api/v1/plans/webhook/test-provider",
+            content=raw,
+            headers={"X-Xcr8-Signature": signature},
+        )
+        assert response.status_code == 200
+
+        db.refresh(user)
+        assert user.plan_tier == PlanTier.pro
+        assert user.billing_meta["pending_plan"] == "starter"
+    finally:
+        db.close()
+
+
+
+def test_image_hq_denial_happens_before_provider_call(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(
+            email="hq-denial@test.local",
+            display_name="HQ Denial Tester",
+            plan_tier=PlanTier.starter,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        called = False
+
+        def fail_if_called(*args, **kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("AI provider must not be called")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_if_called)
+
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/image/generate",
+            json={
+                "user_id": user.id,
+                "prompt": "A test image",
+                "quality": "hq",
+            },
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "hq-denial-1"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "feature_not_in_plan"
+        assert called is False
+    finally:
+        db.close()
+
+
+def test_insufficient_credits_blocks_compose_before_provider_call(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(
+            email="credit-denial@test.local",
+            display_name="Credit Denial Tester",
+            plan_tier=PlanTier.pro,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        period = UsagePeriod(
+            user_id=user.id,
+            period_key=datetime.now(tz=UTC).strftime("%Y-%m"),
+            credits_granted=15_000,
+            credits_used=14_999,
+        )
+        db.add(period)
+        db.commit()
+
+        called = False
+
+        def fail_if_called(*args, **kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("AI provider must not be called")
+
+        monkeypatch.setattr("app.api.routes.ai.generate_composed_content", fail_if_called)
+
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/compose",
+            json={
+                "user_id": user.id,
+                "prompt": "Test prompt",
+                "platform": "instagram",
+                "language": "english",
+            },
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "credit-denial-1"},
+        )
+        assert response.status_code == 429
+        assert response.json()["detail"]["code"] == "monthly_credits_exhausted"
+        assert called is False
+    finally:
+        db.close()
+
+
+
+def test_ai_usage_requires_signed_server_session(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(email="session-guard@test.local", display_name="Session Guard", plan_tier=PlanTier.pro)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/ai/compose",
+            json={"user_id": user.id, "prompt": "test prompt"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "session-guard-1"},
+        )
+        assert response.status_code == 401
+
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/compose",
+            json={"user_id": user.id, "prompt": "test prompt"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "session-guard-2"},
+        )
+        assert response.status_code != 401
+    finally:
+        db.close()
+
+
+
+def test_concurrent_reservations_cannot_overspend_postgres():
+    if not settings.database_url.startswith("postgresql"):
+        pytest.skip("Requires PostgreSQL row-lock semantics")
+
+    from concurrent.futures import ThreadPoolExecutor
+    from app.services.entitlements import reserve_usage
+
+    db = SessionLocal()
+    try:
+        user = User(
+            email="concurrency@test.local",
+            display_name="Concurrency Tester",
+            plan_tier=PlanTier.pro,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        user_id = user.id
+    finally:
+        db.close()
+
+    def attempt(index: int):
+        local_db = SessionLocal()
+        try:
+            return reserve_usage(
+                local_db,
+                user_id,
+                "advanced_ai_generation",
+                idempotency_key=f"concurrency-{index}",
+                feature_type="advanced_ai_generation",
+            ).status
+        except HTTPException as exc:
+            return exc.status_code
+        finally:
+            local_db.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(attempt, [1, 2]))
+
+    assert results.count("reserved") == 1
+    assert results.count(429) == 1
+
+
+
+def test_free_user_cannot_generate_standard_images(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(email="free-image@test.local", display_name="Free Image", plan_tier=PlanTier.free)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        called = False
+
+        def fail_if_called(*args, **kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("AI provider must not be called")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_if_called)
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/image/generate",
+            json={"user_id": user.id, "prompt": "A test image", "quality": "standard"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "free-image-1"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "feature_not_in_plan"
+        assert called is False
+    finally:
+        db.close()
+
+
+
+def test_assistant_fallback_counts_as_completed_usage(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(
+            email="assistant-fallback@test.local",
+            display_name="Assistant Fallback",
+            plan_tier=PlanTier.pro,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        def fail_provider(*args, **kwargs):
+            raise RuntimeError("provider unavailable")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_provider)
+
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/assistant",
+            json={
+                "user_id": user.id,
+                "message": "Help me plan my content for this week",
+            },
+            headers={
+                "X-Xcr8-User-Id": str(user.id),
+                "Idempotency-Key": "assistant-fallback-1",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["model"] == "backend-local-assistant-fallback"
+
+        db.expire_all()
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.credits_used == 4
+
+        ledger_rows = (
+            db.query(UsageLedger)
+            .filter(UsageLedger.user_id == user.id)
+            .order_by(UsageLedger.id)
+            .all()
+        )
+        assert len(ledger_rows) == 1
+        assert ledger_rows[0].status == "completed"
+        assert ledger_rows[0].provider == "backend-local"
+        assert ledger_rows[0].model == "backend-local-assistant-fallback"
+    finally:
+        db.close()
+
+
+def test_provider_failure_refunds_reserved_image_credits(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(email="image-refund@test.local", display_name="Image Refund", plan_tier=PlanTier.starter)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        def fail_provider(*args, **kwargs):
+            raise httpx.RequestError("provider unavailable")
+
+        monkeypatch.setattr("app.api.routes.ai.post_ai_service", fail_provider)
+        client = TestClient(app)
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/image/generate",
+            json={"user_id": user.id, "prompt": "A test image", "quality": "standard"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "image-refund-1"},
+        )
+        assert response.status_code == 502
+
+        period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
+        assert period.credits_used == 0
+        assert period.image_generations == 0
+        ledger_rows = db.query(UsageLedger).filter(UsageLedger.user_id == user.id).order_by(UsageLedger.id).all()
+        assert [row.status for row in ledger_rows] == ["refunded", "refunded"]
     finally:
         db.close()

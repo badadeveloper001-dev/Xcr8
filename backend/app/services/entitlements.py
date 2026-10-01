@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import calendar
+import hashlib
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from fastapi import HTTPException
@@ -18,9 +20,13 @@ from app.db.models import (
     User,
     WorkspaceMembership,
 )
+from app.services.usage_config import CREDIT_WEIGHTS, PLAN_PRICING, PLAN_USAGE, WARNING_THRESHOLDS
+
 
 UsageMetric = Literal[
     "text_generation",
+    "advanced_ai_generation",
+    "ai_content_analysis",
     "image_generation",
     "high_quality_image",
     "voiceover",
@@ -58,15 +64,15 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "free": PlanConfig(
         id="free",
         name="Free",
-        price_cents=0,
-        annual_price_cents=0,
-        ngn_price_kobo=0,
-        ngn_annual_price_kobo=0,
-        monthly_credits=500,
-        text_generations=50,
-        image_generations=0,
-        high_quality_images=0,
-        voiceovers=0,
+        price_cents=PLAN_PRICING["free"].price_cents,
+        annual_price_cents=PLAN_PRICING["free"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["free"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["free"].ngn_annual_price_kobo,
+        monthly_credits=PLAN_USAGE["free"].monthly_credits,
+        text_generations=PLAN_USAGE["free"].limits.text_generations,
+        image_generations=PLAN_USAGE["free"].limits.standard_images,
+        high_quality_images=PLAN_USAGE["free"].limits.hq_images,
+        voiceovers=PLAN_USAGE["free"].limits.voiceovers,
         creator_profiles=0,
         social_accounts=None,
         scheduled_posts=10,
@@ -75,15 +81,15 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "starter": PlanConfig(
         id="starter",
         name="Starter",
-        price_cents=900,
-        annual_price_cents=9_000,
-        ngn_price_kobo=750_000,
-        ngn_annual_price_kobo=7_500_000,
-        monthly_credits=5_000,
-        text_generations=500,
-        image_generations=25,
-        high_quality_images=0,
-        voiceovers=10,
+        price_cents=PLAN_PRICING["starter"].price_cents,
+        annual_price_cents=PLAN_PRICING["starter"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["starter"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["starter"].ngn_annual_price_kobo,
+        monthly_credits=PLAN_USAGE["starter"].monthly_credits,
+        text_generations=PLAN_USAGE["starter"].limits.text_generations,
+        image_generations=PLAN_USAGE["starter"].limits.standard_images,
+        high_quality_images=PLAN_USAGE["starter"].limits.hq_images,
+        voiceovers=PLAN_USAGE["starter"].limits.voiceovers,
         creator_profiles=0,
         social_accounts=None,
         scheduled_posts=100,
@@ -92,15 +98,15 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "pro": PlanConfig(
         id="pro",
         name="Pro",
-        price_cents=2_900,
-        annual_price_cents=29_000,
-        ngn_price_kobo=2_000_000,
-        ngn_annual_price_kobo=20_000_000,
-        monthly_credits=15_000,
-        text_generations=2_500,
-        image_generations=100,
-        high_quality_images=10,
-        voiceovers=50,
+        price_cents=PLAN_PRICING["pro"].price_cents,
+        annual_price_cents=PLAN_PRICING["pro"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["pro"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["pro"].ngn_annual_price_kobo,
+        monthly_credits=PLAN_USAGE["pro"].monthly_credits,
+        text_generations=PLAN_USAGE["pro"].limits.text_generations,
+        image_generations=PLAN_USAGE["pro"].limits.standard_images,
+        high_quality_images=PLAN_USAGE["pro"].limits.hq_images,
+        voiceovers=PLAN_USAGE["pro"].limits.voiceovers,
         creator_profiles=0,
         social_accounts=None,
         scheduled_posts=500,
@@ -109,15 +115,15 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "business": PlanConfig(
         id="business",
         name="Business",
-        price_cents=9_900,
-        annual_price_cents=99_000,
-        ngn_price_kobo=5_000_000,
-        ngn_annual_price_kobo=50_000_000,
-        monthly_credits=50_000,
-        text_generations=10_000,
-        image_generations=300,
-        high_quality_images=50,
-        voiceovers=200,
+        price_cents=PLAN_PRICING["business"].price_cents,
+        annual_price_cents=PLAN_PRICING["business"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["business"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["business"].ngn_annual_price_kobo,
+        monthly_credits=PLAN_USAGE["business"].monthly_credits,
+        text_generations=PLAN_USAGE["business"].limits.text_generations,
+        image_generations=PLAN_USAGE["business"].limits.standard_images,
+        high_quality_images=PLAN_USAGE["business"].limits.hq_images,
+        voiceovers=PLAN_USAGE["business"].limits.voiceovers,
         creator_profiles=5,
         social_accounts=None,
         scheduled_posts=2_000,
@@ -127,10 +133,12 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
 
 # Central credit prices. Quotas remain hard caps even when credits are available.
 CREDIT_COSTS: dict[UsageMetric, int] = {
-    "text_generation": 5,
-    "image_generation": 100,
-    "high_quality_image": 250,
-    "voiceover": 50,
+    "text_generation": CREDIT_WEIGHTS["basic_text_generation"],
+    "advanced_ai_generation": CREDIT_WEIGHTS["advanced_ai_generation"],
+    "ai_content_analysis": CREDIT_WEIGHTS["ai_content_analysis"],
+    "image_generation": CREDIT_WEIGHTS["standard_image_generation"],
+    "high_quality_image": CREDIT_WEIGHTS["hq_image_generation"],
+    "voiceover": CREDIT_WEIGHTS["short_voiceover"],
     "scheduled_post": 0,
 }
 
@@ -139,8 +147,10 @@ LEGACY_PLAN_ALIASES = {
     "agency": "business",
 }
 
-_COUNTER_FIELDS: dict[UsageMetric, str] = {
+_COUNTER_FIELDS: dict[UsageMetric, str | None] = {
     "text_generation": "text_generations",
+    "advanced_ai_generation": "text_generations",
+    "ai_content_analysis": None,
     "image_generation": "image_generations",
     "high_quality_image": "high_quality_images",
     "voiceover": "voiceovers",
@@ -183,6 +193,26 @@ def expire_plan_if_needed(
         return False
 
     previous_meta = user.billing_meta if isinstance(user.billing_meta, dict) else {}
+    pending_plan = normalize_plan_id(previous_meta.get("pending_plan"))
+    if pending_plan != "free" and pending_plan != normalize_plan_id(user.plan_tier):
+        pending_cycle = str(previous_meta.get("pending_billing_cycle") or "monthly").lower()
+        user.plan_tier = PlanTier(pending_plan)
+        user.plan_started_at = normalized_expiry
+        user.plan_expires_at = normalized_expiry + timedelta(days=365 if pending_cycle == "annual" else 31)
+        user.billing_meta = {
+            **previous_meta,
+            "status": "active",
+            "plan": pending_plan,
+            "billing_cycle": pending_cycle,
+            "billing_anchor_at": normalized_expiry.isoformat(),
+            "pending_plan": None,
+            "pending_billing_cycle": None,
+            "plan_changed_at": current.isoformat(),
+        }
+        db.add(user)
+        db.commit()
+        return True
+
     user.plan_tier = PlanTier.free
     user.plan_started_at = None
     user.plan_expires_at = None
@@ -271,6 +301,49 @@ def _period_key(now: datetime | None = None) -> str:
     return current.strftime("%Y-%m")
 
 
+def _add_months(value: datetime, months: int) -> datetime:
+    total = value.year * 12 + (value.month - 1) + months
+    year, month_index = divmod(total, 12)
+    month = month_index + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
+
+
+def _billing_window(user: User, now: datetime | None = None) -> tuple[str, datetime, datetime, str | None]:
+    """Resolve the active monthly entitlement window from subscription state.
+
+    Paid plans use the subscription start as the monthly billing anchor. Free users
+    use the calendar month because they do not have a paid subscription period.
+    """
+    current = now or datetime.now(tz=UTC)
+    plan = plan_for_user(user)
+    if plan.id == "free" or user.plan_started_at is None:
+        start = current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = _add_months(start, 1)
+        return start.strftime("%Y-%m"), start, end, None
+
+    anchor = user.plan_started_at
+    if anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=UTC)
+    # Paystack monthly subscriptions created on the 29th-31st bill on the 28th
+    # thereafter, so normalize the entitlement anchor to the same boundary.
+    anchor = anchor.replace(day=min(anchor.day, 28))
+    if anchor > current:
+        anchor = current
+
+    months = (current.year - anchor.year) * 12 + (current.month - anchor.month)
+    start = _add_months(anchor, months)
+    if start > current:
+        months -= 1
+        start = _add_months(anchor, max(0, months))
+    end = _add_months(start, 1)
+    subscription_id = str((user.billing_meta or {}).get("subscription_id") or "").strip() or None
+    identity = subscription_id or f"{plan.id}:{anchor.isoformat()}"
+    digest = hashlib.sha256(f"{identity}:{start.isoformat()}".encode()).hexdigest()[:24]
+    key = f"billing:{start.strftime('%Y%m%d')}:{digest}"
+    return key, start, end, subscription_id
+
+
 def _lock_user(db: Session, user_id: int) -> User:
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
     if not user:
@@ -279,18 +352,27 @@ def _lock_user(db: Session, user_id: int) -> User:
 
 
 def _usage_period(db: Session, user: User) -> UsagePeriod:
-    key = _period_key()
+    key, period_start, period_end, subscription_id = _billing_window(user)
     period = db.scalar(
         select(UsagePeriod)
         .where(UsagePeriod.user_id == user.id, UsagePeriod.period_key == key)
         .with_for_update()
     )
     if period:
+        if period.period_start is None:
+            period.period_start = period_start
+        if period.period_end is None:
+            period.period_end = period_end
+        if period.subscription_id is None:
+            period.subscription_id = subscription_id
         return period
 
     period = UsagePeriod(
         user_id=user.id,
         period_key=key,
+        period_start=period_start,
+        period_end=period_end,
+        subscription_id=subscription_id,
         credits_granted=plan_for_user(user).monthly_credits,
     )
     db.add(period)
@@ -386,9 +468,9 @@ def consume_usage(
         raise _feature_error(plan, "high_quality_image")
 
     counter_field = _COUNTER_FIELDS[metric]
-    current_count = int(getattr(period, counter_field) or 0)
-    limit = int(getattr(plan, counter_field))
-    if current_count + quantity > limit:
+    current_count = int(getattr(period, counter_field) or 0) if counter_field else 0
+    limit = int(getattr(plan, counter_field)) if counter_field else 0
+    if counter_field and current_count + quantity > limit:
         db.rollback()
         raise _quota_error(plan, counter_field, limit)
 
@@ -413,21 +495,25 @@ def consume_usage(
             },
         )
 
-    setattr(period, counter_field, current_count + quantity)
+    if counter_field:
+        setattr(period, counter_field, current_count + quantity)
     if metric == "high_quality_image":
         period.image_generations += quantity
     period.credits_used += credit_cost
 
+    ledger_meta = {**(event_meta or {}), "plan": plan.id}
     ledger = UsageLedger(
         user_id=user.id,
+        subscription_id=period.subscription_id,
         period_key=period.period_key,
+        feature_type=metric,
         event_type=metric,
         quantity=quantity,
         credits_delta=credit_cost,
         balance_after=period.credits_granted - period.credits_used,
         idempotency_key=clean_key,
         status="consumed",
-        event_meta=event_meta or {},
+        event_meta=ledger_meta,
     )
     db.add(period)
     db.add(ledger)
@@ -448,6 +534,173 @@ def consume_usage(
     return ledger
 
 
+def reserve_usage(
+    db: Session,
+    user_id: int,
+    metric: UsageMetric,
+    *,
+    quantity: int = 1,
+    idempotency_key: str | None = None,
+    workspace_id: int | None = None,
+    feature_type: str | None = None,
+    event_meta: dict | None = None,
+) -> UsageLedger:
+    """Atomically authorize and reserve usage before a billable provider call."""
+    if quantity <= 0:
+        raise ValueError("Usage quantity must be positive.")
+
+    raw_key = str(idempotency_key or "").strip()[:100]
+    clean_key = f"{user_id}:{metric}:{raw_key}" if raw_key else None
+    if clean_key:
+        existing = db.scalar(
+            select(UsageLedger).where(UsageLedger.idempotency_key == clean_key)
+        )
+        if existing:
+            if existing.status == "reserved":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "usage_reservation_in_progress",
+                        "message": "This generation request is already being processed.",
+                    },
+                )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "idempotency_key_reused",
+                    "message": "This idempotency key has already been finalized. Retry with a new request key.",
+                },
+            )
+
+    user = _lock_user(db, user_id)
+    expire_plan_if_needed(db, user, commit=False)
+    plan = plan_for_user(user)
+    period = _usage_period(db, user)
+
+    if period.credits_granted < plan.monthly_credits:
+        period.credits_granted = plan.monthly_credits
+
+    if metric in {"image_generation", "high_quality_image"} and plan.image_generations <= 0:
+        db.rollback()
+        raise _feature_error(plan, "image_generation")
+    if metric == "voiceover" and plan.voiceovers <= 0:
+        db.rollback()
+        raise _feature_error(plan, "voiceover")
+    if metric == "high_quality_image" and plan.high_quality_images <= 0:
+        db.rollback()
+        raise _feature_error(plan, "high_quality_image")
+
+    counter_field = _COUNTER_FIELDS[metric]
+    current_count = int(getattr(period, counter_field) or 0) if counter_field else 0
+    limit = int(getattr(plan, counter_field)) if counter_field else 0
+    if counter_field and current_count + quantity > limit:
+        db.rollback()
+        raise _quota_error(plan, counter_field, limit)
+
+    if metric == "high_quality_image" and period.image_generations + quantity > plan.image_generations:
+        db.rollback()
+        raise _quota_error(plan, "image_generations", plan.image_generations)
+
+    credit_cost = CREDIT_COSTS[metric] * quantity
+    remaining = max(0, int(period.credits_granted or 0) - int(period.credits_used or 0))
+    if credit_cost > remaining:
+        db.rollback()
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "monthly_credits_exhausted",
+                "plan": plan.id,
+                "required": credit_cost,
+                "remaining": remaining,
+                "message": "Monthly credits exhausted. Upgrade or wait for the next billing period.",
+            },
+        )
+
+    if counter_field:
+        setattr(period, counter_field, current_count + quantity)
+    if metric == "high_quality_image":
+        period.image_generations += quantity
+    period.credits_used += credit_cost
+
+    meta = dict(event_meta or {})
+    meta.setdefault("plan", plan.id)
+    meta.setdefault("reservation", True)
+    ledger = UsageLedger(
+        user_id=user.id,
+        workspace_id=workspace_id,
+        subscription_id=period.subscription_id,
+        period_key=period.period_key,
+        feature_type=feature_type or metric,
+        event_type=metric,
+        quantity=quantity,
+        credits_delta=credit_cost,
+        balance_after=period.credits_granted - period.credits_used,
+        idempotency_key=clean_key,
+        status="reserved",
+        event_meta=meta,
+    )
+    db.add(period)
+    db.add(ledger)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if clean_key:
+            existing = db.scalar(
+                select(UsageLedger).where(UsageLedger.idempotency_key == clean_key)
+            )
+            if existing:
+                # A concurrent winner must never be reused for a second provider call.
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "idempotency_key_reused",
+                        "message": "This idempotency key has already been accepted. Retry with a new request key.",
+                    },
+                )
+        raise
+    db.refresh(ledger)
+    from app.usage import ledger as pulse_ledger
+    ctx = pulse_ledger.context.get()
+    if pulse_ledger.enabled() and ctx is not None:
+        ctx["new_credit_debit"] = (db, ledger.id)
+    return ledger
+
+
+def finalize_usage(
+    db: Session,
+    ledger_or_id: UsageLedger | int,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    estimated_external_cost: float | None = None,
+    event_meta: dict | None = None,
+) -> UsageLedger | None:
+    """Finalize a successful reservation without changing its entitlement cost."""
+    ledger_id = ledger_or_id.id if isinstance(ledger_or_id, UsageLedger) else int(ledger_or_id)
+    ledger = db.scalar(
+        select(UsageLedger).where(UsageLedger.id == ledger_id).with_for_update()
+    )
+    if not ledger:
+        db.rollback()
+        return None
+    if ledger.status == "completed":
+        return ledger
+    if ledger.status != "reserved":
+        db.rollback()
+        return None
+
+    ledger.status = "completed"
+    ledger.provider = str(provider).strip()[:80] if provider else ledger.provider
+    ledger.model = str(model).strip()[:160] if model else ledger.model
+    ledger.estimated_external_cost = estimated_external_cost
+    ledger.event_meta = {**(ledger.event_meta or {}), **(event_meta or {})}
+    db.add(ledger)
+    db.commit()
+    db.refresh(ledger)
+    return ledger
+
+
 def refund_usage(
     db: Session,
     ledger_or_id: UsageLedger | int,
@@ -460,7 +713,7 @@ def refund_usage(
     original = db.scalar(
         select(UsageLedger).where(UsageLedger.id == ledger_id).with_for_update()
     )
-    if not original or original.status != "consumed":
+    if not original or original.status not in {"consumed", "reserved"}:
         db.rollback()
         return None
 
@@ -474,13 +727,14 @@ def refund_usage(
         )
         .with_for_update()
     )
-    if not period or not counter_field:
+    if not period:
         db.rollback()
         return None
 
     quantity = max(1, int(original.quantity or 1))
-    current_count = int(getattr(period, counter_field) or 0)
-    setattr(period, counter_field, max(0, current_count - quantity))
+    if counter_field:
+        current_count = int(getattr(period, counter_field) or 0)
+        setattr(period, counter_field, max(0, current_count - quantity))
     if metric == "high_quality_image":
         period.image_generations = max(0, int(period.image_generations or 0) - quantity)
     period.credits_used = max(0, int(period.credits_used or 0) - int(original.credits_delta or 0))
@@ -496,7 +750,10 @@ def refund_usage(
     refund_key = f"refund:{original.id}"
     refund = UsageLedger(
         user_id=original.user_id,
+        workspace_id=original.workspace_id,
+        subscription_id=original.subscription_id,
         period_key=original.period_key,
+        feature_type=original.feature_type or metric,
         event_type=f"{metric}_refund",
         quantity=quantity,
         credits_delta=-int(original.credits_delta or 0),
@@ -598,14 +855,31 @@ def usage_snapshot(db: Session, user_id: int) -> dict:
     plan = plan_for_user(user)
     period = _usage_period(db, user)
     account = db.scalar(select(UsageAccount).where(UsageAccount.user_id == user.id))
+    granted = max(int(period.credits_granted or 0), plan.monthly_credits)
+    used = max(0, int(period.credits_used or 0))
+    remaining = max(0, granted - used)
+    consumed_percent = 100 if granted <= 0 else min(100, int((used * 100) / granted))
+    warning = (
+        "exhausted"
+        if consumed_percent >= WARNING_THRESHOLDS["exhausted"]
+        else "critical"
+        if consumed_percent >= WARNING_THRESHOLDS["critical"]
+        else "warning"
+        if consumed_percent >= WARNING_THRESHOLDS["warning"]
+        else None
+    )
     payload = {
         "user_id": user.id,
         "plan": serialize_plan(plan),
         "period": period.period_key,
+        "period_start": period.period_start,
+        "period_end": period.period_end,
         "credits": {
-            "granted": max(period.credits_granted, plan.monthly_credits),
-            "used": period.credits_used,
-            "remaining": max(0, max(period.credits_granted, plan.monthly_credits) - period.credits_used),
+            "granted": granted,
+            "used": used,
+            "remaining": remaining,
+            "consumed_percent": consumed_percent,
+            "warning": warning,
         },
         "usage": {
             "text_generations": period.text_generations,

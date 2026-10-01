@@ -8,7 +8,7 @@ import uuid
 from collections import Counter, defaultdict
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
@@ -46,10 +46,18 @@ from app.schemas.mvp import (
     AITrendSignal,
 )
 from app.services.ai_adapter import generate_composed_content, generate_content_ideas, post_ai_service
-from app.services.entitlements import consume_usage, plan_for_user, refund_usage, require_feature
+from app.services.entitlements import consume_usage, finalize_usage, plan_for_user, refund_usage, require_feature, reserve_usage
+from app.services.usage_config import IMAGE_MODES
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
+
+
+def _request_workspace_id(request: Request) -> int | None:
+    raw = str(request.headers.get("x-xcr8-workspace-id") or "").strip().lower()
+    if not raw or raw in {"main", "0"}:
+        return None
+    return int(raw) if raw.isdigit() and int(raw) > 0 else None
 
 ASSISTANT_CHAT_MEMORY_TYPE = "assistant_chat"
 ASSISTANT_CHAT_MEMORY_KEY = "assistant_long_chat_memory_v1"
@@ -976,6 +984,7 @@ def trend_mapper(payload: AITrendMapperRequest, db: Session = Depends(get_db)) -
 @router.post("/brainstorm", response_model=AIBrainstormResponse)
 def brainstorm(
     payload: AIBrainstormRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIBrainstormResponse:
@@ -983,11 +992,13 @@ def brainstorm(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
         "text_generation",
         idempotency_key=idempotency_key,
+        feature_type="basic_text_generation",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/brainstorm"},
     )
 
@@ -1007,24 +1018,31 @@ def brainstorm(
 
     creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
-    result = generate_content_ideas(
-        {
-            "topic": payload.topic,
-            "platform": payload.platform,
-            "language": payload.language,
-            "goal": payload.goal,
-            "tone": payload.tone,
-            "audience_location": payload.audience_location,
-            "creator_memory": creator_memory,
-        }
-    )
+    try:
+        result = generate_content_ideas(
+            {
+                "topic": payload.topic,
+                "platform": payload.platform,
+                "language": payload.language,
+                "goal": payload.goal,
+                "tone": payload.tone,
+                "audience_location": payload.audience_location,
+                "creator_memory": creator_memory,
+            }
+        )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="brainstorm_usage_policy_blocked")
+        raise
 
-    return AIBrainstormResponse(**result)
+    parsed = AIBrainstormResponse(**result)
+    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed", "usage": result.get("usage", {})})
+    return parsed
 
 
 @router.post("/compose", response_model=AIComposeResponse)
 def compose(
     payload: AIComposeRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIComposeResponse:
@@ -1032,11 +1050,13 @@ def compose(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
-        "text_generation",
+        "advanced_ai_generation",
         idempotency_key=idempotency_key,
+        feature_type="advanced_ai_generation",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/compose"},
     )
 
@@ -1056,20 +1076,26 @@ def compose(
 
     creator_memory = _build_creator_memory(profile, payload.language, payload.prompt, recent_memories)
 
-    result = generate_composed_content(
-        {
-            "user_id": payload.user_id,
-            "prompt": payload.prompt,
-            "platform": payload.platform,
-            "language": payload.language,
-            "tone": payload.tone,
-            "audience_location": payload.audience_location,
-            "creator_memory": creator_memory,
-            "messages": [message.model_dump() for message in payload.messages],
-        }
-    )
+    try:
+        result = generate_composed_content(
+            {
+                "user_id": payload.user_id,
+                "prompt": payload.prompt,
+                "platform": payload.platform,
+                "language": payload.language,
+                "tone": payload.tone,
+                "audience_location": payload.audience_location,
+                "creator_memory": creator_memory,
+                "messages": [message.model_dump() for message in payload.messages],
+            }
+        )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="compose_usage_policy_blocked")
+        raise
 
-    return AIComposeResponse(**result)
+    parsed = AIComposeResponse(**result)
+    finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed", "usage": result.get("usage", {})})
+    return parsed
 
 
 class AIImageGenerateRequest(BaseModel):
@@ -1083,6 +1109,7 @@ class AIImageGenerateRequest(BaseModel):
 @router.post("/image/generate", response_model=dict)
 def image_generate(
     payload: AIImageGenerateRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -1093,26 +1120,34 @@ def image_generate(
     plan = plan_for_user(user)
     require_feature(db, user.id, "image_generation")
     requested_quality = payload.quality.strip().lower()
-    actual_quality = requested_quality
-    metric = "image_generation"
     if requested_quality in {"high", "hd"}:
-        if plan.high_quality_allowed:
-            actual_quality = "high"
-            metric = "high_quality_image"
-        else:
-            # Starter includes images but explicitly excludes high-quality generation.
-            actual_quality = "standard"
+        requested_quality = "hq"
+    if requested_quality not in IMAGE_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_image_mode", "message": "Image mode must be preview, standard, or hq."},
+        )
 
-    usage_ledger = consume_usage(
+    metric = "high_quality_image" if requested_quality == "hq" else "image_generation"
+    if requested_quality == "hq" and not plan.high_quality_allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "feature_not_in_plan",
+                "resource": "high_quality_image",
+                "plan": plan.id,
+                "message": f"High-quality images are not included in the {plan.name} plan.",
+            },
+        )
+
+    usage_ledger = reserve_usage(
         db,
         user.id,
         metric,
         idempotency_key=idempotency_key,
-        event_meta={
-            "route": "/ai/image/generate",
-            "requested_quality": requested_quality,
-            "actual_quality": actual_quality,
-        },
+        feature_type="hq_image_generation" if requested_quality == "hq" else "standard_image_generation",
+        workspace_id=_request_workspace_id(request),
+        event_meta={"route": "/ai/image/generate", "requested_quality": requested_quality},
     )
 
     try:
@@ -1122,11 +1157,22 @@ def image_generate(
                 "prompt": payload.prompt,
                 "width": payload.width,
                 "height": payload.height,
-                "quality": actual_quality,
+                "quality": requested_quality,
             },
             timeout=120.0,
         )
-        return response.json()
+        result = response.json()
+        finalize_usage(
+            db,
+            usage_ledger,
+            provider="ai-service",
+            model=str(result.get("model") or "") or None,
+            event_meta={"provider_result": "completed", "image_size": f"{payload.width}x{payload.height}", "image_quality": requested_quality},
+        )
+        return result
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="image_usage_policy_blocked")
+        raise
     except httpx.HTTPStatusError as exc:
         refund_usage(db, usage_ledger, reason="image_provider_rejected_request", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Image provider rejected the request")
@@ -1138,6 +1184,7 @@ def image_generate(
 @router.post("/voiceover", response_model=AIVoiceoverResponse)
 def voiceover(
     payload: AIVoiceoverRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIVoiceoverResponse:
@@ -1146,11 +1193,13 @@ def voiceover(
         raise HTTPException(status_code=404, detail="User not found")
 
     require_feature(db, payload.user_id, "voiceover")
-    usage_ledger = consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
-        "text_generation",
+        "voiceover",
         idempotency_key=idempotency_key,
+        feature_type="short_voiceover",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/voiceover", "feature": "voiceover_script"},
     )
 
@@ -1189,6 +1238,9 @@ def voiceover(
             },
             timeout=60.0,
         )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="voiceover_script_usage_policy_blocked")
+        raise
     except httpx.HTTPStatusError as exc:
         refund_usage(db, usage_ledger, reason="voiceover_script_provider_rejected", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Voiceover generation failed")
@@ -1196,12 +1248,15 @@ def voiceover(
         refund_usage(db, usage_ledger, reason="voiceover_script_provider_unavailable")
         raise HTTPException(status_code=502, detail="Voiceover provider is unavailable. No Xcr8 credits were used.") from exc
 
-    return AIVoiceoverResponse(**result.json())
+    parsed = AIVoiceoverResponse(**result.json())
+    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed", "usage": result.json().get("usage", {})})
+    return parsed
 
 
 @router.post("/voiceover/audio")
 def voiceover_audio(
     payload: AIVoiceoverAudioRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -1209,12 +1264,17 @@ def voiceover_audio(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    usage_ledger = consume_usage(
+    usage_ledger = reserve_usage(
         db,
         payload.user_id,
         "voiceover",
         idempotency_key=idempotency_key,
-        event_meta={"route": "/ai/voiceover/audio"},
+        feature_type="short_voiceover",
+        workspace_id=_request_workspace_id(request),
+        event_meta={
+            "route": "/ai/voiceover/audio",
+            "voiceover_characters": len(payload.text),
+        },
     )
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == payload.user_id))
@@ -1252,6 +1312,9 @@ def voiceover_audio(
             },
             timeout=120.0,
         )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="voiceover_audio_usage_policy_blocked")
+        raise
     except httpx.HTTPStatusError as exc:
         refund_usage(db, usage_ledger, reason="voiceover_audio_provider_rejected", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Voiceover audio provider rejected the request")
@@ -1259,12 +1322,14 @@ def voiceover_audio(
         refund_usage(db, usage_ledger, reason="voiceover_audio_provider_unavailable")
         raise HTTPException(status_code=502, detail="Voiceover audio provider is unavailable. No Xcr8 credits were used.") from exc
 
+    finalize_usage(db, usage_ledger, provider="ai-service", event_meta={"provider_result": "completed", "voiceover_characters": len(payload.text), "usage": result.headers.get("x-usage")})
     return Response(content=result.content, media_type=result.headers.get("content-type", "audio/mpeg"))
 
 
 @router.post("/assistant", response_model=AIAssistantResponse)
 def assistant(
     payload: AIAssistantRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIAssistantResponse:
@@ -1272,11 +1337,13 @@ def assistant(
     if not user:
         return _build_missing_user_assistant_response(payload)
 
-    usage_ledger = consume_usage(
+    usage_ledger = reserve_usage(
         db,
         user.id,
-        "text_generation",
+        "advanced_ai_generation",
         idempotency_key=idempotency_key,
+        feature_type="advanced_ai_generation",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/assistant"},
     )
 
@@ -1359,18 +1426,19 @@ def assistant(
         )
         _persist_durable_assistant_facts(db, user.id, payload.message)
         parsed_response.chat_id = chat_id
+        finalize_usage(
+            db,
+            usage_ledger,
+            provider="ai-service",
+            model=str(parsed_response.model or "") or None,
+            event_meta={"provider_result": "completed", "usage": parsed_response.usage},
+        )
         return parsed_response
     except HTTPException:
         # Usage policy rejections must reach the caller, never masquerade as a generated answer.
         refund_usage(db, usage_ledger, reason="assistant_usage_policy_blocked")
         raise
     except Exception as exc:
-        refund_usage(
-            db,
-            usage_ledger,
-            reason="assistant_provider_or_response_failure",
-            event_meta={"error_type": exc.__class__.__name__},
-        )
         summary = app_context.get("summary") if isinstance(app_context.get("summary"), dict) else {}
         assistant_message = (
             f"I hit a temporary assistant issue, but I can still help. "
@@ -1400,6 +1468,16 @@ def assistant(
                 fallback_response.assistant_message,
                 fallback_response.follow_up_question,
             ),
+        )
+        finalize_usage(
+            db,
+            usage_ledger,
+            provider="backend-local",
+            model="backend-local-assistant-fallback",
+            event_meta={
+                "provider_result": "fallback_completed",
+                "fallback_reason": exc.__class__.__name__,
+            },
         )
         return fallback_response
 

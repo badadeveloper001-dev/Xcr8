@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -458,7 +458,10 @@ class UsagePeriod(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    period_key: Mapped[str] = mapped_column(String(7), index=True)
+    period_key: Mapped[str] = mapped_column(String(64), index=True)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    subscription_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     credits_granted: Mapped[int] = mapped_column(Integer, default=0)
     credits_used: Mapped[int] = mapped_column(Integer, default=0)
     text_generations: Mapped[int] = mapped_column(Integer, default=0)
@@ -488,7 +491,13 @@ class UsageLedger(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    period_key: Mapped[str] = mapped_column(String(7), index=True)
+    period_key: Mapped[str] = mapped_column(String(64), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    subscription_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    feature_type: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    provider: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    model: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    estimated_external_cost: Mapped[float | None] = mapped_column(Numeric(20, 8), nullable=True)
     event_type: Mapped[str] = mapped_column(String(64), index=True)
     quantity: Mapped[int] = mapped_column(BigInteger, default=1)
     credits_delta: Mapped[int] = mapped_column(Integer, default=0)

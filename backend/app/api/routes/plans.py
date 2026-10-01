@@ -58,12 +58,23 @@ def list_plans(request: Request, response: Response) -> list:
 
 
 @router.get("/{user_id}/usage", response_model=dict)
-def get_usage(user_id: int, db: Session = Depends(get_db)) -> dict:
+def get_usage(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    user_id = _require_request_user_id(request, user_id)
     return usage_snapshot(db, user_id)
 
 
 @router.get("/{user_id}/ledger", response_model=list)
-def get_usage_ledger(user_id: int, limit: int = 100, db: Session = Depends(get_db)) -> list:
+def get_usage_ledger(
+    user_id: int,
+    request: Request,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> list:
+    user_id = _require_request_user_id(request, user_id)
     if not db.get(User, user_id):
         raise HTTPException(status_code=404, detail="User not found")
     rows = db.scalars(
@@ -177,16 +188,79 @@ def _activate_paystack_payment(
 
     now = datetime.now(tz=UTC)
     previous_meta = dict(user.billing_meta or {})
+    current_plan = normalize_plan_id(user.plan_tier)
+    plan_rank = {"free": 0, "starter": 1, "pro": 2, "business": 3}
+    active_subscription = bool(
+        user.plan_expires_at
+        and (
+            user.plan_expires_at.replace(tzinfo=UTC)
+            if user.plan_expires_at.tzinfo is None
+            else user.plan_expires_at
+        ) > now
+        and current_plan != "free"
+    )
+
+    if active_subscription and plan_rank[normalized_plan] < plan_rank[current_plan]:
+        # A paid downgrade is recorded now but takes effect at the current
+        # subscription renewal boundary. It cannot reset the current allowance.
+        pending_meta = {
+            **previous_meta,
+            "pending_plan": normalized_plan,
+            "pending_billing_cycle": billing_cycle,
+            "last_verified_at": now.isoformat(),
+            "last_payment_reference": event_id,
+        }
+        user.billing_meta = pending_meta
+        db.add(
+            PaymentEvent(
+                provider_event_id=event_id,
+                provider="paystack",
+                user_id=user.id,
+                plan=normalized_plan,
+                status=status,
+                payload_hash=payload_hash,
+                signature_verified=True,
+            )
+        )
+        db.add(user)
+        db.commit()
+        return {
+            "processed": True,
+            "duplicate": False,
+            "user_id": user.id,
+            "plan": current_plan,
+            "pending_plan": normalized_plan,
+            "reference": event_id,
+        }
+
     recurring = bool(previous_meta.get("paystack_subscription_code"))
-    if recurring:
-        base = user.plan_expires_at if user.plan_expires_at and user.plan_expires_at > now else now
-        expires_at = base + timedelta(days=365 if billing_cycle == "annual" else 31)
+    if recurring and user.plan_expires_at and user.plan_expires_at > now:
+        base = user.plan_expires_at
     else:
-        expires_at = now + timedelta(days=365 if billing_cycle == "annual" else 31)
+        base = now
+
+    expires_at = base + timedelta(days=365 if billing_cycle == "annual" else 31)
+    anchor_raw = str(previous_meta.get("billing_anchor_at") or "").strip()
+    try:
+        billing_anchor = datetime.fromisoformat(anchor_raw.replace("Z", "+00:00")) if anchor_raw else None
+    except ValueError:
+        billing_anchor = None
+    if not active_subscription:
+        billing_anchor = now
+    elif billing_anchor is None or billing_anchor.tzinfo is None:
+        billing_anchor = now if billing_anchor is None else billing_anchor.replace(tzinfo=UTC)
+
     user.plan_tier = PlanTier(normalized_plan)
-    user.plan_started_at = now
+    # Preserve the billing anchor across upgrades and renewals so usage cannot reset.
+    user.plan_started_at = billing_anchor
     user.plan_expires_at = expires_at
+    subscription_id = str(
+        provider_meta.get("subscription_id")
+        or previous_meta.get("paystack_subscription_code")
+        or ""
+    ).strip() or None
     user.billing_meta = {
+        **previous_meta,
         "provider": "paystack",
         "reference": event_id,
         "plan": normalized_plan,
@@ -194,9 +268,13 @@ def _activate_paystack_payment(
         "currency": currency,
         "amount_minor": int(amount_minor),
         "last_verified_at": now.isoformat(),
+        "billing_anchor_at": billing_anchor.isoformat(),
+        "subscription_id": subscription_id,
         "subscription_status": previous_meta.get("subscription_status", "active"),
         "paystack_subscription_code": previous_meta.get("paystack_subscription_code"),
         "paystack_customer_code": previous_meta.get("paystack_customer_code"),
+        "pending_plan": None,
+        "pending_billing_cycle": None,
         **{key: value for key, value in provider_meta.items() if value is not None},
     }
     db.add(

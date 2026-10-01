@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,7 @@ from app.db.models import (
 )
 from app.schemas.mvp import ApprovalRequest, DistributionCreateRequest, DistributionDraftResponse
 from app.services.ai_adapter import detect_caption_language, generate_adaptation
-from app.services.entitlements import consume_usage
+from app.services.entitlements import finalize_usage, refund_usage, reserve_usage
 
 router = APIRouter(prefix="/distribution", tags=["distribution"])
 
@@ -106,6 +106,7 @@ def get_distribution_draft(
 @router.post("/draft", response_model=DistributionDraftResponse)
 def create_distribution_draft(
     payload: DistributionCreateRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> DistributionDraftResponse:
@@ -119,16 +120,28 @@ def create_distribution_draft(
         else None
     )
 
-    consume_usage(
+    detection_ledger = reserve_usage(
         db,
         payload.user_id,
-        "text_generation",
-        quantity=max(1, len(payload.selected_platforms)),
-        idempotency_key=idempotency_key,
-        event_meta={"route": "/distribution/draft", "platforms": list(payload.selected_platforms)},
+        "ai_content_analysis",
+        idempotency_key=f"{idempotency_key}:language" if idempotency_key else None,
+        feature_type="ai_content_analysis",
+        workspace_id=(int(request.headers.get("x-xcr8-workspace-id")) if str(request.headers.get("x-xcr8-workspace-id") or "").isdigit() else None),
+        event_meta={"route": "/distribution/draft", "analysis": "language_detection"},
     )
 
-    language_detection = detect_caption_language(payload.master_caption)
+    try:
+        language_detection = detect_caption_language(payload.master_caption)
+        finalize_usage(
+            db,
+            detection_ledger,
+            provider="ai-service",
+            model=str(language_detection.get("model") or "") or None,
+            event_meta={"provider_result": "completed"},
+        )
+    except HTTPException:
+        refund_usage(db, detection_ledger, reason="distribution_language_analysis_failed")
+        raise
     detected_language = str(language_detection.get("language", "english"))
 
     if existing_post is not None:
@@ -228,12 +241,37 @@ def create_distribution_draft(
     target_languages = [detected_language]
     for platform in payload.selected_platforms:
         for language in target_languages:
-            result = generate_adaptation(
-                text=payload.master_caption,
-                platform=platform,
-                language=language,
-                creator_memory=creator_memory,
+            variant_ledger = reserve_usage(
+                db,
+                payload.user_id,
+                "text_generation",
+                idempotency_key=f"{idempotency_key}:{platform}:{language}" if idempotency_key else None,
+                feature_type="basic_text_generation",
+                workspace_id=(int(request.headers.get("x-xcr8-workspace-id")) if str(request.headers.get("x-xcr8-workspace-id") or "").isdigit() else None),
+                event_meta={"route": "/distribution/draft", "platform": platform, "language": language},
             )
+            try:
+                result = generate_adaptation(
+                    text=payload.master_caption,
+                    platform=platform,
+                    language=language,
+                    creator_memory=creator_memory,
+                )
+                finalize_usage(
+                    db,
+                    variant_ledger,
+                    provider="ai-service",
+                    model=str(result.get("model") or "") or None,
+                    event_meta={"provider_result": "completed"},
+                )
+            except HTTPException:
+                refund_usage(
+                    db,
+                    variant_ledger,
+                    reason="distribution_variant_generation_failed",
+                    event_meta={"platform": platform, "language": language},
+                )
+                raise
 
             variant = PostVariant(
                 post_id=post.id,

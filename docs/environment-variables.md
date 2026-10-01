@@ -48,6 +48,7 @@
 - `PULSE_USER_EMAIL_ENABLED`: optional Pulse user-email switch (default `false`); in-app notifications remain primary.
 - `CRON_SECRET`: random shared secret used by the scheduler cron to invoke the due-post dispatcher.
 - `OAUTH_STATE_SECRET`: random signing secret for OAuth state.
+- `PULSE_SESSION_SECRET`: server-only signing secret for authenticated AI usage sessions; must be at least 32 random characters.
 - `BILLING_WEBHOOK_SECRET`: HMAC secret required to activate paid plans through the verified billing webhook.
 - `PAYSTACK_SECRET_KEY`: Paystack secret key (`sk_test_...` while test mode is enabled; never expose it to the frontend).
 - `PAYSTACK_CURRENCY`: `AUTO` (recommended for location-aware NGN/USD checkout), or explicitly `NGN`/`USD` if your Paystack account settles in one currency.
