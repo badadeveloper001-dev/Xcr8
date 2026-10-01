@@ -39,6 +39,11 @@ type SourceRow = {
   revenue_by_currency: Record<string, number>;
 };
 
+type ReferralManagement = {
+  campaigns: { id: number; name: string; code: string; status: string; attribution_window_days: number; url: string }[];
+  influencers: { id: number; name: string; code: string | null; status: string; campaign_id: number | null; attribution_window_days: number; url: string }[];
+};
+
 type SourceDetails = {
   campaigns: SourceRow[];
   influencers: SourceRow[];
@@ -137,6 +142,7 @@ export default function GrowthDashboard() {
   const [days, setDays] = useState(30);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [sources, setSources] = useState<SourceDetails | null>(null);
+  const [referrals, setReferrals] = useState<ReferralManagement | null>(null);
   const [tab, setTab] = useState<"overview" | "sources" | "network">("overview");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -156,16 +162,21 @@ export default function GrowthDashboard() {
     setBusy(true);
     setError("");
     try {
-      const [snapshotResponse, sourceResponse] = await Promise.all([
+      const [snapshotResponse, sourceResponse, referralResponseRaw] = await Promise.all([
         fetch(`/admin/data/growth?days=${days}`, { cache: "no-store" }),
         fetch(`/admin/data/growth/sources?days=${days}`, { cache: "no-store" }),
+        fetch("/admin/data/growth/referrals", { cache: "no-store" }),
       ]);
       const snapshotBody = await snapshotResponse.json();
       const sourceBody = await sourceResponse.json();
+      const referralResponse = await referralResponseRaw.json();
+      
       if (!snapshotResponse.ok) throw new Error(snapshotBody.detail || "Unable to load Growth reporting.");
       if (!sourceResponse.ok) throw new Error(sourceBody.detail || "Unable to load Growth source reporting.");
+      if (!referralResponseRaw.ok) throw new Error(referralResponse.detail || "Unable to load Growth referral management.");
       setSnapshot(snapshotBody);
       setSources(sourceBody);
+      setReferrals(referralResponse);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load Growth reporting.");
     } finally {
@@ -174,6 +185,18 @@ export default function GrowthDashboard() {
   };
 
   useEffect(() => { void refresh(); }, [days]);
+  const setReferralStatus = async (sourceType: "campaign" | "influencer", sourceId: number, currentStatus: string) => {
+    try {
+      const nextStatus = currentStatus === "active" ? "inactive" : "active";
+      const response = await fetch(`/admin/data/growth/referrals/status?source_type=${sourceType}&source_id=${sourceId}&status=${nextStatus}`, { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "Unable to update referral status.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update referral status.");
+    }
+  };
+
   const resetCreateForm = () => {
     setCreateName("");
     setCreateCode("");
@@ -345,7 +368,7 @@ export default function GrowthDashboard() {
             <div className="space-y-5">
               <section className={panel}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div><h2 className="font-semibold">Referral management</h2><p className="mt-1 text-sm text-slate-400">Create campaign and influencer links for acquisition tracking.</p></div>
+                  <div><h2 className="font-semibold">Referral management</h2><p className="mt-1 text-sm text-slate-400">Created campaign and influencer links.</p></div>
                   <button type="button" onClick={() => { resetCreateForm(); setShowCreate(true); }} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm">Create Referral</button>
                 </div>
                 {createdReferral && (
@@ -358,8 +381,23 @@ export default function GrowthDashboard() {
                     </div>
                   </div>
                 )}
+                <div className="mt-5 space-y-4">
+                  <div><p className="mb-2 text-xs uppercase tracking-wider text-slate-500">Campaigns</p>{referrals?.campaigns.map((row) => (
+                    <div key={row.id} className="flex flex-wrap items-center gap-3 border-t border-white/5 py-3">
+                      <div className="min-w-[180px] flex-1"><p className="font-medium">{row.name}</p><p className="text-xs text-slate-500">{row.code} · {row.status}</p></div>
+                      <button type="button" onClick={() => void copyReferral(row.url)} className="rounded-lg border border-white/10 px-3 py-2 text-xs">{copiedUrl === row.url ? "Copied" : "Copy Link"}</button>
+                      <button type="button" onClick={() => void setReferralStatus("campaign", row.id, row.status)} className="rounded-lg border border-white/10 px-3 py-2 text-xs">{row.status === "active" ? "Deactivate" : "Activate"}</button>
+                    </div>
+                  ))}</div>
+                  <div><p className="mb-2 text-xs uppercase tracking-wider text-slate-500">Influencers</p>{referrals?.influencers.map((row) => (
+                    <div key={row.id} className="flex flex-wrap items-center gap-3 border-t border-white/5 py-3">
+                      <div className="min-w-[180px] flex-1"><p className="font-medium">{row.name}</p><p className="text-xs text-slate-500">{row.code || "—"} · {row.status}</p></div>
+                      {row.code && <button type="button" onClick={() => void copyReferral(row.url)} className="rounded-lg border border-white/10 px-3 py-2 text-xs">{copiedUrl === row.url ? "Copied" : "Copy Link"}</button>}
+                      <button type="button" onClick={() => void setReferralStatus("influencer", row.id, row.status)} className="rounded-lg border border-white/10 px-3 py-2 text-xs">{row.status === "active" ? "Deactivate" : "Activate"}</button>
+                    </div>
+                  ))}</div>
+                </div>
               </section>
-
               <section className={panel}><h2 className="mb-4 font-semibold">Campaigns</h2><SourceTable rows={sources.campaigns} empty="No campaign activity in this window." /></section>
               <section className={panel}><h2 className="mb-4 font-semibold">Influencers</h2><SourceTable rows={sources.influencers} empty="No influencer activity in this window." /></section>
               <section className={panel}><h2 className="mb-4 font-semibold">User referrals</h2><SourceTable rows={sources.user_referrals} empty="No user referral activity in this window." /></section>
