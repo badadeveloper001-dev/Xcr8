@@ -776,12 +776,17 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
     db.refresh(user)
 
     if payload.attribution_token:
-        attach_user_attribution(
-            db,
-            user.id,
-            tracking_id=str(payload.attribution_token).strip(),
-            event_type="signup_completed",
-        )
+        try:
+            attach_user_attribution(
+                db,
+                user.id,
+                tracking_id=str(payload.attribution_token).strip(),
+                event_type="signup_completed",
+            )
+        except ValueError:
+            # Attribution abuse or stale referral ownership must never block
+            # an otherwise valid Google authentication flow.
+            db.rollback()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
