@@ -202,7 +202,10 @@ def test_plan_catalog_matches_entitlements():
     assert plans["starter"]["pricing"]["monthly_formatted"] == "$9"
     assert plans["starter"]["pricing"]["annual_formatted"] == "$90"
     assert plans["pro"]["high_quality_images"] == 10
+    assert plans["business"]["text_generations"] == 5_000
+    assert plans["business"]["image_generations"] == 200
     assert plans["business"]["high_quality_images"] == 20
+    assert plans["business"]["voiceovers"] == 100
     assert plans["business"]["storage_megabytes"] == 50 * 1024
 
 
