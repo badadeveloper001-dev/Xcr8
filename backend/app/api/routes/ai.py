@@ -8,7 +8,7 @@ import uuid
 from collections import Counter, defaultdict
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
@@ -50,6 +50,13 @@ from app.services.entitlements import consume_usage, finalize_usage, plan_for_us
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
+
+
+def _request_workspace_id(request: Request) -> int | None:
+    raw = str(request.headers.get("x-xcr8-workspace-id") or "").strip().lower()
+    if not raw or raw in {"main", "0"}:
+        return None
+    return int(raw) if raw.isdigit() and int(raw) > 0 else None
 
 ASSISTANT_CHAT_MEMORY_TYPE = "assistant_chat"
 ASSISTANT_CHAT_MEMORY_KEY = "assistant_long_chat_memory_v1"
@@ -976,6 +983,7 @@ def trend_mapper(payload: AITrendMapperRequest, db: Session = Depends(get_db)) -
 @router.post("/brainstorm", response_model=AIBrainstormResponse)
 def brainstorm(
     payload: AIBrainstormRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIBrainstormResponse:
@@ -989,6 +997,7 @@ def brainstorm(
         "text_generation",
         idempotency_key=idempotency_key,
         feature_type="basic_text_generation",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/brainstorm"},
     )
 
@@ -1032,6 +1041,7 @@ def brainstorm(
 @router.post("/compose", response_model=AIComposeResponse)
 def compose(
     payload: AIComposeRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIComposeResponse:
@@ -1045,6 +1055,7 @@ def compose(
         "advanced_ai_generation",
         idempotency_key=idempotency_key,
         feature_type="advanced_ai_generation",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/compose"},
     )
 
@@ -1097,6 +1108,7 @@ class AIImageGenerateRequest(BaseModel):
 @router.post("/image/generate", response_model=dict)
 def image_generate(
     payload: AIImageGenerateRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -1133,6 +1145,7 @@ def image_generate(
         metric,
         idempotency_key=idempotency_key,
         feature_type="hq_image_generation" if requested_quality == "hq" else "standard_image_generation",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/image/generate", "requested_quality": requested_quality},
     )
 
@@ -1170,6 +1183,7 @@ def image_generate(
 @router.post("/voiceover", response_model=AIVoiceoverResponse)
 def voiceover(
     payload: AIVoiceoverRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIVoiceoverResponse:
@@ -1184,6 +1198,7 @@ def voiceover(
         "voiceover",
         idempotency_key=idempotency_key,
         feature_type="short_voiceover",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/voiceover", "feature": "voiceover_script"},
     )
 
@@ -1240,6 +1255,7 @@ def voiceover(
 @router.post("/voiceover/audio")
 def voiceover_audio(
     payload: AIVoiceoverAudioRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -1253,6 +1269,7 @@ def voiceover_audio(
         "voiceover",
         idempotency_key=idempotency_key,
         feature_type="short_voiceover",
+        workspace_id=_request_workspace_id(request),
         event_meta={
             "route": "/ai/voiceover/audio",
             "voiceover_characters": len(payload.text),
@@ -1311,6 +1328,7 @@ def voiceover_audio(
 @router.post("/assistant", response_model=AIAssistantResponse)
 def assistant(
     payload: AIAssistantRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> AIAssistantResponse:
@@ -1324,6 +1342,7 @@ def assistant(
         "advanced_ai_generation",
         idempotency_key=idempotency_key,
         feature_type="advanced_ai_generation",
+        workspace_id=_request_workspace_id(request),
         event_meta={"route": "/ai/assistant"},
     )
 
