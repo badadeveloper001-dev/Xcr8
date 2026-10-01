@@ -6,6 +6,7 @@ from app.db.models import (
     GrowthCampaign,
     InfluencerReferral,
     ReferralCode,
+    ReferralRelationship,
     User,
     WatermarkLink,
 )
@@ -232,5 +233,70 @@ def test_invalid_referral_owner_configuration_is_rejected():
             assert False, "expected ValueError"
         except ValueError as exc:
             assert "type" in str(exc).lower() or "ownership" in str(exc).lower()
+    finally:
+        db.close()
+
+
+def test_user_referral_creates_direct_relationship():
+    db = SessionLocal()
+    try:
+        referrer = User(email="direct-referrer@example.com", display_name="Referrer")
+        referred = User(email="direct-referred@example.com", display_name="Referred")
+        db.add_all([referrer, referred])
+        db.flush()
+        db.add(ReferralCode(code="DIRECT26", code_type="user", owner_user_id=referrer.id))
+        db.commit()
+
+        capture = capture_visit(db, resolve_referral_code(db, "DIRECT26"))
+        attach_user_attribution(db, referred.id, tracking_id=capture.tracking_id)
+
+        relationship = db.query(ReferralRelationship).filter_by(referred_user_id=referred.id).one()
+        assert relationship.referrer_user_id == referrer.id
+        assert relationship.referral_code == "DIRECT26"
+    finally:
+        db.close()
+
+
+def test_user_cannot_self_refer():
+    db = SessionLocal()
+    try:
+        user = User(email="self-referrer@example.com", display_name="Self")
+        db.add(user)
+        db.flush()
+        db.add(ReferralCode(code="SELF26", code_type="user", owner_user_id=user.id))
+        db.commit()
+
+        capture = capture_visit(db, resolve_referral_code(db, "SELF26"))
+        try:
+            attach_user_attribution(db, user.id, tracking_id=capture.tracking_id)
+            assert False, "expected self-referral rejection"
+        except ValueError as exc:
+            assert "own account" in str(exc).lower()
+        assert db.query(ReferralRelationship).filter_by(referred_user_id=user.id).count() == 0
+    finally:
+        db.close()
+
+
+def test_existing_referral_relationship_cannot_be_reassigned():
+    db = SessionLocal()
+    try:
+        first = User(email="first-referrer@example.com", display_name="First")
+        second = User(email="second-referrer@example.com", display_name="Second")
+        referred = User(email="already-referred@example.com", display_name="Referred")
+        db.add_all([first, second, referred])
+        db.flush()
+        db.add_all([
+            ReferralCode(code="FIRSTREF26", code_type="user", owner_user_id=first.id),
+            ReferralCode(code="SECONDREF26", code_type="user", owner_user_id=second.id),
+        ])
+        db.add(ReferralRelationship(referrer_user_id=first.id, referred_user_id=referred.id, referral_code="FIRSTREF26"))
+        db.commit()
+
+        capture = capture_visit(db, resolve_referral_code(db, "SECONDREF26"))
+        try:
+            attach_user_attribution(db, referred.id, tracking_id=capture.tracking_id)
+            assert False, "expected relationship reassignment rejection"
+        except ValueError as exc:
+            assert "already assigned" in str(exc).lower()
     finally:
         db.close()
