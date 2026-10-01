@@ -1439,12 +1439,6 @@ def assistant(
         refund_usage(db, usage_ledger, reason="assistant_usage_policy_blocked")
         raise
     except Exception as exc:
-        refund_usage(
-            db,
-            usage_ledger,
-            reason="assistant_provider_or_response_failure",
-            event_meta={"error_type": exc.__class__.__name__},
-        )
         summary = app_context.get("summary") if isinstance(app_context.get("summary"), dict) else {}
         assistant_message = (
             f"I hit a temporary assistant issue, but I can still help. "
@@ -1474,6 +1468,16 @@ def assistant(
                 fallback_response.assistant_message,
                 fallback_response.follow_up_question,
             ),
+        )
+        finalize_usage(
+            db,
+            usage_ledger,
+            provider="backend-local",
+            model="backend-local-assistant-fallback",
+            event_meta={
+                "provider_result": "fallback_completed",
+                "fallback_reason": exc.__class__.__name__,
+            },
         )
         return fallback_response
 
