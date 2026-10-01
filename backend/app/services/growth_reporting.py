@@ -88,18 +88,6 @@ def _source_breakdown(db: Session, start: datetime, end: datetime) -> list[dict]
 
 
 def _revenue_breakdown(db: Session, start: datetime, end: datetime) -> dict:
-    total_minor = int(
-        db.scalar(
-            select(func.coalesce(func.sum(PaymentEvent.amount_minor), 0)).where(
-                PaymentEvent.signature_verified.is_(True),
-                PaymentEvent.amount_minor.is_not(None),
-                PaymentEvent.processed_at >= start,
-                PaymentEvent.processed_at < end,
-            )
-        )
-        or 0
-    )
-
     currency_rows = db.execute(
         select(
             PaymentEvent.currency,
@@ -116,6 +104,7 @@ def _revenue_breakdown(db: Session, start: datetime, end: datetime) -> dict:
     attributed_rows = db.execute(
         select(
             AcquisitionAttribution.first_touch_type,
+            PaymentEvent.currency,
             func.coalesce(func.sum(PaymentEvent.amount_minor), 0).label("amount_minor"),
             func.count(PaymentEvent.id).label("payments"),
         )
@@ -130,7 +119,7 @@ def _revenue_breakdown(db: Session, start: datetime, end: datetime) -> dict:
     ).all()
 
     return {
-        "total_minor": total_minor,
+        "total_minor": None,
         "by_currency": [
             {
                 "currency": str(row.currency or "UNKNOWN"),
@@ -142,12 +131,13 @@ def _revenue_breakdown(db: Session, start: datetime, end: datetime) -> dict:
         "by_first_touch": [
             {
                 "source_type": str(row.first_touch_type or "unknown"),
+                "currency": str(row.currency or "UNKNOWN"),
                 "amount_minor": int(row.amount_minor or 0),
                 "payments": int(row.payments or 0),
             }
             for row in attributed_rows
         ],
-        "note": "Amounts are reported in their original minor units; currencies are never converted without an FX source.",
+        "note": "Amounts are reported by currency in their original minor units; mixed currencies are never summed or converted without an FX source.",
     }
 
 
