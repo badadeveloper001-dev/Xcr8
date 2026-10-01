@@ -24,6 +24,7 @@ from app.services.usage_config import CREDIT_WEIGHTS, PLAN_USAGE
 
 UsageMetric = Literal[
     "text_generation",
+    "advanced_ai_generation",
     "image_generation",
     "high_quality_image",
     "voiceover",
@@ -131,6 +132,7 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
 # Central credit prices. Quotas remain hard caps even when credits are available.
 CREDIT_COSTS: dict[UsageMetric, int] = {
     "text_generation": CREDIT_WEIGHTS["basic_text_generation"],
+    "advanced_ai_generation": CREDIT_WEIGHTS["advanced_ai_generation"],
     "image_generation": CREDIT_WEIGHTS["standard_image_generation"],
     "high_quality_image": CREDIT_WEIGHTS["hq_image_generation"],
     "voiceover": CREDIT_WEIGHTS["short_voiceover"],
@@ -144,6 +146,7 @@ LEGACY_PLAN_ALIASES = {
 
 _COUNTER_FIELDS: dict[UsageMetric, str] = {
     "text_generation": "text_generations",
+    "advanced_ai_generation": "text_generations",
     "image_generation": "image_generations",
     "high_quality_image": "high_quality_images",
     "voiceover": "voiceovers",
