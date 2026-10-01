@@ -77,9 +77,9 @@ def admin_usage_snapshot(db: Session) -> dict:
             account_costs[row.user_id] = account_costs.get(row.user_id, 0.0) + cost
         account_credits[row.user_id] = account_credits.get(row.user_id, 0) + credits
 
-        if row.status == "refunded":
+        if row.status == "refunded" and str(row.event_type or "").endswith("_refund"):
             refunded += 1
-        if row.status == "failed":
+        if row.status in {"failed", "refunded"} and not str(row.event_type or "").endswith("_refund"):
             failed += 1
 
     top_user_ids = sorted(
