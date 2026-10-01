@@ -34,3 +34,13 @@ def test_safety_configuration():
     assert VOICEOVER_MAX_CHARACTERS == 500
     assert IMAGE_MODES == ("preview", "standard", "hq")
     assert WARNING_THRESHOLDS == {"warning": 75, "critical": 90, "exhausted": 100}
+
+
+
+def test_voiceover_schema_rejects_over_limit():
+    import pytest
+    from pydantic import ValidationError
+    from app.schemas.mvp import AIVoiceoverAudioRequest
+
+    with pytest.raises(ValidationError):
+        AIVoiceoverAudioRequest(user_id=1, text="x" * 501)
