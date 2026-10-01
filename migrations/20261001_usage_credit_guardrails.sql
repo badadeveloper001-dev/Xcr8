@@ -14,6 +14,10 @@ ALTER TABLE usage_ledger
     ALTER COLUMN period_key TYPE VARCHAR(64);
 
 ALTER TABLE usage_ledger
+    ALTER COLUMN estimated_external_cost TYPE NUMERIC(20, 8)
+    USING estimated_external_cost::numeric;
+
+ALTER TABLE usage_ledger
     ADD COLUMN IF NOT EXISTS workspace_id INTEGER,
     ADD COLUMN IF NOT EXISTS subscription_id VARCHAR(160),
     ADD COLUMN IF NOT EXISTS feature_type VARCHAR(64),
