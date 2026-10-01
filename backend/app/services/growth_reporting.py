@@ -354,9 +354,9 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
             target = user_sources.setdefault(
                 referrer_user_id,
                 _source_metric_template(
-                    (referrer.display_name if referrer else f"User {relationship.referrer_user_id}"),
+                    (referrer.display_name if referrer else f"User {referrer_user_id}"),
                     "user_referral",
-                    relationship.referrer_user_id,
+                    referrer_user_id,
                 ),
             )
         else:
