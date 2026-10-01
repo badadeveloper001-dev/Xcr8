@@ -52,7 +52,10 @@ def _source_breakdown(db: Session, start: datetime, end: datetime) -> list[dict]
         ).where(
             AcquisitionAttribution.signup_at >= start,
             AcquisitionAttribution.signup_at < end,
-        ).group_by(AcquisitionAttribution.first_touch_type)
+        ).group_by(
+            AcquisitionAttribution.first_touch_type,
+            PaymentEvent.currency,
+        )
     ).all()
 
     attributed_types = {"campaign", "influencer", "user_referral", "watermark"}
