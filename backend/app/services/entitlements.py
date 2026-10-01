@@ -20,7 +20,7 @@ from app.db.models import (
     User,
     WorkspaceMembership,
 )
-from app.services.usage_config import CREDIT_WEIGHTS, PLAN_USAGE
+from app.services.usage_config import CREDIT_WEIGHTS, PLAN_USAGE, WARNING_THRESHOLDS
 
 
 UsageMetric = Literal[
@@ -800,11 +800,11 @@ def usage_snapshot(db: Session, user_id: int) -> dict:
     consumed_percent = 100 if granted <= 0 else min(100, int((used * 100) / granted))
     warning = (
         "exhausted"
-        if consumed_percent >= 100
+        if consumed_percent >= WARNING_THRESHOLDS["exhausted"]
         else "critical"
-        if consumed_percent >= 90
+        if consumed_percent >= WARNING_THRESHOLDS["critical"]
         else "warning"
-        if consumed_percent >= 75
+        if consumed_percent >= WARNING_THRESHOLDS["warning"]
         else None
     )
     payload = {
