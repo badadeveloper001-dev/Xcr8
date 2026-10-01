@@ -1036,3 +1036,46 @@ def test_ai_usage_requires_signed_server_session(monkeypatch):
         assert response.status_code != 401
     finally:
         db.close()
+
+
+
+def test_concurrent_reservations_cannot_overspend_postgres():
+    if not settings.database_url.startswith("postgresql"):
+        pytest.skip("Requires PostgreSQL row-lock semantics")
+
+    from concurrent.futures import ThreadPoolExecutor
+    from app.services.entitlements import reserve_usage
+
+    db = SessionLocal()
+    try:
+        user = User(
+            email="concurrency@test.local",
+            display_name="Concurrency Tester",
+            plan_tier=PlanTier.pro,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        user_id = user.id
+    finally:
+        db.close()
+
+    def attempt(index: int):
+        local_db = SessionLocal()
+        try:
+            return reserve_usage(
+                local_db,
+                user_id,
+                "advanced_ai_generation",
+                idempotency_key=f"concurrency-{index}",
+                feature_type="advanced_ai_generation",
+            ).status
+        except HTTPException as exc:
+            return exc.status_code
+        finally:
+            local_db.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(attempt, [1, 2]))
+
+    assert sorted(results) == [200, "reserved"]
