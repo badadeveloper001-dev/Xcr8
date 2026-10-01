@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
@@ -106,6 +106,7 @@ def get_distribution_draft(
 @router.post("/draft", response_model=DistributionDraftResponse)
 def create_distribution_draft(
     payload: DistributionCreateRequest,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> DistributionDraftResponse:
@@ -125,6 +126,7 @@ def create_distribution_draft(
         "ai_content_analysis",
         idempotency_key=f"{idempotency_key}:language" if idempotency_key else None,
         feature_type="ai_content_analysis",
+        workspace_id=(int(request.headers.get("x-xcr8-workspace-id")) if str(request.headers.get("x-xcr8-workspace-id") or "").isdigit() else None),
         event_meta={"route": "/distribution/draft", "analysis": "language_detection"},
     )
 
@@ -245,6 +247,7 @@ def create_distribution_draft(
                 "text_generation",
                 idempotency_key=f"{idempotency_key}:{platform}:{language}" if idempotency_key else None,
                 feature_type="basic_text_generation",
+                workspace_id=(int(request.headers.get("x-xcr8-workspace-id")) if str(request.headers.get("x-xcr8-workspace-id") or "").isdigit() else None),
                 event_meta={"route": "/distribution/draft", "platform": platform, "language": language},
             )
             try:
