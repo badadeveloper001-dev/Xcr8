@@ -1006,3 +1006,33 @@ def test_insufficient_credits_blocks_compose_before_provider_call(monkeypatch):
         assert called is False
     finally:
         db.close()
+
+
+
+def test_ai_usage_requires_signed_server_session(monkeypatch):
+    monkeypatch.setenv("PULSE_SESSION_SECRET", "usage-session-test-secret-" * 2)
+    db = SessionLocal()
+    try:
+        user = User(email="session-guard@test.local", display_name="Session Guard", plan_tier=PlanTier.pro)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/ai/compose",
+            json={"user_id": user.id, "prompt": "test prompt"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "session-guard-1"},
+        )
+        assert response.status_code == 401
+
+        from app.services.usage_cockpit import sign_user
+        client.cookies.set("xcr8_usage_session", sign_user(user.id, int(time.time()) + 600))
+        response = client.post(
+            "/api/v1/ai/compose",
+            json={"user_id": user.id, "prompt": "test prompt"},
+            headers={"X-Xcr8-User-Id": str(user.id), "Idempotency-Key": "session-guard-2"},
+        )
+        assert response.status_code != 401
+    finally:
+        db.close()
