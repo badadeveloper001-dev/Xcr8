@@ -24,6 +24,14 @@ class PlanUsageConfig:
     limits: FeatureLimit
 
 
+@dataclass(frozen=True, slots=True)
+class PlanPricing:
+    price_cents: int
+    annual_price_cents: int
+    ngn_price_kobo: int
+    ngn_annual_price_kobo: int
+
+
 PLAN_USAGE: Final[dict[str, PlanUsageConfig]] = {
     "free": PlanUsageConfig(
         monthly_credits=500,
