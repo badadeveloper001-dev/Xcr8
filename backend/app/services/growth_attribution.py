@@ -15,6 +15,8 @@ from app.db.models import (
     GrowthEvent,
     InfluencerReferral,
     ReferralCode,
+    ReferralRelationship,
+    User,
     WatermarkLink,
 )
 
@@ -291,6 +293,34 @@ def attach_user_attribution(
 
     if event_type == "signup_completed" and attribution.signup_at is None:
         attribution.signup_at = now
+
+        if source.source_type == "user_referral" and source.referrer_user_id is not None:
+            if source.referrer_user_id == user_id:
+                db.rollback()
+                raise ValueError("A user cannot refer their own account.")
+
+            referrer = db.get(User, source.referrer_user_id)
+            if not referrer:
+                db.rollback()
+                raise ValueError("Referral owner no longer exists.")
+
+            existing_relationship = db.scalar(
+                select(ReferralRelationship)
+                .where(ReferralRelationship.referred_user_id == user_id)
+                .with_for_update()
+            )
+            if existing_relationship:
+                if existing_relationship.referrer_user_id != source.referrer_user_id:
+                    db.rollback()
+                    raise ValueError("Referral relationship is already assigned.")
+            else:
+                db.add(
+                    ReferralRelationship(
+                        referrer_user_id=source.referrer_user_id,
+                        referred_user_id=user_id,
+                        referral_code=source.referral_code,
+                    )
+                )
 
     db.add(
         GrowthEvent(
