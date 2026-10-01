@@ -650,7 +650,14 @@ def reserve_usage(
                 select(UsageLedger).where(UsageLedger.idempotency_key == clean_key)
             )
             if existing:
-                return existing
+                # A concurrent winner must never be reused for a second provider call.
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "idempotency_key_reused",
+                        "message": "This idempotency key has already been accepted. Retry with a new request key.",
+                    },
+                )
         raise
     db.refresh(ledger)
     from app.usage import ledger as pulse_ledger
