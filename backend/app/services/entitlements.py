@@ -529,7 +529,21 @@ def reserve_usage(
             select(UsageLedger).where(UsageLedger.idempotency_key == clean_key)
         )
         if existing:
-            return existing
+            if existing.status == "reserved":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "usage_reservation_in_progress",
+                        "message": "This generation request is already being processed.",
+                    },
+                )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "idempotency_key_reused",
+                    "message": "This idempotency key has already been finalized. Retry with a new request key.",
+                },
+            )
 
     user = _lock_user(db, user_id)
     expire_plan_if_needed(db, user, commit=False)
