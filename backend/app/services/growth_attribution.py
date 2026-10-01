@@ -307,3 +307,91 @@ def attach_user_attribution(
     db.commit()
     db.refresh(attribution)
     return attribution
+
+
+_MEANINGFUL_ACTIVATION_EVENTS = {
+    "first_generation",
+    "first_schedule",
+    "first_social_account_connected",
+}
+
+
+def record_growth_event(
+    db: Session,
+    user_id: int,
+    event_type: str,
+    *,
+    metadata: dict | None = None,
+) -> GrowthEvent:
+    """Record an authoritative lifecycle event and update attribution milestones."""
+    normalized = _normalize_code(event_type)
+    if not normalized:
+        raise ValueError("Growth event type is required.")
+
+    now = datetime.now(tz=UTC)
+    attribution = db.scalar(
+        select(AcquisitionAttribution).where(AcquisitionAttribution.user_id == user_id)
+    )
+
+    # Lifecycle events remain useful even when the user was organic/unattributed.
+    if attribution:
+        existing = db.scalar(
+            select(GrowthEvent).where(
+                GrowthEvent.user_id == user_id,
+                GrowthEvent.event_type == normalized,
+            )
+        )
+        if existing:
+            return existing
+
+        event = GrowthEvent(
+            user_id=user_id,
+            campaign_id=attribution.last_touch_campaign_id,
+            influencer_referral_id=attribution.last_touch_influencer_id,
+            referral_code=attribution.last_touch_referral_code,
+            watermark_id=attribution.last_touch_watermark_id,
+            event_type=normalized,
+            event_time=now,
+            metadata=metadata or {},
+        )
+        db.add(event)
+
+        if normalized == "onboarding_completed":
+            if attribution.activation_at is None:
+                # Activation is evaluated below after this event is persisted.
+                pass
+        elif normalized in {"subscription_started", "subscription_upgraded", "subscription_renewed"}:
+            if attribution.first_paid_at is None:
+                attribution.first_paid_at = now
+
+        db.flush()
+
+        if attribution.signup_at and attribution.activation_at is None:
+            meaningful = db.scalar(
+                select(GrowthEvent).where(
+                    GrowthEvent.user_id == user_id,
+                    GrowthEvent.event_type.in_(list(_MEANINGFUL_ACTIVATION_EVENTS)),
+                )
+            )
+            onboarding = db.scalar(
+                select(GrowthEvent).where(
+                    GrowthEvent.user_id == user_id,
+                    GrowthEvent.event_type == "onboarding_completed",
+                )
+            )
+            if meaningful and onboarding:
+                attribution.activation_at = now
+
+        db.add(attribution)
+        db.commit()
+        return event
+
+    event = GrowthEvent(
+        user_id=user_id,
+        event_type=normalized,
+        event_time=now,
+        metadata=metadata or {},
+    )
+    db.add(event)
+    db.commit()
+    return event
