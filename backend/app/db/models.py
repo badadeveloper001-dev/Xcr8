@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -555,7 +557,7 @@ class InfluencerReferral(Base):
     campaign_id: Mapped[int | None] = mapped_column(ForeignKey("growth_campaigns.id"), nullable=True, index=True)
     compensation_type: Mapped[str] = mapped_column(String(32), default="none")
     compensation_plan: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    cash_compensation: Mapped[float] = mapped_column(Numeric(20, 2), default=0)
+    cash_compensation: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
     attribution_window_days: Mapped[int] = mapped_column(Integer, default=30)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -679,5 +681,5 @@ class GrowthEvent(Base):
     referrer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     event_type: Mapped[str] = mapped_column(String(64), index=True)
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
