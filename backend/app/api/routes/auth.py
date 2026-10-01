@@ -29,7 +29,7 @@ from app.schemas.mvp import (
     SignupResponse,
 )
 from app.services.entitlements import effective_plan_id
-from app.services.growth_attribution import attach_user_attribution
+from app.services.growth_attribution import attach_user_attribution, record_growth_event
 from app.services.auth import (
     SupabaseAuthError,
     stable_fallback_user_id,
@@ -929,6 +929,10 @@ def onboarding(payload: OnboardingRequest, db: Session = Depends(get_db)) -> Aut
 
     db.commit()
     db.refresh(user)
+    try:
+        record_growth_event(db, user.id, "onboarding_completed")
+    except Exception:
+        db.rollback()
 
     # Best-effort: write onboarding_complete to Supabase user_metadata so
     # admin analytics stay accurate even when the local DB is ephemeral.
