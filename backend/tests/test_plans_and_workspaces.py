@@ -810,6 +810,16 @@ def test_usage_reservation_finalization_and_refund():
         assert refund is not None
         assert refund.status == "refunded"
 
+        analysis = reserve_usage(
+            db,
+            user.id,
+            "ai_content_analysis",
+            idempotency_key="reservation-analysis",
+            feature_type="ai_content_analysis",
+        )
+        assert analysis.credits_delta == 4
+        refund_usage(db, analysis.id, reason="analysis_provider_failure")
+
         period = db.query(UsagePeriod).filter(UsagePeriod.user_id == user.id).one()
         assert period.credits_used == 4
         assert period.image_generations == 0
