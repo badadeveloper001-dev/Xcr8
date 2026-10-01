@@ -839,3 +839,76 @@ def test_business_usage_limits_match_shared_pool():
         assert exc_info.value.detail["code"] == "plan_quota_exceeded"
     finally:
         db.close()
+
+
+
+def test_plan_upgrade_preserves_billing_anchor_and_downgrade_is_deferred(monkeypatch):
+    db = SessionLocal()
+    try:
+        monkeypatch.setattr(settings, "billing_webhook_secret", "test-billing-secret")
+        anchor = datetime.now(tz=UTC) - timedelta(days=10)
+        user = User(
+            email="plan-change@test.local",
+            display_name="Plan Change Tester",
+            plan_tier=PlanTier.starter,
+            plan_started_at=anchor,
+            plan_expires_at=anchor + timedelta(days=21),
+            billing_meta={
+                "billing_anchor_at": anchor.isoformat(),
+                "subscription_id": "sub-plan-change",
+            },
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        client = TestClient(app)
+
+        upgrade_payload = {
+            "event_id": "evt_upgrade_preserve_anchor",
+            "user_id": user.id,
+            "plan": "pro",
+            "status": "paid",
+            "currency": "USD",
+            "billing_cycle": "monthly",
+            "amount_minor": 2900,
+            "subscription_id": "sub-plan-change",
+        }
+        raw = json.dumps(upgrade_payload, separators=(",", ":")).encode()
+        signature = hmac.new(b"test-billing-secret", raw, hashlib.sha256).hexdigest()
+        response = client.post(
+            "/api/v1/plans/webhook/test-provider",
+            content=raw,
+            headers={"X-Xcr8-Signature": signature},
+        )
+        assert response.status_code == 200
+
+        db.refresh(user)
+        assert user.plan_tier == PlanTier.pro
+        assert user.plan_started_at == anchor
+        assert user.billing_meta["billing_anchor_at"] == anchor.isoformat()
+
+        downgrade_payload = {
+            "event_id": "evt_downgrade_deferred",
+            "user_id": user.id,
+            "plan": "starter",
+            "status": "paid",
+            "currency": "USD",
+            "billing_cycle": "monthly",
+            "amount_minor": 900,
+            "subscription_id": "sub-plan-change",
+        }
+        raw = json.dumps(downgrade_payload, separators=(",", ":")).encode()
+        signature = hmac.new(b"test-billing-secret", raw, hashlib.sha256).hexdigest()
+        response = client.post(
+            "/api/v1/plans/webhook/test-provider",
+            content=raw,
+            headers={"X-Xcr8-Signature": signature},
+        )
+        assert response.status_code == 200
+
+        db.refresh(user)
+        assert user.plan_tier == PlanTier.pro
+        assert user.billing_meta["pending_plan"] == "starter"
+    finally:
+        db.close()
