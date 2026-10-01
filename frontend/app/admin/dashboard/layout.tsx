@@ -12,6 +12,7 @@ import {
   Menu,
   Settings2,
   Users,
+  TrendingUp,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -19,6 +20,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 const primaryItems = [
   ["/admin/dashboard", "Overview", LayoutDashboard],
+  ["/admin/dashboard/growth", "Growth", TrendingUp],
   ["/admin/dashboard/creators", "Creators", Users],
   ["/admin/dashboard/content", "Content", FileWarning],
   ["/admin/dashboard/system", "System", Settings2],
