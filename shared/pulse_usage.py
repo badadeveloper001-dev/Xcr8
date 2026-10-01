@@ -459,7 +459,40 @@ def dashboard():
                 ).where(attempts.c.request_id.in_(request_ids))
                  .order_by(attempts.c.created_at.asc())).mappings()
             ]
-return {
+        attempts_by_request = {}
+        for attempt in attempt_rows:
+            attempts_by_request.setdefault(attempt["request_id"], []).append(attempt)
+
+        recent = []
+        for request in recent_requests:
+            request_attempts = attempts_by_request.get(request["id"], [])
+            unknown = sum(1 for a in request_attempts if a["cost_micros"] is None)
+            total = None if unknown or not request_attempts else sum(a["cost_micros"] for a in request_attempts)
+            recent.append({
+                "id": request["id"],
+                "user_id": request["user_id"],
+                "feature": request["feature"],
+                "status": request["status"],
+                "duration_ms": request["duration_ms"],
+                "attempts": len(request_attempts),
+                "unknown_attempts": unknown,
+                "fallback": any(a["fallback"] for a in request_attempts),
+                "cost_micros": total,
+                "providers": [
+                    {
+                        "provider": a["provider"],
+                        "model": a["model"],
+                        "cost_micros": a["cost_micros"],
+                        "fallback": bool(a["fallback"]),
+                        "status": a["status"],
+                    }
+                    for a in request_attempts
+                ],
+            })
+
+        revision = conn.execute(select(policy.c.revision).where(policy.c.id == 1)).scalar_one()
+
+    return {
         "periods": periods,
         "features": feature_rows,
         "providers": providers,
