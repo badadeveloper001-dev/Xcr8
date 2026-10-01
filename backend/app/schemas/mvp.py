@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
@@ -201,6 +202,22 @@ class PulseEventIngestRequest(BaseModel):
     user_id: int | None = None
     affected_user_email: str | None = None
     event_meta: dict = Field(default_factory=dict)
+
+
+class AdminGrowthCampaignCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=180)
+    campaign_code: str | None = Field(default=None, min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    attribution_window_days: int = Field(default=30, ge=1, le=3650)
+
+
+class AdminGrowthInfluencerCreateRequest(BaseModel):
+    influencer_name: str = Field(min_length=2, max_length=180)
+    referral_code: str | None = Field(default=None, min_length=3, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    campaign_id: int | None = Field(default=None, ge=1)
+    attribution_window_days: int = Field(default=30, ge=1, le=3650)
+    compensation_type: str = Field(default="none", max_length=32)
+    compensation_plan: str | None = Field(default=None, max_length=64)
+    cash_compensation: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 class AdminOverview(BaseModel):
