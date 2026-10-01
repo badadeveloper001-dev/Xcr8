@@ -411,7 +411,8 @@ export default function GrowthDashboard() {
           <p className="text-xs text-slate-500">
             Window: {new Date(snapshot.window.start).toLocaleDateString()} → {new Date(snapshot.window.end).toLocaleDateString()}. Revenue is shown in original currencies; mixed currencies are not combined.
           </p>
-        </>}
+        </>
+      )}
       {showCreate && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-labelledby="create-referral-title" className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
