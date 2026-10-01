@@ -402,12 +402,15 @@ def signup_verify_code(payload: AuthSignupCodeVerifyRequest, db: Session = Depen
 
     attribution_token = str(preferences.get("attribution_token") or "").strip() or None
     if attribution_token:
-        attach_user_attribution(
-            db,
-            user.id,
-            tracking_id=attribution_token,
-            event_type="signup_completed",
-        )
+        try:
+            attach_user_attribution(
+                db,
+                user.id,
+                tracking_id=attribution_token,
+                event_type="signup_completed",
+            )
+        except ValueError:
+            db.rollback()
         profile.preferences = {
             **(profile.preferences or {}),
             "attribution_token": None,
@@ -449,7 +452,10 @@ def signup_verify_link(payload: AuthSignupLinkVerifyRequest, db: Session = Depen
         db.add(profile)
         db.commit()
         if attribution_token:
-            attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+            try:
+                attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+            except ValueError:
+                db.rollback()
             profile.preferences = {**(profile.preferences or {}), "attribution_token": None}
             db.add(profile)
             db.commit()
@@ -494,7 +500,10 @@ def signup_verify_password(
     db.add(profile)
     db.commit()
     if attribution_token:
-        attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+        try:
+            attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+        except ValueError:
+            db.rollback()
         profile.preferences = {**(profile.preferences or {}), "attribution_token": None}
         db.add(profile)
         db.commit()
