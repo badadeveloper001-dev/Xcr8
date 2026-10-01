@@ -20,7 +20,7 @@ from app.db.models import (
     User,
     WorkspaceMembership,
 )
-from app.services.usage_config import CREDIT_WEIGHTS, PLAN_USAGE, WARNING_THRESHOLDS
+from app.services.usage_config import CREDIT_WEIGHTS, PLAN_PRICING, PLAN_USAGE, WARNING_THRESHOLDS
 
 
 UsageMetric = Literal[
@@ -63,10 +63,10 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "free": PlanConfig(
         id="free",
         name="Free",
-        price_cents=0,
-        annual_price_cents=0,
-        ngn_price_kobo=0,
-        ngn_annual_price_kobo=0,
+        price_cents=PLAN_PRICING["free"].price_cents,
+        annual_price_cents=PLAN_PRICING["free"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["free"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["free"].ngn_annual_price_kobo,
         monthly_credits=PLAN_USAGE["free"].monthly_credits,
         text_generations=PLAN_USAGE["free"].limits.text_generations,
         image_generations=PLAN_USAGE["free"].limits.standard_images,
@@ -80,10 +80,10 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "starter": PlanConfig(
         id="starter",
         name="Starter",
-        price_cents=900,
-        annual_price_cents=9_000,
-        ngn_price_kobo=750_000,
-        ngn_annual_price_kobo=7_500_000,
+        price_cents=PLAN_PRICING["starter"].price_cents,
+        annual_price_cents=PLAN_PRICING["starter"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["starter"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["starter"].ngn_annual_price_kobo,
         monthly_credits=PLAN_USAGE["starter"].monthly_credits,
         text_generations=PLAN_USAGE["starter"].limits.text_generations,
         image_generations=PLAN_USAGE["starter"].limits.standard_images,
@@ -97,10 +97,10 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "pro": PlanConfig(
         id="pro",
         name="Pro",
-        price_cents=2_900,
-        annual_price_cents=29_000,
-        ngn_price_kobo=2_000_000,
-        ngn_annual_price_kobo=20_000_000,
+        price_cents=PLAN_PRICING["pro"].price_cents,
+        annual_price_cents=PLAN_PRICING["pro"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["pro"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["pro"].ngn_annual_price_kobo,
         monthly_credits=PLAN_USAGE["pro"].monthly_credits,
         text_generations=PLAN_USAGE["pro"].limits.text_generations,
         image_generations=PLAN_USAGE["pro"].limits.standard_images,
@@ -114,10 +114,10 @@ PLAN_CONFIG: dict[str, PlanConfig] = {
     "business": PlanConfig(
         id="business",
         name="Business",
-        price_cents=9_900,
-        annual_price_cents=99_000,
-        ngn_price_kobo=5_000_000,
-        ngn_annual_price_kobo=50_000_000,
+        price_cents=PLAN_PRICING["business"].price_cents,
+        annual_price_cents=PLAN_PRICING["business"].annual_price_cents,
+        ngn_price_kobo=PLAN_PRICING["business"].ngn_price_kobo,
+        ngn_annual_price_kobo=PLAN_PRICING["business"].ngn_annual_price_kobo,
         monthly_credits=PLAN_USAGE["business"].monthly_credits,
         text_generations=PLAN_USAGE["business"].limits.text_generations,
         image_generations=PLAN_USAGE["business"].limits.standard_images,
