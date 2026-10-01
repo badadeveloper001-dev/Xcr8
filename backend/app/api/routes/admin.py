@@ -270,7 +270,6 @@ def _create_unique_referral_code(
             influencer_referral_id=influencer_referral_id,
             active=True,
         )
-        db.add(referral)
         try:
             with db.begin_nested():
                 db.add(referral)
@@ -357,7 +356,7 @@ def admin_create_growth_influencer(
         compensation_type=compensation_type,
         compensation_plan=payload.compensation_plan.strip() if payload.compensation_plan else None,
         cash_compensation=payload.cash_compensation,
-        created_by_user_id=_admin_system_user_id(db),
+        created_by_user_id=None,
     )
     db.add(influencer)
     db.flush()
