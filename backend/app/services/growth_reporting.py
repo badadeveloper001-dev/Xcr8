@@ -248,13 +248,16 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
         for item in db.scalars(select(WatermarkLink).order_by(WatermarkLink.id))
     }
 
-    click_rows = db.scalars(
-        select(GrowthEvent).where(
-            GrowthEvent.event_type.in_(["referral_link_clicked", "watermark_link_clicked"]),
-            GrowthEvent.event_time >= start,
-            GrowthEvent.event_time < end,
+    click_rows = list(
+        db.scalars(
+            select(GrowthEvent).where(
+                GrowthEvent.event_type.in_(["referral_link_clicked", "watermark_link_clicked"]),
+                GrowthEvent.event_time >= start,
+                GrowthEvent.event_time < end,
+            )
         )
     )
+    user_click_counts: dict[int, int] = {}
     for event in click_rows:
         if event.campaign_id in campaigns:
             campaigns[event.campaign_id]["clicks"] += 1
@@ -262,6 +265,8 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
             influencers[event.influencer_referral_id]["clicks"] += 1
         if event.watermark_id in watermarks:
             watermarks[event.watermark_id]["clicks"] += 1
+        if event.referrer_user_id:
+            user_click_counts[event.referrer_user_id] = user_click_counts.get(event.referrer_user_id, 0) + 1
 
     attributions = list(
         db.scalars(
@@ -297,6 +302,17 @@ def growth_source_details(db: Session, start: datetime, end: datetime) -> dict:
             )
         )
     } if relationships else {}
+
+    for referrer_user_id, click_count in user_click_counts.items():
+        referrer = db.get(User, referrer_user_id)
+        user_sources.setdefault(
+            referrer_user_id,
+            _source_metric_template(
+                (referrer.display_name if referrer else f"User {referrer_user_id}"),
+                "user_referral",
+                referrer_user_id,
+            ),
+        )["clicks"] += click_count
 
     for row in attributions:
         if row.first_touch_type == "campaign" and row.first_touch_campaign_id in campaigns:
@@ -471,7 +487,7 @@ def growth_snapshot(db: Session, days: int = 30) -> dict:
         "free_economics": _free_economics(db, start, end),
         "limitations": [
             "Revenue remains in original currency/minor units; no FX conversion is performed.",
-            "subscription_cancelled remains zero until the Paystack cancellation webhook is wired to Growth events.",
+            "subscription_cancelled is recorded from verified Paystack subscription.disable events.",
             "Free Network Value is not inferred from provider cost; this snapshot reports actual free-user acquisition and recorded provider-cost telemetry.",
         ],
     }
