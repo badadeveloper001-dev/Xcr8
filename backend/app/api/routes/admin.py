@@ -18,6 +18,7 @@ from app.schemas.mvp import (
     PulseStatusUpdateRequest,
 )
 from app.services.pulse import resolve_pulse_incident
+from app.services.usage_admin import admin_usage_snapshot
 from app.services.pulse import record_pulse_event
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -220,6 +221,16 @@ def _require_admin_access(x_admin_code: str | None, request: Request) -> None:
         _record_failed_attempt(client_id)
         raise HTTPException(status_code=401, detail="Invalid admin access code")
     _clear_attempts(client_id)
+
+
+@router.get("/usage", response_model=dict)
+def admin_usage(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+    return admin_usage_snapshot(db)
 
 
 @router.post("/session")
