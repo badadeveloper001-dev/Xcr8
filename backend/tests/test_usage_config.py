@@ -44,3 +44,26 @@ def test_voiceover_schema_rejects_over_limit():
 
     with pytest.raises(ValidationError):
         AIVoiceoverAudioRequest(user_id=1, text="x" * 501)
+
+
+
+def test_paid_billing_window_preserves_subscription_month_boundary():
+    from datetime import UTC, datetime
+    from app.db.models import PlanTier, User
+    from app.services.entitlements import _billing_window
+
+    user = User(
+        email="billing-window@test.local",
+        display_name="Billing Window",
+        plan_tier=PlanTier.pro,
+        plan_started_at=datetime(2026, 1, 31, 10, 0, tzinfo=UTC),
+        billing_meta={"subscription_id": "sub-window"},
+    )
+    key, start, end, subscription_id = _billing_window(
+        user,
+        datetime(2026, 2, 15, 12, 0, tzinfo=UTC),
+    )
+    assert start.day == 28
+    assert end.month == 3
+    assert subscription_id == "sub-window"
+    assert key.startswith("billing:20260228:")
