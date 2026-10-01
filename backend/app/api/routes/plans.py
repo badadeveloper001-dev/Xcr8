@@ -293,6 +293,9 @@ def _activate_paystack_payment(
             user_id=user.id,
             plan=normalized_plan,
             status=status,
+            currency=currency,
+            amount_minor=int(amount_minor),
+            billing_cycle=billing_cycle,
             payload_hash=payload_hash,
             signature_verified=True,
         )
@@ -718,6 +721,9 @@ async def payment_webhook(
             user_id=user.id,
             plan=plan_id,
             status=status,
+            currency=currency,
+            amount_minor=amount_minor,
+            billing_cycle=billing_cycle,
             payload_hash=hashlib.sha256(raw_body).hexdigest(),
             signature_verified=True,
         )
