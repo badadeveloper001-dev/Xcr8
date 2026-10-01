@@ -14,16 +14,16 @@ ALTER TABLE usage_ledger
     ALTER COLUMN period_key TYPE VARCHAR(64);
 
 ALTER TABLE usage_ledger
-    ALTER COLUMN estimated_external_cost TYPE NUMERIC(20, 8)
-    USING estimated_external_cost::numeric;
-
-ALTER TABLE usage_ledger
     ADD COLUMN IF NOT EXISTS workspace_id INTEGER,
     ADD COLUMN IF NOT EXISTS subscription_id VARCHAR(160),
     ADD COLUMN IF NOT EXISTS feature_type VARCHAR(64),
     ADD COLUMN IF NOT EXISTS provider VARCHAR(80),
     ADD COLUMN IF NOT EXISTS model VARCHAR(160),
     ADD COLUMN IF NOT EXISTS estimated_external_cost NUMERIC(20, 8);
+
+ALTER TABLE usage_ledger
+    ALTER COLUMN estimated_external_cost TYPE NUMERIC(20, 8)
+    USING estimated_external_cost::numeric;
 
 -- Backfill legacy calendar-month periods without deleting or rewriting usage.
 UPDATE usage_periods
