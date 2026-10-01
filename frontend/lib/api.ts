@@ -128,6 +128,7 @@ export type LoginPayload = {
 
 export type GoogleSessionPayload = {
   access_token: string;
+  attribution_token?: string;
 };
 
 export type AdminCreatorItem = {
