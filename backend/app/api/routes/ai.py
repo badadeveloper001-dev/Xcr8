@@ -1008,6 +1008,7 @@ def brainstorm(
 
     creator_memory = _build_creator_memory(profile, payload.language, payload.topic, recent_memories)
 
+    try:
     result = generate_content_ideas(
         {
             "topic": payload.topic,
@@ -1019,6 +1020,9 @@ def brainstorm(
             "creator_memory": creator_memory,
         }
     )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="brainstorm_usage_policy_blocked")
+        raise
 
     parsed = AIBrainstormResponse(**result)
     finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed"})
@@ -1060,6 +1064,7 @@ def compose(
 
     creator_memory = _build_creator_memory(profile, payload.language, payload.prompt, recent_memories)
 
+    try:
     result = generate_composed_content(
         {
             "user_id": payload.user_id,
@@ -1072,6 +1077,9 @@ def compose(
             "messages": [message.model_dump() for message in payload.messages],
         }
     )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="compose_usage_policy_blocked")
+        raise
 
     parsed = AIComposeResponse(**result)
     finalize_usage(db, usage_ledger, provider="ai-service", model=str(result.get("model") or "") or None, event_meta={"provider_result": "completed"})
@@ -1148,6 +1156,9 @@ def image_generate(
             event_meta={"provider_result": "completed"},
         )
         return result
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="image_usage_policy_blocked")
+        raise
     except httpx.HTTPStatusError as exc:
         refund_usage(db, usage_ledger, reason="image_provider_rejected_request", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Image provider rejected the request")
@@ -1211,6 +1222,9 @@ def voiceover(
             },
             timeout=60.0,
         )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="voiceover_script_usage_policy_blocked")
+        raise
     except httpx.HTTPStatusError as exc:
         refund_usage(db, usage_ledger, reason="voiceover_script_provider_rejected", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Voiceover generation failed")
@@ -1280,6 +1294,9 @@ def voiceover_audio(
             },
             timeout=120.0,
         )
+    except HTTPException:
+        refund_usage(db, usage_ledger, reason="voiceover_audio_usage_policy_blocked")
+        raise
     except httpx.HTTPStatusError as exc:
         refund_usage(db, usage_ledger, reason="voiceover_audio_provider_rejected", event_meta={"provider_status": exc.response.status_code})
         _raise_ai_service_error(exc, "Voiceover audio provider rejected the request")
