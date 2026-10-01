@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum as SqlEnum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -497,7 +497,7 @@ class UsageLedger(Base):
     feature_type: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     provider: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     model: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
-    estimated_external_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_external_cost: Mapped[float | None] = mapped_column(Numeric(20, 8), nullable=True)
     event_type: Mapped[str] = mapped_column(String(64), index=True)
     quantity: Mapped[int] = mapped_column(BigInteger, default=1)
     credits_delta: Mapped[int] = mapped_column(Integer, default=0)
