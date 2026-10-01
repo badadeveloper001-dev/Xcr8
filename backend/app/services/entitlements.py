@@ -720,13 +720,14 @@ def refund_usage(
         )
         .with_for_update()
     )
-    if not period or not counter_field:
+    if not period:
         db.rollback()
         return None
 
     quantity = max(1, int(original.quantity or 1))
-    current_count = int(getattr(period, counter_field) or 0)
-    setattr(period, counter_field, max(0, current_count - quantity))
+    if counter_field:
+        current_count = int(getattr(period, counter_field) or 0)
+        setattr(period, counter_field, max(0, current_count - quantity))
     if metric == "high_quality_image":
         period.image_generations = max(0, int(period.image_generations or 0) - quantity)
     period.credits_used = max(0, int(period.credits_used or 0) - int(original.credits_delta or 0))
