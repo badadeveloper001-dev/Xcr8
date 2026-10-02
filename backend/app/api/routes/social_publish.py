@@ -14,6 +14,11 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, ContentPost, Platform, PostVariant, User
 from app.services.entitlements import ensure_social_account_capacity
+from app.services.watermark_attribution import free_attribution
+from app.services.watermark_platform_attribution import (
+    build_attribution_payload,
+    format_platform_attribution,
+)
 from app.services.profile_scope import current_profile_id
 from app.services.pulse import record_pulse_event
 from app.services.social_publisher import (
