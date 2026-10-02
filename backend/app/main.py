@@ -7,7 +7,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -94,24 +94,10 @@ def _report_pulse_fallback(request: Request, title: str, detail: str, feature: s
     except Exception:
         logger.exception("Pulse fallback founder alert failed")
 
-def _ensure_postgres_enum_values() -> None:
-    """Keep existing PostgreSQL installations compatible with newly supported enum values."""
-    if not str(settings.database_url or "").startswith("postgresql"):
-        return
-
-    try:
-        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
-            connection.execute(text("ALTER TYPE platform ADD VALUE IF NOT EXISTS 'threads'"))
-            connection.execute(text("ALTER TYPE plantier ADD VALUE IF NOT EXISTS 'starter'"))
-            connection.execute(text("ALTER TYPE plantier ADD VALUE IF NOT EXISTS 'business'"))
-    except Exception as exc:
-        logger.warning("Could not ensure PostgreSQL enum values: %s", exc)
-
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     try:
-        _ensure_postgres_enum_values()
         models.Base.metadata.create_all(bind=engine)
         logger.info("Database schema initialized successfully.")
         try:

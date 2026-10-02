@@ -1,24 +1,34 @@
 from datetime import UTC, datetime, timedelta
 from collections import defaultdict
 from threading import Lock
+import secrets
+import string
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 import httpx
 from sqlalchemy import case, desc, func, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.db.deps import get_db
-from app.db.models import AIGeneration, ConnectedPlatform, ContentPost, CreatorProfile, PlanTier, PostStatus, PulseIncident, ScheduledPost, TrendSignalEvent, UsageLedger, User
+from app.db.models import (
+    AIGeneration, ConnectedPlatform, ContentPost, CreatorProfile, GrowthCampaign,
+    InfluencerReferral, PlanTier, PostStatus, PulseIncident, ReferralCode,
+    ScheduledPost, TrendSignalEvent, UsageLedger, User
+)
 from app.schemas.mvp import (
     AdminOverview,
     AdminSeriesPoint,
     AdminTopCreatorItem,
+    AdminGrowthCampaignCreateRequest,
+    AdminGrowthInfluencerCreateRequest,
     PulseIncidentItem,
     PulseStatusUpdateRequest,
 )
 from app.services.pulse import resolve_pulse_incident
 from app.services.usage_admin import admin_usage_snapshot
+from app.services.growth_reporting import growth_snapshot, growth_source_details
 from app.services.pulse import record_pulse_event
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -221,6 +231,270 @@ def _require_admin_access(x_admin_code: str | None, request: Request) -> None:
         _record_failed_attempt(client_id)
         raise HTTPException(status_code=401, detail="Invalid admin access code")
     _clear_attempts(client_id)
+
+
+def _growth_public_url(path: str) -> str:
+    base = str(settings.frontend_url or "").rstrip("/")
+    if not base:
+        raise HTTPException(status_code=503, detail="Frontend URL is not configured.")
+    return f"{base}/{path.lstrip('/')}"
+
+
+def _normalize_public_code(value: str | None) -> str | None:
+    normalized = str(value or "").strip().upper()
+    return normalized or None
+
+
+def _generate_public_code(prefix: str, length: int = 10) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return f"{prefix}{''.join(secrets.choice(alphabet) for _ in range(length))}"
+
+
+def _create_unique_referral_code(
+    db: Session,
+    *,
+    code_type: str,
+    influencer_referral_id: int | None = None,
+    requested_code: str | None = None,
+) -> ReferralCode:
+    requested = _normalize_public_code(requested_code)
+    for _ in range(8):
+        code = requested or _generate_public_code("REF-")
+        if db.scalar(select(ReferralCode).where(ReferralCode.code == code)):
+            if requested:
+                raise HTTPException(status_code=409, detail="That referral code is already in use.")
+            continue
+        referral = ReferralCode(
+            code=code,
+            code_type=code_type,
+            influencer_referral_id=influencer_referral_id,
+            active=True,
+        )
+        try:
+            with db.begin_nested():
+                db.add(referral)
+                db.flush()
+            return referral
+        except IntegrityError:
+            if requested:
+                raise HTTPException(status_code=409, detail="That referral code is already in use.")
+    raise HTTPException(status_code=503, detail="Could not allocate a unique referral code. Try again.")
+
+
+@router.post("/growth/campaigns", response_model=dict, status_code=201)
+def admin_create_growth_campaign(
+    payload: AdminGrowthCampaignCreateRequest,
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+
+    requested_code = _normalize_public_code(payload.campaign_code)
+    campaign_code = requested_code
+    for _ in range(8):
+        if not campaign_code:
+            campaign_code = _generate_public_code("CAM-")
+        if db.scalar(select(GrowthCampaign).where(GrowthCampaign.campaign_code == campaign_code)):
+            if requested_code:
+                raise HTTPException(status_code=409, detail="That campaign code is already in use.")
+            campaign_code = None
+            continue
+        break
+    if not campaign_code:
+        raise HTTPException(status_code=503, detail="Could not allocate a unique campaign code. Try again.")
+
+    campaign = GrowthCampaign(
+        campaign_code=campaign_code,
+        name=payload.name.strip(),
+        attribution_window_days=payload.attribution_window_days,
+        created_by_user_id=None,
+    )
+    db.add(campaign)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Campaign code is already in use.")
+    db.refresh(campaign)
+
+    return {
+        "id": campaign.id,
+        "name": campaign.name,
+        "campaign_code": campaign.campaign_code,
+        "status": campaign.status,
+        "attribution_window_days": campaign.attribution_window_days,
+        "url": _growth_public_url(f"campaign/{campaign.campaign_code}"),
+    }
+
+
+@router.post("/growth/influencers", response_model=dict, status_code=201)
+def admin_create_growth_influencer(
+    payload: AdminGrowthInfluencerCreateRequest,
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+
+    campaign = None
+    if payload.campaign_id is not None:
+        campaign = db.get(GrowthCampaign, payload.campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found.")
+
+    compensation_type = payload.compensation_type.strip().lower()
+    if compensation_type not in {"none", "flat", "percentage"}:
+        raise HTTPException(status_code=422, detail="Compensation type must be none, flat, or percentage.")
+    if compensation_type == "none" and payload.cash_compensation != 0:
+        raise HTTPException(status_code=422, detail="Cash compensation must be zero when compensation type is none.")
+
+    influencer = InfluencerReferral(
+        influencer_name=payload.influencer_name.strip(),
+        campaign_id=campaign.id if campaign else None,
+        attribution_window_days=payload.attribution_window_days,
+        compensation_type=compensation_type,
+        compensation_plan=payload.compensation_plan.strip() if payload.compensation_plan else None,
+        cash_compensation=payload.cash_compensation,
+        created_by_user_id=None,
+    )
+    db.add(influencer)
+    db.flush()
+
+    referral = _create_unique_referral_code(
+        db,
+        code_type="influencer",
+        influencer_referral_id=influencer.id,
+        requested_code=payload.referral_code,
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Referral code is already in use.")
+    db.refresh(influencer)
+
+    return {
+        "id": influencer.id,
+        "influencer_name": influencer.influencer_name,
+        "campaign_id": influencer.campaign_id,
+        "referral_code": referral.code,
+        "status": influencer.status,
+        "attribution_window_days": influencer.attribution_window_days,
+        "url": _growth_public_url(f"r/{referral.code}"),
+    }
+
+
+@router.post("/growth/referrals/{source_type}/{source_id}/status", response_model=dict)
+def admin_growth_referral_status(
+    source_type: str,
+    source_id: int,
+    request: Request,
+    status: str,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+    normalized = status.strip().lower()
+    if normalized not in {"active", "inactive"}:
+        raise HTTPException(status_code=422, detail="Status must be active or inactive.")
+
+    if source_type == "campaign":
+        source = db.get(GrowthCampaign, source_id)
+    elif source_type == "influencer":
+        source = db.get(InfluencerReferral, source_id)
+    else:
+        raise HTTPException(status_code=422, detail="Source type must be campaign or influencer.")
+    if not source:
+        raise HTTPException(status_code=404, detail="Referral source not found.")
+
+    source.status = normalized
+    db.add(source)
+    db.commit()
+    return {"id": source.id, "source_type": source_type, "status": source.status}
+
+
+@router.get("/growth/referrals", response_model=dict)
+def admin_growth_referrals(
+    request: Request,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+
+    campaigns = db.scalars(
+        select(GrowthCampaign).order_by(desc(GrowthCampaign.created_at))
+    ).all()
+    influencers = db.scalars(
+        select(InfluencerReferral).order_by(desc(InfluencerReferral.created_at))
+    ).all()
+
+    influencer_codes = {
+        referral.id: code
+        for referral, code in db.execute(
+            select(InfluencerReferral, ReferralCode.code)
+            .join(ReferralCode, ReferralCode.influencer_referral_id == InfluencerReferral.id)
+            .where(ReferralCode.active.is_(True))
+        ).all()
+    }
+
+    return {
+        "campaigns": [
+            {
+                "id": campaign.id,
+                "name": campaign.name,
+                "code": campaign.campaign_code,
+                "status": campaign.status,
+                "attribution_window_days": campaign.attribution_window_days,
+                "url": _growth_public_url(f"campaign/{campaign.campaign_code}"),
+            }
+            for campaign in campaigns
+        ],
+        "influencers": [
+            {
+                "id": influencer.id,
+                "name": influencer.influencer_name,
+                "code": influencer_codes.get(influencer.id),
+                "status": influencer.status,
+                "campaign_id": influencer.campaign_id,
+                "attribution_window_days": influencer.attribution_window_days,
+                "url": _growth_public_url(f"r/{influencer_codes[influencer.id]}"),
+            }
+            for influencer in influencers
+            if influencer.id in influencer_codes
+        ],
+    }
+
+
+@router.get("/growth", response_model=dict)
+def admin_growth(
+    request: Request,
+    days: int = 30,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
+    return growth_snapshot(db, days=days)
+
+
+@router.get("/growth/sources", response_model=dict)
+def admin_growth_sources(
+    request: Request,
+    days: int = 30,
+    x_admin_code: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_admin_access(x_admin_code, request)
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
+    now = datetime.now(tz=UTC)
+    start = now - timedelta(days=days)
+    return {
+        "window": {"days": days, "start": start.isoformat(), "end": now.isoformat()},
+        **growth_source_details(db, start, now),
+    }
 
 
 @router.get("/usage", response_model=dict)

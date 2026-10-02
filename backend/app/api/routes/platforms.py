@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, Platform
 from app.services.entitlements import ensure_social_account_capacity
+from app.services.growth_attribution import record_growth_event
 
 router = APIRouter(prefix="/platforms", tags=["platforms"])
 
@@ -83,6 +84,10 @@ def connect_platform(
         }
         db.commit()
         db.refresh(existing)
+        try:
+            record_growth_event(db, user_id, "first_social_account_connected", metadata={"platform": platform})
+        except Exception:
+            db.rollback()
         return _serialize_connection(existing)
 
     row = ConnectedPlatform(
@@ -95,6 +100,10 @@ def connect_platform(
     db.add(row)
     db.commit()
     db.refresh(row)
+    try:
+        record_growth_event(db, user_id, "first_social_account_connected", metadata={"platform": platform})
+    except Exception:
+        db.rollback()
     return _serialize_connection(row)
 
 

@@ -698,6 +698,11 @@ def finalize_usage(
     db.add(ledger)
     db.commit()
     db.refresh(ledger)
+    try:
+        from app.services.growth_attribution import record_growth_event
+        record_growth_event(db, ledger.user_id, "first_generation", metadata={"feature_type": ledger.feature_type or ledger.event_type})
+    except Exception:
+        db.rollback()
     return ledger
 
 

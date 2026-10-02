@@ -71,6 +71,7 @@ export default function SignupPage() {
       setError(null);
       setNotice(null);
       try {
+        const attributionToken = new URLSearchParams(window.location.search).get("attribution_token") || undefined;
         const response = await signup({
           full_name: fullName.trim(),
           username: username.trim(),
@@ -79,6 +80,7 @@ export default function SignupPage() {
           confirm_password: confirmPassword,
           language: "english",
           timezone: "Africa/Lagos",
+          attribution_token: attributionToken,
         });
 
         if (response.requires_verification === false) {
@@ -211,6 +213,7 @@ export default function SignupPage() {
     setError(null);
     setNotice(null);
     try {
+      const attributionToken = new URLSearchParams(window.location.search).get("attribution_token") || undefined;
       const response = await signup({
         full_name: fullName.trim(),
         username: username.trim(),
@@ -219,6 +222,7 @@ export default function SignupPage() {
         confirm_password: confirmPassword,
         language: "english",
         timezone: "Africa/Lagos",
+        attribution_token: attributionToken,
       });
       setNotice(response.message || "A new verification code has been sent.");
     } catch (err) {

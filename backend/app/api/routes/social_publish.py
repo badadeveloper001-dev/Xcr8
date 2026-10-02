@@ -14,6 +14,11 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, ContentPost, Platform, PostVariant, User
 from app.services.entitlements import ensure_social_account_capacity
+from app.services.watermark_attribution import free_attribution
+from app.services.watermark_platform_attribution import (
+    build_attribution_payload,
+    format_platform_attribution,
+)
 from app.services.profile_scope import current_profile_id
 from app.services.pulse import record_pulse_event
 from app.services.social_publisher import (
@@ -533,6 +538,8 @@ def publish_post(
             detail="No approved variants found. Please approve the post variants before publishing.",
         )
 
+    attribution = build_attribution_payload(free_attribution(db, user))
+
     # If specific platforms given, filter to those; otherwise use all approved variant platforms
     if target_platforms:
         variants = [v for v in variants if v.platform.value in target_platforms]
@@ -562,6 +569,12 @@ def publish_post(
         caption_with_hashtags = variant.adapted_caption
         if variant.hashtags:
             caption_with_hashtags = f"{caption_with_hashtags}\n{' '.join(variant.hashtags)}"
+
+        caption_with_hashtags = format_platform_attribution(
+            caption_with_hashtags,
+            platform_name,
+            attribution,
+        )
 
         content_meta = post.content_meta if isinstance(post.content_meta, dict) else {}
         media_urls = content_meta.get("media_urls") if isinstance(content_meta.get("media_urls"), list) else []

@@ -64,7 +64,8 @@ export default function GoogleCallbackPage() {
           throw new Error("Missing Google access token after sign-in.");
         }
 
-        const session = await loginWithGoogle({ access_token: accessToken });
+        const attributionToken = searchParams.get("attribution_token") || undefined;
+        const session = await loginWithGoogle({ access_token: accessToken, attribution_token: attributionToken });
         setSession({
           userId: session.user_id,
           email: session.email,
