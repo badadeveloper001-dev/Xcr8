@@ -570,6 +570,12 @@ def publish_post(
         if variant.hashtags:
             caption_with_hashtags = f"{caption_with_hashtags}\n{' '.join(variant.hashtags)}"
 
+        caption_with_hashtags = format_platform_attribution(
+            caption_with_hashtags,
+            platform_name,
+            attribution,
+        )
+
         content_meta = post.content_meta if isinstance(post.content_meta, dict) else {}
         media_urls = content_meta.get("media_urls") if isinstance(content_meta.get("media_urls"), list) else []
         media_types = content_meta.get("media_types") if isinstance(content_meta.get("media_types"), list) else []
