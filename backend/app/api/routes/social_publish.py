@@ -538,6 +538,8 @@ def publish_post(
             detail="No approved variants found. Please approve the post variants before publishing.",
         )
 
+    attribution = build_attribution_payload(free_attribution(db, user))
+
     # If specific platforms given, filter to those; otherwise use all approved variant platforms
     if target_platforms:
         variants = [v for v in variants if v.platform.value in target_platforms]
