@@ -5,6 +5,7 @@ import pytest
 from app.services.watermark_platform_attribution import (
     AttributionPayload,
     build_attribution_payload,
+    format_platform_attribution,
     can_publish_linked_attribution,
     linked_text_mode,
 )
@@ -52,3 +53,20 @@ def test_raw_url_is_not_allowed_inside_visible_attribution_text():
                 "public_code": "ABC123",
             }
         )
+
+
+def test_unsupported_platform_preserves_original_caption_without_raw_url():
+    payload = build_attribution_payload(
+        {
+            "text": "Published with XCR8",
+            "url": "https://xcr8.tech/c/ABC123",
+            "public_code": "ABC123",
+        }
+    )
+
+    caption = "My original caption"
+    assert format_platform_attribution(caption, "instagram", payload) == caption
+
+
+def test_missing_attribution_preserves_original_caption():
+    assert format_platform_attribution("My original caption", "youtube_shorts", None) == "My original caption"
