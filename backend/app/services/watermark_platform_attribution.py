@@ -58,3 +58,21 @@ def linked_text_mode(platform: str) -> ATTRIBUTION_LINK_MODE:
 
 def can_publish_linked_attribution(platform: str) -> bool:
     return linked_text_mode(platform) == "linked_text"
+
+
+def format_platform_attribution(
+    caption: str,
+    platform: str,
+    attribution: AttributionPayload | None,
+) -> str:
+    """Apply attribution only when the platform can preserve the required linked-text UX.
+
+    Unsupported platforms intentionally keep the original caption. This prevents
+    XCR8 from silently replacing the required hidden link with a raw URL.
+    """
+    if not attribution or not can_publish_linked_attribution(platform):
+        return caption
+
+    # No currently verified platform reaches this branch. Keep the formatter
+    # explicit so a verified adapter can be added without changing publish_post().
+    return caption
