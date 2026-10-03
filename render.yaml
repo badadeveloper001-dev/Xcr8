@@ -16,7 +16,7 @@ services:
     runtime: python
     plan: starter
     region: frankfurt
-    branch: main
+    branch: fix/test-db-safety
     autoDeployTrigger: checksPass
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt -r ai-services/requirements.txt
     startCommand: bash scripts/render-start-platform.sh
@@ -169,7 +169,7 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    branch: main
+    branch: fix/test-db-safety
     autoDeployTrigger: checksPass
     buildCommand: corepack enable && corepack prepare pnpm@10.11.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @xcr8/frontend build
     startCommand: pnpm --filter @xcr8/frontend exec next start -p $PORT
@@ -206,7 +206,7 @@ services:
     runtime: python
     plan: starter
     region: frankfurt
-    branch: main
+    branch: fix/test-db-safety
     schedule: "* * * * *"
     buildCommand: echo "No additional scheduler dependencies"
     startCommand: python scripts/render_dispatch_due.py

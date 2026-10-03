@@ -4,10 +4,9 @@ from contextvars import ContextVar, Token
 from threading import Lock
 from typing import Literal
 
-from sqlalchemy import event, inspect, text
+from sqlalchemy import event
 from sqlalchemy.orm import Session as OrmSession, with_loader_criteria
 
-from app.db import models
 from app.db.models import (
     AnalyticsSnapshot,
     ConnectedPlatform,
@@ -18,7 +17,6 @@ from app.db.models import (
     ScheduledPost,
     TrendSignalEvent,
 )
-from app.db.session import engine
 
 ProfileScope = Literal["unscoped", "main"] | int
 
@@ -53,46 +51,6 @@ def current_profile_id() -> int | None:
 
 def current_profile_scope() -> ProfileScope:
     return _profile_scope.get()
-
-
-def ensure_profile_scope_schema() -> None:
-    """Apply the additive profile-scope schema safely on old and new databases."""
-    global _schema_ready
-    if _schema_ready:
-        return
-
-    with _schema_lock:
-        if _schema_ready:
-            return
-
-        # Creates missing tables on serverless instances where lifespan startup is skipped.
-        # Existing tables are preserved; missing workspace_id columns are added below.
-        models.Base.metadata.create_all(bind=engine)
-
-        with engine.begin() as connection:
-            db_inspector = inspect(connection)
-            existing_tables = set(db_inspector.get_table_names())
-            for model in SCOPED_MODELS:
-                table_name = model.__tablename__
-                if table_name not in existing_tables:
-                    continue
-                columns = {column["name"] for column in db_inspector.get_columns(table_name)}
-                if "workspace_id" not in columns:
-                    connection.execute(
-                        text(
-                            f'ALTER TABLE "{table_name}" ADD COLUMN workspace_id '
-                            'INTEGER NULL REFERENCES workspaces(id)'
-                        )
-                    )
-                index_name = f"ix_{table_name}_workspace_id"
-                connection.execute(
-                    text(
-                        f'CREATE INDEX IF NOT EXISTS "{index_name}" '
-                        f'ON "{table_name}" (workspace_id)'
-                    )
-                )
-
-        _schema_ready = True
 
 
 @event.listens_for(OrmSession, "do_orm_execute")

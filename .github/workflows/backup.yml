@@ -1,0 +1,68 @@
+name: XCR8 Database Backup
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Backup production database
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+
+    steps:
+      - name: Check required secrets
+        run: |
+          test -n "${SUPABASE_DB_URL}" || { echo "SUPABASE_DB_URL is not configured"; exit 1; }
+          test -n "${BACKUP_ENCRYPTION_KEY}" || { echo "BACKUP_ENCRYPTION_KEY is not configured"; exit 1; }
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Create database dumps
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f backup/roles.sql --role-only
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f backup/schema.sql
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f backup/data.sql --data-only --use-copy
+
+      - name: Verify backup contents
+        run: |
+          set -euo pipefail
+          test -s backup/roles.sql
+          test -s backup/schema.sql
+          test -s backup/data.sql
+          grep -q "CREATE TABLE" backup/schema.sql
+          grep -q "INSERT INTO\|COPY " backup/data.sql
+
+      - name: Encrypt backup
+        run: |
+          set -euo pipefail
+          tar -C backup -czf xcr8-db-backup.tar.gz roles.sql schema.sql data.sql
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in xcr8-db-backup.tar.gz \
+            -out xcr8-db-backup.tar.gz.enc \
+            -pass env:BACKUP_ENCRYPTION_KEY
+          sha256sum xcr8-db-backup.tar.gz.enc > xcr8-db-backup.sha256
+          rm -rf backup xcr8-db-backup.tar.gz
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcr8-db-backup-${{ github.run_id }}
+          path: |
+            xcr8-db-backup.tar.gz.enc
+            xcr8-db-backup.sha256
+          retention-days: 30
+          if-no-files-found: error
