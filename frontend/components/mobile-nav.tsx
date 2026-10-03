@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, Home, Palette, PlusCircle, User2 } from "lucide-react";
+import { Home, Palette, PlusCircle, User2 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/compose", label: "Create", icon: PlusCircle },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai-studio", label: "AI Studio", icon: Palette },
   { href: "/settings", label: "Profile", icon: User2 },
 ];
@@ -17,10 +15,15 @@ export function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-[min(96%,1120px)] -translate-x-1/2 rounded-[30px] border border-indigo-300/20 bg-[#0a1022]/92 px-1.5 py-1.5 backdrop-blur-2xl dark:bg-[#0a1022]/92 light:border-slate-200 light:bg-white/95 light:shadow-[0_14px_32px_rgba(17,24,39,0.12)]">
-      <ul className="grid grid-cols-6 items-stretch gap-1">
+    <nav
+      aria-label="Creator quick navigation"
+      className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-[min(96%,1120px)] -translate-x-1/2 rounded-[30px] border border-indigo-300/20 bg-[#0a1022]/92 px-1.5 py-1.5 backdrop-blur-2xl dark:bg-[#0a1022]/92 light:border-slate-200 light:bg-white/95 light:shadow-[0_14px_32px_rgba(17,24,39,0.12)]"
+    >
+      <ul className="grid grid-cols-4 items-stretch gap-1">
         {navItems.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            pathname === item.href ||
+            (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
           const Icon = item.icon;
           return (
             <li key={item.href}>
