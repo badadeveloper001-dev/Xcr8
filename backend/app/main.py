@@ -7,7 +7,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -16,7 +16,6 @@ from app.db.session import SessionLocal, engine
 from app.services.entitlements import expire_plan_if_needed, plan_for_user
 from app.services.pulse import auto_resolve_stable_incidents, is_benign_slow_route, notify_founders_fallback, record_pulse_event
 from app.services.profile_scope import (
-    ensure_profile_scope_schema,
     reset_profile_scope,
     set_profile_scope,
 )
@@ -94,32 +93,9 @@ def _report_pulse_fallback(request: Request, title: str, detail: str, feature: s
     except Exception:
         logger.exception("Pulse fallback founder alert failed")
 
-def _ensure_postgres_enum_values() -> None:
-    """Keep existing PostgreSQL installations compatible with newly supported enum values."""
-    if not str(settings.database_url or "").startswith("postgresql"):
-        return
-
-    try:
-        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
-            connection.execute(text("ALTER TYPE platform ADD VALUE IF NOT EXISTS 'threads'"))
-            connection.execute(text("ALTER TYPE plantier ADD VALUE IF NOT EXISTS 'starter'"))
-            connection.execute(text("ALTER TYPE plantier ADD VALUE IF NOT EXISTS 'business'"))
-    except Exception as exc:
-        logger.warning("Could not ensure PostgreSQL enum values: %s", exc)
-
-
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    try:
-        _ensure_postgres_enum_values()
-        models.Base.metadata.create_all(bind=engine)
-        logger.info("Database schema initialized successfully.")
-        try:
-            logger.info("Using database URL: %s", settings.database_url)
-        except Exception:
-            logger.warning("Could not read settings.database_url")
-    except Exception as exc:
-        logger.warning("Database schema creation failed (will retry on first request): %s", exc)
+    logger.info("Database startup complete; schema is managed by migrations.")
     yield
 
 
@@ -147,21 +123,6 @@ async def pulse_request_middleware(request: Request, call_next):
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
         return response
-
-    try:
-        ensure_profile_scope_schema()
-    except Exception as exc:
-        logger.exception("Managed-profile schema initialization failed")
-        _report_pulse_fallback(
-            request,
-            "Database or profile schema initialization failed",
-            str(exc) or exc.__class__.__name__,
-            "database",
-        )
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "Profile data is temporarily unavailable. Please retry shortly."},
-        )
 
     requested_scope = str(request.headers.get("x-xcr8-workspace-id") or "").strip().lower()
     scope: str | int = "unscoped"
@@ -369,6 +330,3 @@ def root() -> dict[str, str]:
     return {"service": "backend", "environment": settings.environment}
 
 
-@app.get("/api/v1/debug/db-url")
-def debug_db_url() -> dict:
-    return {"database_url": str(settings.database_url)}
