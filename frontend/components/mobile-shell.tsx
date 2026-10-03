@@ -3,6 +3,7 @@ import { NotificationBellButton } from "@/components/notification-bell-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/mobile-nav";
 import { CreatorProfileSwitcher } from "@/components/creator-profile-switcher";
+import { CreatorMenu } from "@/components/creator-menu";
 
 type MobileShellProps = {
   children: ReactNode;
@@ -42,6 +43,7 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
               ) : null}
             </div>
             <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+              <CreatorMenu />
               <CreatorProfileSwitcher />
               <NotificationBellButton />
               <ThemeToggle />
@@ -49,6 +51,7 @@ export function MobileShell({ children, title, subtitle, hideHeader = false }: M
           </header>
         ) : (
           <div className="mb-4 flex min-w-0 flex-wrap items-start justify-end gap-2" aria-label="Active profile and account">
+            <CreatorMenu />
             <CreatorProfileSwitcher />
             <NotificationBellButton />
             <ThemeToggle />
