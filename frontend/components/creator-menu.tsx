@@ -6,7 +6,6 @@ import {
   BarChart3,
   CalendarDays,
   FileUp,
-  Layers3,
   Menu,
   Settings,
   X,
@@ -32,7 +31,6 @@ const menuSections = [
   {
     label: "Account",
     items: [
-      ["/settings/profiles", "Creator Profiles", Layers3],
       ["/settings", "Settings", Settings],
     ],
   },
