@@ -46,20 +46,21 @@ export function Cr8orAiWidget() {
     return null;
   }
 
-  const href = "/ai-studio/assistant";
-
   return (
-    <div className="fixed bottom-[5.9rem] right-4 z-40 sm:bottom-[5.9rem] sm:right-6 lg:bottom-6 lg:right-8">
+    <div className="fixed bottom-[6.4rem] right-4 z-40 sm:bottom-[6.4rem] sm:right-6 lg:bottom-6 lg:right-8">
       <Link
-        href={href}
-        className="group inline-flex items-center gap-2 rounded-full border border-cyan-300/35 bg-gradient-to-r from-indigo-500/85 to-cyan-500/80 px-3 py-2 text-sm font-semibold text-white sm:px-4 sm:py-2.5 shadow-[0_12px_32px_rgba(34,211,238,0.35)] backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(14,165,233,0.4)] light:border-cyan-300 light:from-indigo-500 light:to-cyan-500"
-        aria-label="Open Cr8or AI chat"
+        href="/ai-studio/assistant"
+        className="group relative flex h-12 w-12 items-center justify-center rounded-full border border-violet-300/40 bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-[0_12px_34px_rgba(139,92,246,0.38)] ring-1 ring-white/20 transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(139,92,246,0.48)] light:border-violet-300 light:from-indigo-500 light:to-violet-500"
+        aria-label="Open Cr8or Intelligence"
+        title="Cr8or Intelligence"
       >
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/35 light:bg-white/25">
-          <Bot size={16} />
+        <span className="absolute inset-[-5px] rounded-full bg-violet-400/15 blur-md transition group-hover:bg-violet-400/25" />
+        <span className="relative">
+          <Sparkles size={20} strokeWidth={2.2} />
         </span>
-        <span className="leading-none">Cr8or AI</span>
-        <Sparkles size={14} className="opacity-90 transition group-hover:scale-110" />
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-violet-200/70 bg-[#0a1022] text-[8px] text-cyan-200">
+          <Bot size={9} />
+        </span>
       </Link>
     </div>
   );
