@@ -13,16 +13,16 @@ type MobileShellProps = {
 
 export function MobileShell({ children, title, subtitle, hideHeader = false }: MobileShellProps) {
   return (
-    <div className="relative mx-auto min-h-screen w-full max-w-6xl overflow-x-clip px-4 pb-[calc(env(safe-area-inset-bottom)+8.5rem)] pt-6 supports-[height:100dvh]:min-h-[100dvh] sm:px-6 lg:px-10">
+    <div className="xcr8-creator-ui relative mx-auto min-h-screen w-full max-w-6xl overflow-x-clip px-4 pb-[calc(env(safe-area-inset-bottom)+8.5rem)] pt-6 supports-[height:100dvh]:min-h-[100dvh] sm:px-6 lg:px-10">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-violet-600 focus:px-3 focus:py-2 focus:text-white"
       >
         Skip to content
       </a>
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 rounded-[34px] bg-gradient-to-b from-indigo-500/24 via-cyan-500/10 to-transparent blur-2xl light:from-indigo-200/55" />
-      <div className="pointer-events-none absolute -right-12 top-24 -z-10 h-52 w-52 rounded-full bg-cyan-400/16 blur-3xl light:bg-cyan-200/35" />
-      <div className="pointer-events-none absolute left-[-48px] top-[38%] -z-10 h-44 w-44 rounded-full bg-rose-400/12 blur-3xl light:bg-rose-200/30" />
+      <div className="xcr8-creator-glow pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 rounded-[34px] blur-2xl" />
+      <div className="xcr8-creator-orb xcr8-creator-orb-cyan pointer-events-none absolute -right-12 top-24 -z-10 h-52 w-52 rounded-full blur-3xl" />
+      <div className="xcr8-creator-orb xcr8-creator-orb-rose pointer-events-none absolute left-[-48px] top-[38%] -z-10 h-44 w-44 rounded-full blur-3xl" />
       <div className="mx-auto min-w-0 w-full max-w-[460px] sm:max-w-[640px] md:max-w-[820px] lg:max-w-[1120px]">
         {!hideHeader ? (
           <header
