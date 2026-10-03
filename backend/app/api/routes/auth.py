@@ -29,6 +29,7 @@ from app.schemas.mvp import (
     SignupResponse,
 )
 from app.services.entitlements import effective_plan_id
+from app.services.growth_attribution import attach_user_attribution
 from app.services.auth import (
     SupabaseAuthError,
     stable_fallback_user_id,
@@ -252,6 +253,7 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
                 **(profile.preferences or {}),
                 "email_code_verified": False,
                 "email_verification_method": "pending",
+                "attribution_token": str(payload.attribution_token or "").strip() or None,
             }
             code = generate_signup_email_code()
             profile.preferences = {
@@ -269,6 +271,7 @@ def signup_request_code(payload: AuthSignupRequest, db: Session = Depends(get_db
                 preferences={
                     "email_code_verified": False,
                     "email_verification_method": "pending",
+                    "attribution_token": str(payload.attribution_token or "").strip() or None,
                     "signup_code_hash": hash_signup_email_code(normalized_email, code),
                     "signup_code_expires_at": signup_code_expiry().isoformat(),
                     "signup_code_attempts": 0,
@@ -398,6 +401,13 @@ def signup_verify_code(payload: AuthSignupCodeVerifyRequest, db: Session = Depen
     db.add(profile)
     db.commit()
 
+    attribution_token = str(preferences.get("attribution_token") or "").strip() or None
+    if attribution_token:
+        attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+        profile.preferences = {**(profile.preferences or {}), "attribution_token": None}
+        db.add(profile)
+        db.commit()
+
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
 
@@ -428,8 +438,14 @@ def signup_verify_link(payload: AuthSignupLinkVerifyRequest, db: Session = Depen
             "email_verified_at": datetime.now(tz=UTC).isoformat(),
             "email_verification_method": "link",
         }
+        attribution_token = str(profile.preferences.get("attribution_token") or "").strip() or None
         db.add(profile)
         db.commit()
+        if attribution_token:
+            attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+            profile.preferences = {**(profile.preferences or {}), "attribution_token": None}
+            db.add(profile)
+            db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
@@ -467,8 +483,14 @@ def signup_verify_password(
         "email_verified_at": datetime.now(tz=UTC).isoformat(),
         "email_verification_method": "password_fallback",
     }
+    attribution_token = str(profile.preferences.get("attribution_token") or "").strip() or None
     db.add(profile)
     db.commit()
+    if attribution_token:
+        attach_user_attribution(db, user.id, tracking_id=attribution_token, event_type="signup_completed")
+        profile.preferences = {**(profile.preferences or {}), "attribution_token": None}
+        db.add(profile)
+        db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
@@ -745,6 +767,14 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
 
     db.commit()
     db.refresh(user)
+
+    if payload.attribution_token:
+        attach_user_attribution(
+            db,
+            user.id,
+            tracking_id=str(payload.attribution_token).strip(),
+            event_type="signup_completed",
+        )
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
