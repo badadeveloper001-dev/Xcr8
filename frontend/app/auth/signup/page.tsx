@@ -79,6 +79,7 @@ export default function SignupPage() {
           confirm_password: confirmPassword,
           language: "english",
           timezone: "Africa/Lagos",
+          attribution_token: new URLSearchParams(window.location.search).get("attribution_token") || undefined,
         });
 
         if (response.requires_verification === false) {
@@ -154,10 +155,12 @@ export default function SignupPage() {
       setError("Google auth is not configured yet.");
       return;
     }
-    const redirectTo = `${window.location.origin}/auth/google/callback`;
+    const attributionToken = new URLSearchParams(window.location.search).get("attribution_token");
+    const redirectTo = new URL(`${window.location.origin}/auth/google/callback`);
+    if (attributionToken) redirectTo.searchParams.set("attribution_token", attributionToken);
     await supabaseClient.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo },
+      options: { redirectTo: redirectTo.toString() },
     });
   };
 
@@ -219,6 +222,7 @@ export default function SignupPage() {
         confirm_password: confirmPassword,
         language: "english",
         timezone: "Africa/Lagos",
+        attribution_token: new URLSearchParams(window.location.search).get("attribution_token") || undefined,
       });
       setNotice(response.message || "A new verification code has been sent.");
     } catch (err) {
