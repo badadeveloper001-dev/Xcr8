@@ -23,7 +23,16 @@ from app.services.profile_scope import reset_profile_scope, set_profile_scope
 from app.services.pulse import record_pulse_event, resolve_pulse_incident
 
 
-# Ensure test database has current schema
+# Tests must never perform destructive schema setup against PostgreSQL.
+# CI/local tests use the SQLite fallback database. A PostgreSQL DATABASE_URL
+# (including the production Supabase URL) is refused before any DDL runs.
+if not settings.database_url.startswith("sqlite:///"):
+    raise RuntimeError(
+        "Refusing destructive test database setup: test_plans_and_workspaces.py "
+        "requires a SQLite test database."
+    )
+
+# Ensure the isolated SQLite test database has the current schema.
 models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
 
