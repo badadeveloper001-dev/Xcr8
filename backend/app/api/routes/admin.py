@@ -471,10 +471,10 @@ def verify_admin_session(
 
 
 def _growth_public_url(path: str) -> str:
-    base = str(settings.frontend_url or "").rstrip("/")
+    base = str(settings.api_public_url or "").rstrip("/")
     if not base:
-        raise HTTPException(status_code=503, detail="Frontend URL is not configured.")
-    return f"{base}/{path.lstrip('/')}"
+        raise HTTPException(status_code=503, detail="Public API URL is not configured.")
+    return f"{base}/api/v1/{path.lstrip('/')}"
 
 
 def _normalize_public_code(value: str | None) -> str | None:
