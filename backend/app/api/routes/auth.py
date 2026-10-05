@@ -771,7 +771,7 @@ def get_session(
 def update_avatar(
     payload: AvatarUpdateRequest,
     db: Session = Depends(get_db),
-    _auth_user = Depends(require_user_match),
+    auth_user = Depends(current_user),
 ) -> AuthSessionResponse:
     if payload.user_id != auth_user.id:
         raise HTTPException(status_code=403, detail="This request belongs to another account.")
@@ -808,6 +808,8 @@ def update_profile(
     db: Session = Depends(get_db),
     _auth_user = Depends(require_user_match),
 ) -> AuthSessionResponse:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -861,6 +863,8 @@ def onboarding(
     db: Session = Depends(get_db),
     _auth_user = Depends(require_user_match),
 ) -> AuthSessionResponse:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
