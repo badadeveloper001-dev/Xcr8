@@ -797,7 +797,7 @@ def mark_notification_read(
 
 
 @router.post("/feedback")
-def submit_intelligence_feedback(payload: IntelligenceFeedbackRequest, db: Session = Depends(get_db)) -> dict:
+def submit_intelligence_feedback(payload: IntelligenceFeedbackRequest, db: Session = Depends(get_db), auth_user=Depends(require_user_match)) -> dict:
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
