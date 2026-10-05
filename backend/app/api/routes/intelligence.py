@@ -769,6 +769,7 @@ def mark_notification_read(
     notification_id: int,
     payload: IntelligenceNotificationReadRequest,
     db: Session = Depends(get_db),
+    _auth_user=Depends(require_user_match),
 ) -> IntelligenceNotificationItem:
     notification = db.scalar(
         select(IntelligenceNotification).where(
