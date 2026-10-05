@@ -1025,7 +1025,7 @@ def _post_instagram(
     selected_type = types[0] if types else media_type
     is_video = selected_type.startswith("video") or image_url.lower().split("?")[0].endswith((".mp4", ".mov", ".webm"))
 
-    with httpx.Client(timeout=45.0) as client:
+    with httpx.Client(timeout=120.0) as client:
         container_params = {"caption": caption, "access_token": access_token}
         if is_video:
             container_params.update({"media_type": "REELS", "video_url": image_url})
