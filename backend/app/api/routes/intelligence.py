@@ -580,7 +580,7 @@ def _serialize_signal(signal: TrendSignalEvent, brief: TrendResearchBrief | None
 
 
 @router.post("/refresh")
-def refresh_intelligence(payload: IntelligenceRefreshRequest, db: Session = Depends(get_db)) -> dict:
+def refresh_intelligence(payload: IntelligenceRefreshRequest, db: Session = Depends(get_db), _auth_user=Depends(require_user_match)) -> dict:
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
