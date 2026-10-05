@@ -719,6 +719,7 @@ def notification_inbox(
     q: str = Query(default="", max_length=100),
     selected_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
+    _auth_user=Depends(require_user_match),
 ) -> dict:
     """Read the inbox without refreshing trends or excluding support messages."""
     base = [IntelligenceNotification.user_id == user_id]
