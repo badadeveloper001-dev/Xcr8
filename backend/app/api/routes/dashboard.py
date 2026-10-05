@@ -21,6 +21,7 @@ from app.db.models import (
 from app.api.routes.intelligence import _profile_interests, _signal_matches_interests
 from app.schemas.mvp import Cr8orAIAlert, DashboardOverview, PlatformConnection
 from app.services.profile_scope import current_profile_id
+from app.services.current_user import require_user_match
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -136,7 +137,7 @@ def _localized_inactive_alert(language: str, inactive_days: int) -> Cr8orAIAlert
 
 
 @router.get("/overview/{user_id}", response_model=DashboardOverview)
-def overview(user_id: int, db: Session = Depends(get_db)) -> DashboardOverview:
+def overview(user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> DashboardOverview:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
