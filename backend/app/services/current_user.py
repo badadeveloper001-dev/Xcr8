@@ -21,8 +21,8 @@ def current_user(
     return user
 
 
-def require_user_match(supplied_user_id: int, user: User = Depends(current_user)) -> User:
-    """Keep legacy client user_id fields compatible without trusting them."""
-    if supplied_user_id != user.id:
+def require_user_match(user_id: int, user: User = Depends(current_user)) -> User:
+    """Authorize a route whose user_id is supplied as a path/query parameter."""
+    if user_id != user.id:
         raise HTTPException(status_code=403, detail="This request belongs to another account.")
     return user
