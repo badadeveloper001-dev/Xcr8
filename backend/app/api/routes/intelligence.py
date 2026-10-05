@@ -603,6 +603,7 @@ def intelligence_feed(
     platform: str = Query(default="all"),
     limit: int = Query(default=12, ge=3, le=50),
     db: Session = Depends(get_db),
+    _auth_user=Depends(require_user_match),
 ) -> IntelligenceFeedResponse:
     user = db.get(User, user_id)
     if not user:
