@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
+from app.services.current_user import require_user_match
 from app.db.models import (
     AnalyticsSnapshot,
     ConnectedPlatform,
