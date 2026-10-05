@@ -6,7 +6,7 @@ from app.db.deps import get_db
 from app.db.models import CreatorMemory
 from app.schemas.mvp import MemoryWriteRequest
 from app.services.memory_vector import build_vector_memory_config
-from app.services.current_user import current_user
+from app.services.current_user import current_user, require_user_match
 
 router = APIRouter(prefix="/memory", tags=["memory"])
 
@@ -35,7 +35,7 @@ def write_memory(payload: MemoryWriteRequest, db: Session = Depends(get_db), aut
 
 
 @router.get("/profile/{user_id}")
-def memory_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
+def memory_profile(user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     memories = db.scalars(
         select(CreatorMemory)
         .where(CreatorMemory.user_id == user_id)
