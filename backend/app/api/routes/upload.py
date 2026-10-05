@@ -146,6 +146,8 @@ def create_presigned_upload_url(
 ) -> JSONResponse:
     """Return a Supabase signed upload URL so the browser can upload directly,
     bypassing any Vercel payload size limits."""
+    if body.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     base_url = str(settings.supabase_url or "").rstrip("/")
     key = str(settings.supabase_service_role_key or "").strip()
     bucket = str(settings.storage_bucket or "xcr8-assets").strip() or "xcr8-assets"
@@ -204,7 +206,7 @@ async def upload_media(
     user_id: int = Form(...),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
-    _auth_user = Depends(require_user_match),
+    auth_user = Depends(current_user),
 ) -> JSONResponse:
     if not _is_allowed_media_type(file.content_type, file.filename):
         raise HTTPException(
