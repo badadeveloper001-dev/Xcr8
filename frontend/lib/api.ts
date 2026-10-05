@@ -1195,7 +1195,7 @@ export async function startPlatformOAuth(
 
 export async function publishPost(payload: PublishPostPayload): Promise<PublishPostResponse> {
   const { data } = await apiClient.post<PublishPostResponse>("/api/v1/social/publish", payload, {
-    timeout: 60_000,
+    timeout: 120_000,
   });
   return data;
 }
