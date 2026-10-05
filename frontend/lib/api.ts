@@ -925,7 +925,7 @@ export async function generateAiTrendMap(
   payload: AiTrendMapperPayload,
 ): Promise<AiTrendMapperResponse> {
   const { data } = await apiClient.post<AiTrendMapperResponse>("/api/v1/ai/trend-mapper", payload, {
-    timeout: 60_000,
+    timeout: 120_000,
   });
   return data;
 }
