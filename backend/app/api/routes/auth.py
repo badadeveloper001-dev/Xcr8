@@ -28,7 +28,7 @@ from app.schemas.mvp import (
     PasswordResetRequestResponse,
     SignupResponse,
 )
-from app.services.current_user import require_user_match
+from app.services.current_user import current_user, require_user_match
 from app.services.entitlements import effective_plan_id
 from app.services.auth import (
     SupabaseAuthError,
@@ -756,7 +756,7 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
 def get_session(
     user_id: int,
     db: Session = Depends(get_db),
-    _auth_user = Depends(require_user_match),
+    auth_user = Depends(current_user),
 ) -> AuthSessionResponse:
     user = db.get(User, user_id)
     if not user:
@@ -773,6 +773,8 @@ def update_avatar(
     db: Session = Depends(get_db),
     _auth_user = Depends(require_user_match),
 ) -> AuthSessionResponse:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
