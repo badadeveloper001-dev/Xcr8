@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
+from app.services.current_user import require_user_match
 from app.services.entitlements import reserve_storage
 
 router = APIRouter(prefix="/upload", tags=["upload"])
@@ -141,6 +142,7 @@ def create_presigned_upload_url(
     body: PresignRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
+    _auth_user = Depends(require_user_match),
 ) -> JSONResponse:
     """Return a Supabase signed upload URL so the browser can upload directly,
     bypassing any Vercel payload size limits."""
@@ -202,6 +204,7 @@ async def upload_media(
     user_id: int = Form(...),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
+    _auth_user = Depends(require_user_match),
 ) -> JSONResponse:
     if not _is_allowed_media_type(file.content_type, file.filename):
         raise HTTPException(
