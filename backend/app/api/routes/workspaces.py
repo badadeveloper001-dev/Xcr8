@@ -11,7 +11,7 @@ from app.db.models import CreatorMemory, User, Workspace, WorkspaceMembership
 from app.db.session import engine
 from app.services.entitlements import expire_plan_if_needed, plan_for_user
 from app.services.profile_scope import SCOPED_MODELS
-from app.services.current_user import require_user_match
+from app.services.current_user import current_user, require_user_match
 
 _workspace_schema_ready = False
 
@@ -248,7 +248,7 @@ def update_workspace(
 
 
 @router.delete("/{workspace_id}", response_model=dict)
-def delete_workspace(workspace_id: int, user_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_workspace(workspace_id: int, user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
