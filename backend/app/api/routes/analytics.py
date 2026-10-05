@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import AIGeneration, AnalyticsSnapshot, ConnectedPlatform, ContentPost
+from app.services.current_user import require_user_match
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -46,7 +47,7 @@ def _refresh_google_access_token(refresh_token: str) -> dict | None:
 
 
 @router.get("/overview/{user_id}")
-def analytics_overview(user_id: int, window: Literal["7d", "30d", "90d"] = "30d", db: Session = Depends(get_db)) -> dict:
+def analytics_overview(user_id: int, window: Literal["7d", "30d", "90d"] = "30d", db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     snapshots = db.scalars(
         select(AnalyticsSnapshot)
         .where(AnalyticsSnapshot.user_id == user_id, AnalyticsSnapshot.metric_window == window)
