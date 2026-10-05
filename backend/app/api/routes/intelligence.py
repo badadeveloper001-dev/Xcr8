@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
-from app.services.current_user import require_user_match
+from app.services.current_user import current_user, require_user_match
 from app.db.models import (
     AnalyticsSnapshot,
     ConnectedPlatform,
@@ -580,7 +580,9 @@ def _serialize_signal(signal: TrendSignalEvent, brief: TrendResearchBrief | None
 
 
 @router.post("/refresh")
-def refresh_intelligence(payload: IntelligenceRefreshRequest, db: Session = Depends(get_db), _auth_user=Depends(require_user_match)) -> dict:
+def refresh_intelligence(payload: IntelligenceRefreshRequest, db: Session = Depends(get_db), auth_user=Depends(current_user)) -> dict:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -769,8 +771,10 @@ def mark_notification_read(
     notification_id: int,
     payload: IntelligenceNotificationReadRequest,
     db: Session = Depends(get_db),
-    _auth_user=Depends(require_user_match),
+    auth_user=Depends(current_user),
 ) -> IntelligenceNotificationItem:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     notification = db.scalar(
         select(IntelligenceNotification).where(
             IntelligenceNotification.id == notification_id,
@@ -797,7 +801,9 @@ def mark_notification_read(
 
 
 @router.post("/feedback")
-def submit_intelligence_feedback(payload: IntelligenceFeedbackRequest, db: Session = Depends(get_db), auth_user=Depends(require_user_match)) -> dict:
+def submit_intelligence_feedback(payload: IntelligenceFeedbackRequest, db: Session = Depends(get_db), auth_user=Depends(current_user)) -> dict:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
