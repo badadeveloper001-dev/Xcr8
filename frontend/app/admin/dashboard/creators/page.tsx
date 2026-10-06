@@ -99,6 +99,7 @@ export default function CreatorsPage() {
                   {creator.display_name}
                 </p>
                 <p className="text-xs text-slate-500">{creator.email}</p>
+                <p className="mt-1 text-xs text-slate-500">User ID: {creator.user_id}</p>
                 <p className="mt-1 text-xs text-slate-400">
                   Current plan:{" "}
                   <span className="font-semibold text-violet-300">
