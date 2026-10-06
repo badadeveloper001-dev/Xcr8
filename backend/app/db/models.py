@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -520,6 +522,169 @@ class PaymentEvent(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     plan: Mapped[str] = mapped_column(String(32), index=True)
     status: Mapped[str] = mapped_column(String(32), index=True)
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    billing_cycle: Mapped[str | None] = mapped_column(String(16), nullable=True)
     payload_hash: Mapped[str] = mapped_column(String(64))
     signature_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+
+
+class GrowthCampaign(Base):
+    __tablename__ = "growth_campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    campaign_type: Mapped[str] = mapped_column(String(64), default="marketing", index=True)
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    destination_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attribution_window_days: Mapped[int] = mapped_column(Integer, default=30)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class InfluencerReferral(Base):
+    __tablename__ = "influencer_referrals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    influencer_name: Mapped[str] = mapped_column(String(180), index=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("growth_campaigns.id"), nullable=True, index=True)
+    compensation_type: Mapped[str] = mapped_column(String(32), default="none")
+    compensation_plan: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cash_compensation: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
+    attribution_window_days: Mapped[int] = mapped_column(Integer, default=30)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ReferralCode(Base):
+    __tablename__ = "referral_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    code_type: Mapped[str] = mapped_column(String(24), index=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("growth_campaigns.id"), nullable=True, index=True)
+    influencer_referral_id: Mapped[int | None] = mapped_column(
+        ForeignKey("influencer_referrals.id"), nullable=True, index=True
+    )
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WatermarkLink(Base):
+    __tablename__ = "watermark_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    creator_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    content_post_id: Mapped[int | None] = mapped_column(ForeignKey("content_posts.id"), nullable=True, index=True)
+    public_code: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AttributionVisit(Base):
+    __tablename__ = "attribution_visits"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tracking_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    referral_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("growth_campaigns.id"), nullable=True, index=True)
+    influencer_referral_id: Mapped[int | None] = mapped_column(
+        ForeignKey("influencer_referrals.id"), nullable=True, index=True
+    )
+    watermark_id: Mapped[int | None] = mapped_column(ForeignKey("watermark_links.id"), nullable=True, index=True)
+    visitor_token: Mapped[str] = mapped_column(String(128), index=True)
+    landing_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    referrer_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    utm_source: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    utm_medium: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    utm_content: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AcquisitionAttribution(Base):
+    __tablename__ = "acquisition_attributions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+
+    first_touch_type: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
+    first_touch_referral_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    first_touch_campaign_id: Mapped[int | None] = mapped_column(
+        ForeignKey("growth_campaigns.id"), nullable=True, index=True
+    )
+    first_touch_influencer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("influencer_referrals.id"), nullable=True, index=True
+    )
+    first_touch_watermark_id: Mapped[int | None] = mapped_column(
+        ForeignKey("watermark_links.id"), nullable=True, index=True
+    )
+    first_touch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    last_touch_type: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
+    last_touch_referral_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_touch_campaign_id: Mapped[int | None] = mapped_column(
+        ForeignKey("growth_campaigns.id"), nullable=True, index=True
+    )
+    last_touch_influencer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("influencer_referrals.id"), nullable=True, index=True
+    )
+    last_touch_watermark_id: Mapped[int | None] = mapped_column(
+        ForeignKey("watermark_links.id"), nullable=True, index=True
+    )
+    last_touch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    attribution_window_days: Mapped[int] = mapped_column(Integer, default=30)
+    signup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    activation_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    first_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ReferralRelationship(Base):
+    __tablename__ = "referral_relationships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    referrer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    referred_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    referral_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GrowthEvent(Base):
+    __tablename__ = "growth_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("growth_campaigns.id"), nullable=True, index=True)
+    influencer_referral_id: Mapped[int | None] = mapped_column(
+        ForeignKey("influencer_referrals.id"), nullable=True, index=True
+    )
+    referral_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    watermark_id: Mapped[int | None] = mapped_column(ForeignKey("watermark_links.id"), nullable=True, index=True)
+    referrer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    event_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
