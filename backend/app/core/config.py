@@ -86,6 +86,7 @@ class Settings(BaseSettings):
 
     # Public frontend URL used for OAuth redirect_uri construction
     frontend_url: str = ""
+    api_public_url: str = "https://xcr8-creator-os-api-ml4p.onrender.com"
 
     storage_provider: str = "s3"
     storage_bucket: str = "xcr8-assets"
