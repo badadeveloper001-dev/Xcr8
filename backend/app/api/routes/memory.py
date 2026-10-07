@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -6,12 +6,16 @@ from app.db.deps import get_db
 from app.db.models import CreatorMemory
 from app.schemas.mvp import MemoryWriteRequest
 from app.services.memory_vector import build_vector_memory_config
+from app.services.current_user import current_user, require_user_match
 
 router = APIRouter(prefix="/memory", tags=["memory"])
 
 
 @router.post("/write")
-def write_memory(payload: MemoryWriteRequest, db: Session = Depends(get_db)) -> dict:
+def write_memory(payload: MemoryWriteRequest, db: Session = Depends(get_db), auth_user = Depends(current_user)) -> dict:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
+
     memory = CreatorMemory(
         user_id=payload.user_id,
         memory_type=payload.memory_type,
@@ -31,7 +35,7 @@ def write_memory(payload: MemoryWriteRequest, db: Session = Depends(get_db)) -> 
 
 
 @router.get("/profile/{user_id}")
-def memory_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
+def memory_profile(user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     memories = db.scalars(
         select(CreatorMemory)
         .where(CreatorMemory.user_id == user_id)

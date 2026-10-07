@@ -11,6 +11,7 @@ from app.db.models import CreatorMemory, User, Workspace, WorkspaceMembership
 from app.db.session import engine
 from app.services.entitlements import expire_plan_if_needed, plan_for_user
 from app.services.profile_scope import SCOPED_MODELS
+from app.services.current_user import current_user, require_user_match
 
 _workspace_schema_ready = False
 
@@ -107,7 +108,7 @@ def _unique_slug(db: Session, name: str, workspace_id: int | None = None) -> str
 
 
 @router.post("/", response_model=dict)
-def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db)) -> dict:
+def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -180,7 +181,7 @@ def create_workspace(payload: dict, user_id: int, db: Session = Depends(get_db))
 
 
 @router.get("/", response_model=list)
-def list_workspaces(user_id: int, db: Session = Depends(get_db)) -> list:
+def list_workspaces(user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> list:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -200,7 +201,7 @@ def list_workspaces(user_id: int, db: Session = Depends(get_db)) -> list:
 
 
 @router.get("/summary", response_model=dict)
-def workspace_summary(user_id: int, db: Session = Depends(get_db)) -> dict:
+def workspace_summary(user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -222,6 +223,7 @@ def update_workspace(
     payload: dict,
     user_id: int,
     db: Session = Depends(get_db),
+    _auth_user = Depends(require_user_match),
 ) -> dict:
     user = db.get(User, user_id)
     if not user:
@@ -246,7 +248,7 @@ def update_workspace(
 
 
 @router.delete("/{workspace_id}", response_model=dict)
-def delete_workspace(workspace_id: int, user_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_workspace(workspace_id: int, user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
