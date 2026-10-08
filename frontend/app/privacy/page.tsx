@@ -1,5 +1,10 @@
-export const metadata = {
-  title: "Privacy Policy | XCR8",
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  alternates: {
+    canonical: "/privacy",
+  },
 };
 
 export default function PrivacyPage() {
