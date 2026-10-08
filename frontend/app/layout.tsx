@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   generator: "Next.js",
   referrer: "origin-when-cross-origin",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/xcr8-icon.svg",
   },
   openGraph: {
     type: "website",
