@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db
 from app.db.models import ConnectedPlatform, Platform
 from app.services.entitlements import ensure_social_account_capacity
+from app.services.current_user import require_user_match
 
 router = APIRouter(prefix="/platforms", tags=["platforms"])
 
@@ -32,7 +33,7 @@ def _serialize_connection(row: ConnectedPlatform) -> dict:
 
 
 @router.get("/{user_id}")
-def list_platforms(user_id: int, db: Session = Depends(get_db)) -> dict:
+def list_platforms(user_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     rows = db.scalars(
         select(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id)
     )
@@ -46,6 +47,7 @@ def connect_platform(
     user_id: int,
     payload: PlatformConnectRequest,
     db: Session = Depends(get_db),
+    _auth_user = Depends(require_user_match),
 ) -> dict:
     platform = payload.platform.strip().lower()
     handle = payload.handle.strip()
@@ -99,7 +101,7 @@ def connect_platform(
 
 
 @router.delete("/{user_id}/{platform_id}")
-def disconnect_platform(user_id: int, platform_id: int, db: Session = Depends(get_db)) -> dict:
+def disconnect_platform(user_id: int, platform_id: int, db: Session = Depends(get_db), _auth_user = Depends(require_user_match)) -> dict:
     row = db.get(ConnectedPlatform, platform_id)
     if not row or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="Platform connection not found.")

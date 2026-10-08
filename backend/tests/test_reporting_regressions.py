@@ -64,6 +64,36 @@ class ReportingRegressionTests(unittest.TestCase):
         self.assertIn(".offset(offset).limit(limit)", source)
         self.assertIn("IntelligenceNotification.id == selected_id", source)
 
+
+    def test_intelligence_body_routes_use_signed_session_authorization(self):
+        source = (ROOT / "app/api/routes/intelligence.py").read_text(encoding="utf-8")
+        self.assertIn("def refresh_intelligence(payload: IntelligenceRefreshRequest", source)
+        self.assertIn("auth_user=Depends(current_user)", source)
+        self.assertIn('if payload.user_id != auth_user.id:', source)
+        self.assertIn("def mark_notification_read(", source)
+        self.assertIn("def submit_intelligence_feedback(", source)
+
+    def test_user_match_dependency_binds_route_user_id(self):
+        source = (ROOT / "app/services/current_user.py").read_text(encoding="utf-8")
+        self.assertIn("def require_user_match(user_id: int", source)
+
+    def test_body_routes_use_signed_session_identity(self):
+        checks = {
+            "app/api/routes/workspaces.py": "def create_workspace(payload: dict, user_id: int",
+            "app/api/routes/scheduling.py": "if payload.user_id != auth_user.id:",
+            "app/api/routes/upload.py": "if body.user_id != auth_user.id:",
+            "app/api/routes/auth.py": "if payload.user_id != auth_user.id:",
+        }
+        for relative_path, expected in checks.items():
+            source = (ROOT / relative_path).read_text(encoding="utf-8")
+            self.assertIn(expected, source)
+
+    def test_intelligence_path_routes_keep_user_match_authorization(self):
+        source = (ROOT / "app/api/routes/intelligence.py").read_text(encoding="utf-8")
+        self.assertIn('def intelligence_feed(', source)
+        self.assertIn('def notification_inbox(', source)
+        self.assertIn('_auth_user=Depends(require_user_match)', source)
+
     def test_render_uses_liveness_health_and_long_running_connection_pool(self):
         blueprint = (ROOT.parent / "render.yaml").read_text(encoding="utf-8")
         session_source = (ROOT / "app/db/session.py").read_text(encoding="utf-8")

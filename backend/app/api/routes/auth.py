@@ -28,6 +28,7 @@ from app.schemas.mvp import (
     PasswordResetRequestResponse,
     SignupResponse,
 )
+from app.services.current_user import current_user, require_user_match
 from app.services.entitlements import effective_plan_id
 from app.services.auth import (
     SupabaseAuthError,
@@ -752,7 +753,11 @@ def google_session(payload: AuthGoogleTokenRequest, db: Session = Depends(get_db
 
 
 @router.get("/session/{user_id}", response_model=AuthSessionResponse)
-def get_session(user_id: int, db: Session = Depends(get_db)) -> AuthSessionResponse:
+def get_session(
+    user_id: int,
+    db: Session = Depends(get_db),
+    auth_user = Depends(current_user),
+) -> AuthSessionResponse:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -763,7 +768,13 @@ def get_session(user_id: int, db: Session = Depends(get_db)) -> AuthSessionRespo
 
 
 @router.post("/avatar", response_model=AuthSessionResponse)
-def update_avatar(payload: AvatarUpdateRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+def update_avatar(
+    payload: AvatarUpdateRequest,
+    db: Session = Depends(get_db),
+    auth_user = Depends(current_user),
+) -> AuthSessionResponse:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -792,7 +803,13 @@ def update_avatar(payload: AvatarUpdateRequest, db: Session = Depends(get_db)) -
 
 
 @router.post("/profile", response_model=AuthSessionResponse)
-def update_profile(payload: AuthProfileUpdateRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+def update_profile(
+    payload: AuthProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    _auth_user = Depends(require_user_match),
+) -> AuthSessionResponse:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -841,7 +858,13 @@ def update_profile(payload: AuthProfileUpdateRequest, db: Session = Depends(get_
 
 
 @router.post("/onboarding", response_model=AuthSessionResponse)
-def onboarding(payload: OnboardingRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
+def onboarding(
+    payload: OnboardingRequest,
+    db: Session = Depends(get_db),
+    _auth_user = Depends(require_user_match),
+) -> AuthSessionResponse:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

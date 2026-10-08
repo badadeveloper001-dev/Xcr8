@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import ContentPost, Platform, PostStatus, ScheduledPost
 from app.schemas.mvp import ScheduleRequest
+from app.services.current_user import current_user, require_user_match
 from app.services.entitlements import consume_usage
 from app.services.pulse import record_pulse_event
 
@@ -28,7 +29,10 @@ def queue_schedule(
     payload: ScheduleRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
+    auth_user = Depends(current_user),
 ) -> dict:
+    if payload.user_id != auth_user.id:
+        raise HTTPException(status_code=403, detail="This request belongs to another account.")
     post = db.get(ContentPost, payload.post_id)
     if not post or post.user_id != payload.user_id:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -242,7 +246,11 @@ def dispatch_due_posts(
 
 
 @router.get("/calendar/{user_id}")
-def calendar(user_id: int, db: Session = Depends(get_db)) -> dict:
+def calendar(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _auth_user = Depends(require_user_match),
+) -> dict:
     schedules = db.scalars(
         select(ScheduledPost)
         .where(ScheduledPost.user_id == user_id)
