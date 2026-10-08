@@ -83,6 +83,47 @@ export default function WelcomePage() {
             </span>
           </div>
         </motion.section>
+
+        <section className="mt-10 grid gap-5 md:grid-cols-2" aria-labelledby="xcr8-workflow">
+          <div className="surface-card rounded-3xl border border-slate-200/70 bg-white/80 p-6 dark:border-white/10 dark:bg-slate-950/60">
+            <h2 id="xcr8-workflow" className="text-xl font-semibold text-slate-950 dark:text-white">
+              One workspace for the creator workflow
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              XCR8 connects the work around content creation: plan ideas, create with AI-assisted
+              tools, prepare and publish content, measure performance, and use those insights to grow.
+            </p>
+            <ol className="mt-5 grid gap-3 text-sm text-slate-700 dark:text-slate-200 sm:grid-cols-5">
+              {["Plan", "Create", "Publish", "Measure", "Grow"].map((step, index) => (
+                <li key={step} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-white/10 dark:bg-white/5">
+                  <span className="block text-xs font-semibold text-cyan-600 dark:text-cyan-300">
+                    0{index + 1}
+                  </span>
+                  <span className="mt-1 block font-medium">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="surface-card rounded-3xl border border-slate-200/70 bg-white/80 p-6 dark:border-white/10 dark:bg-slate-950/60">
+            <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
+              More than a video editor
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              XCR8 is designed as a creator workspace rather than a conventional video editor.
+              Its focus is the broader workflow around content: organizing ideas, using AI-assisted
+              creation, publishing to supported social platforms, and understanding results.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3 text-sm font-medium">
+              <Link href="/features" className="inline-flex items-center gap-1 text-cyan-700 hover:underline dark:text-cyan-300">
+                Explore features <ArrowRight size={15} />
+              </Link>
+              <Link href="/pricing" className="inline-flex items-center gap-1 text-cyan-700 hover:underline dark:text-cyan-300">
+                View pricing <ArrowRight size={15} />
+              </Link>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );
