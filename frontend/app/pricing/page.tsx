@@ -44,8 +44,14 @@ type Plan = {
 };
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL?.trim() ||
-  "https://xcr8-creator-os-api-ml4p.onrender.com";
+  process.env.BACKEND_API_URL ??
+  process.env.BACKEND_INTERNAL_URL ??
+  process.env.BACKEND_URL;
+
+function normalizeBackendUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, "");
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+}
 
 async function getPlans(): Promise<Plan[]> {
   const requestHeaders = await headers();
@@ -56,7 +62,11 @@ async function getPlans(): Promise<Plan[]> {
     "";
 
   try {
-    const response = await fetch(`${BACKEND_URL.replace(/\/$/, "")}/api/v1/plans/`, {
+    if (!BACKEND_URL) {
+      throw new Error("Backend API is not configured");
+    }
+
+    const response = await fetch(`${normalizeBackendUrl(BACKEND_URL)}/api/v1/plans/`, {
       headers: countryCode ? { "x-country-code": countryCode } : undefined,
       cache: "no-store",
     });
