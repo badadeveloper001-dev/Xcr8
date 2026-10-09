@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from difflib import SequenceMatcher
 from time import perf_counter
 
 from openai import OpenAI
@@ -34,8 +35,11 @@ SYSTEM_PROMPT = (
     "facts, names, offer, meaning, and language style. Never introduce a different topic, fake experience, "
     "unsupported claim, generic advice, or a recycled previous caption. Keep the creator's level of formality. "
     "Do not add labels such as 'Caption:', 'Creator note:', or 'Here is your post'. Do not repeat the hook inside "
-    "adapted_caption. Hashtags must be directly supported by words or named concepts in source_caption; return an "
-    "empty array when none are useful. Return JSON only, with exactly this shape: "
+    "adapted_caption. Hashtags must be topic-specific and directly supported by source_caption. Do not use generic "
+    "platform/creator/growth tags such as #contentstrategy, #creator, #contentmarketing, or #xcr8. "
+    "Prefer 3-5 precise tags for the actual subject, audience, product, place, or activity; return an "
+    "empty array rather than padding with generic tags. The adapted_caption must be a genuine rewrite, "
+    "not the source caption copied verbatim or with only punctuation/emoji changes. Return JSON only, with exactly this shape: "
     "{\"adapted_caption\":\"...\",\"hashtags\":[\"#example\"],\"hook\":\"...\"}. "
     "For Instagram, use readable spacing and at most 5 useful hashtags. For Facebook, favor natural paragraphs "
     "and avoid hashtag stuffing. For Threads, be conversational and stay within 500 characters. For YouTube "
@@ -268,6 +272,10 @@ def _extract_keywords(text: str, max_items: int = 4) -> list[str]:
         "really",
         "very",
         "more",
+        "launching", "collection", "saturday", "sunday", "monday", "tuesday",
+        "wednesday", "thursday", "friday", "today", "tomorrow", "our", "you",
+        "post", "caption", "content", "creator", "creators", "business", "brand",
+        "using", "make", "made", "show", "share", "help", "want",
     }
     deduped: list[str] = []
     for token in tokens:
@@ -318,6 +326,16 @@ def _has_source_anchor(candidate: str, source_text: str, language: str) -> bool:
         return True
     candidate_tokens = set(_extract_keywords(candidate, max_items=40))
     return any(keyword in candidate_tokens for keyword in source_keywords)
+
+def _is_meaningful_rewrite(candidate: str, source_text: str) -> bool:
+    """Reject outputs that only copy the source or make cosmetic changes."""
+    normalize = lambda value: " ".join(re.findall(r"[a-z0-9]+", value.lower()))
+    source = normalize(source_text)
+    adapted = normalize(candidate)
+    if not source or not adapted:
+        return False
+    return SequenceMatcher(None, source, adapted).ratio() < 0.94
+
 
 
 _VOLATILE_MEMORY_KEYS = {
@@ -426,8 +444,9 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
                 not adapted_caption
                 or _looks_generic(adapted_caption)
                 or not _has_source_anchor(adapted_caption, text, language)
+                or not _is_meaningful_rewrite(adapted_caption, text)
             ):
-                raise ValueError("Caption provider returned a generic or unrelated adaptation")
+                raise ValueError("Caption provider returned a generic, unchanged, or unrelated adaptation")
 
             if _looks_generic(hook):
                 hook = _build_dynamic_hook(text, platform)
