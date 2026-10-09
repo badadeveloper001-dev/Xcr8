@@ -18,7 +18,6 @@ from app.schemas.mvp import (
     AuthProfileUpdateRequest,
     AuthLoginRequest,
     AuthSignupLinkVerifyRequest,
-    AuthSignupPasswordVerifyRequest,
     AuthSessionResponse,
     AuthSignupCodeVerifyRequest,
     PasswordResetConfirmRequest,
@@ -431,45 +430,6 @@ def signup_verify_link(payload: AuthSignupLinkVerifyRequest, db: Session = Depen
         }
         db.add(profile)
         db.commit()
-
-    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    return _session_payload(user, credential)
-
-
-@router.post("/signup/verify-password", response_model=AuthSessionResponse)
-def signup_verify_password(
-    payload: AuthSignupPasswordVerifyRequest,
-    db: Session = Depends(get_db),
-) -> AuthSessionResponse:
-    normalized_email = _normalize_email(str(payload.email))
-
-    user = db.scalar(select(User).where(User.email == normalized_email))
-    if not user:
-        raise HTTPException(status_code=404, detail="Signup session not found. Please register again.")
-
-    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    if not credential or not _verify_password(payload.password, credential.password_salt, credential.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
-
-    try:
-        supabase_admin_confirm_email(normalized_email)
-    except SupabaseAuthError:
-        # Local auth flow should keep working even when Supabase admin confirmation is unavailable.
-        pass
-
-    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
-    if not profile:
-        profile = CreatorProfile(user_id=user.id, multilingual_profile=[user.language], preferences={})
-        db.add(profile)
-
-    profile.preferences = {
-        **(profile.preferences or {}),
-        "email_code_verified": True,
-        "email_verified_at": datetime.now(tz=UTC).isoformat(),
-        "email_verification_method": "password_fallback",
-    }
-    db.add(profile)
-    db.commit()
 
     credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
     return _session_payload(user, credential)
