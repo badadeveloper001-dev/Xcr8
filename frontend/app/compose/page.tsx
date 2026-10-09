@@ -125,7 +125,22 @@ export default function ComposePage() {
             setSelectedPlatforms(saved.selectedPlatforms?.length ? saved.selectedPlatforms : ["instagram", "facebook"]);
             setScheduleAt(saved.scheduleAt || "");
             setMediaItems(Array.isArray(saved.mediaItems) ? saved.mediaItems : []);
-            setResumedPostId(saved.postId || null);
+
+            // Local browser drafts can outlive the server-side draft (for example,
+            // after it has been approved, scheduled, published, or removed).
+            // Only resume a post ID that the API still recognizes as an editable draft.
+            let validPostId: number | null = null;
+            if (Number.isInteger(saved.postId) && Number(saved.postId) > 0) {
+              try {
+                const savedDraft = await getDistributionDraft(userId as number, Number(saved.postId));
+                validPostId = savedDraft.post_id;
+              } catch {
+                // Keep the user's local caption/media, but start a fresh server draft.
+                validPostId = null;
+              }
+            }
+            if (cancelled) return;
+            setResumedPostId(validPostId);
           }
         } catch {
           window.localStorage.removeItem(localDraftKey);
@@ -203,9 +218,8 @@ export default function ComposePage() {
     setNotice(null);
 
     try {
-      const draft = await createDistributionDraft({
+      const draftPayload = {
         user_id: userId,
-        ...(resumedPostId ? { post_id: resumedPostId } : {}),
         title,
         media_url: mediaItems[0]?.url ?? "",
         media_urls: mediaItems.map((item) => item.url),
@@ -214,7 +228,23 @@ export default function ComposePage() {
         master_caption: caption,
         primary_language: "english",
         selected_platforms: selectedPlatforms,
-      });
+      };
+
+      let draft;
+      try {
+        draft = await createDistributionDraft({
+          ...draftPayload,
+          ...(resumedPostId ? { post_id: resumedPostId } : {}),
+        });
+      } catch (err) {
+        // A draft may become non-editable between restore and generation. The
+        // backend rejects that stale ID before reserving usage or creating content.
+        const message = getApiErrorMessage(err, "");
+        if (!resumedPostId || !/draft not found/i.test(message)) throw err;
+
+        setResumedPostId(null);
+        draft = await createDistributionDraft(draftPayload);
+      }
 
       setResumedPostId(draft.post_id);
       setDistributionDraft({
