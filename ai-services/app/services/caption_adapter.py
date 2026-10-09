@@ -38,8 +38,8 @@ SYSTEM_PROMPT = (
     "adapted_caption. Hashtags must be topic-specific and directly supported by source_caption. Do not use generic "
     "platform/creator/growth tags such as #contentstrategy, #creator, #contentmarketing, or #xcr8. "
     "Prefer 3-5 precise tags for the actual subject, audience, product, place, or activity; return an "
-    "empty array rather than padding with generic tags. The adapted_caption must be a genuine rewrite, "
-    "not the source caption copied verbatim or with only punctuation/emoji changes. Return JSON only, with exactly this shape: "
+    "empty array rather than padding with generic tags. The adapted_caption must be a genuine editorial adaptation, "
+    "not a synonym swap or rearrangement of source sentences. Rebuild the message around a fresh opening or framing, vary sentence structure, and make deliberate platform-specific choices. Keep product names, places, dates, ingredients, offers, and claims accurate. Do not invent testimonials, outcomes, prices, or facts. If the source is already short, make only the changes needed for a natural platform-native version rather than padding it. Return JSON only, with exactly this shape: "
     "{\"adapted_caption\":\"...\",\"hashtags\":[\"#example\"],\"hook\":\"...\"}. "
     "For Instagram, use readable spacing and at most 5 useful hashtags. For Facebook, favor natural paragraphs "
     "and avoid hashtag stuffing. For Threads, be conversational and stay within 500 characters. For YouTube "
@@ -328,13 +328,30 @@ def _has_source_anchor(candidate: str, source_text: str, language: str) -> bool:
     return any(keyword in candidate_tokens for keyword in source_keywords)
 
 def _is_meaningful_rewrite(candidate: str, source_text: str) -> bool:
-    """Reject outputs that only copy the source or make cosmetic changes."""
-    normalize = lambda value: " ".join(re.findall(r"[a-z0-9]+", value.lower()))
-    source = normalize(source_text)
-    adapted = normalize(candidate)
-    if not source or not adapted:
+    """Reject copy edits and sentence/word rearrangements while allowing fact-preserving rewrites."""
+    tokenize = lambda value: re.findall(r"[a-z0-9]+", value.lower())
+    source_tokens = tokenize(source_text)
+    adapted_tokens = tokenize(candidate)
+    if not source_tokens or not adapted_tokens:
         return False
-    return SequenceMatcher(None, source, adapted).ratio() < 0.94
+
+    sequence_similarity = SequenceMatcher(None, source_tokens, adapted_tokens).ratio()
+    if sequence_similarity >= 0.84:
+        return False
+
+    # Ignore common grammatical words when checking whether the content itself was rewritten.
+    stop_words = {
+        "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "each",
+        "for", "from", "has", "have", "in", "is", "it", "its", "of", "on", "or",
+        "our", "the", "their", "this", "to", "was", "were", "with", "you", "your",
+    }
+    source_content = {token for token in source_tokens if token not in stop_words}
+    adapted_content = {token for token in adapted_tokens if token not in stop_words}
+    if not source_content or not adapted_content:
+        return sequence_similarity < 0.65
+
+    content_overlap = len(source_content & adapted_content) / len(source_content | adapted_content)
+    return content_overlap <= 0.88
 
 
 
@@ -426,6 +443,15 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
                                     ),
                                     "language_profile": creator_memory.get("language_profile", {}),
                                 },
+                                "platform_guidance": {
+                                    "instagram": "Lead with a clear, relatable opening; use airy spacing and a natural community tone.",
+                                    "tiktok": "Use a punchy, spoken-language opening that feels native to a short video; avoid forced trends or bait.",
+                                    "linkedin": "Frame the concrete lesson or professional relevance; use a thoughtful, credible voice.",
+                                    "x": "Make one sharp point in concise, conversational language; prioritize clarity over hype.",
+                                    "facebook": "Use a warm, natural community-facing voice and a complete thought.",
+                                    "threads": "Sound conversational and personal without engagement bait.",
+                                    "youtube_shorts": "Keep it concise, searchable, and tied directly to what viewers will see.",
+                                }.get(platform.lower(), "Make the caption natural for the selected platform without inventing facts."),
                                 "constraints": {
                                     "max_caption_length": PLATFORM_LIMITS.get(platform, 2200),
                                     "hook_max_length": 180,
