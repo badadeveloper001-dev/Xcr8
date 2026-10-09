@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import {
   getApiErrorMessage,
-  login,
   signup,
   verifySignupCode,
-  verifySignupPassword,
 } from "@/lib/api";
 import { supabaseClient } from "@/lib/supabase";
 import { useCreatorStore } from "@/lib/store";
@@ -81,26 +79,6 @@ export default function SignupPage() {
           timezone: "Africa/Lagos",
         });
 
-        if (response.requires_verification === false) {
-          const session = await login({
-            email: email.trim(),
-            password,
-            remember_me: false,
-          });
-          setSession({
-            userId: session.user_id,
-            email: session.email,
-            displayName: session.display_name,
-            fullName: session.full_name,
-            username: session.username,
-            avatarUrl: session.avatar_url ?? null,
-            plan: session.plan,
-            onboardingComplete: session.onboarding_complete,
-          });
-          router.push("/onboarding");
-          return;
-        }
-
         setCodeSent(true);
         setNotice(response.message || "Verification code sent. Check your email inbox.");
       } catch (err) {
@@ -159,40 +137,6 @@ export default function SignupPage() {
       provider: "google",
       options: { redirectTo },
     });
-  };
-
-  const handleVerifyWithPassword = async () => {
-    if (!codeSent || password.length < 8) {
-      setError("Enter your account password to continue.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const session = await verifySignupPassword({
-        email: email.trim(),
-        password,
-      });
-      setSession({
-        userId: session.user_id,
-        email: session.email,
-        displayName: session.display_name,
-        fullName: session.full_name,
-        username: session.username,
-        avatarUrl: (session as { avatar_url?: string | null }).avatar_url ?? null,
-        plan: session.plan,
-        onboardingComplete: session.onboarding_complete,
-      });
-      router.push("/onboarding");
-    } catch (err) {
-      setError(
-        getApiErrorMessage(err, "Could not verify with password. Please check your password."),
-      );
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleResendCode = async () => {
@@ -404,14 +348,7 @@ export default function SignupPage() {
                 >
                   Resend code now
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleVerifyWithPassword()}
-                  disabled={loading}
-                  className="w-full rounded-2xl border border-emerald-400/25 bg-emerald-500/10 py-3.5 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/15 disabled:opacity-60 light:border-emerald-300 light:bg-emerald-50 light:text-emerald-700"
-                >
-                  I did not get a code, verify with password
-                </button>
+
                 <button
                   type="button"
                   onClick={() => {
