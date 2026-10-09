@@ -927,7 +927,7 @@ def confirm_password_reset(
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters and include a number.")
 
     try:
-        supabase_update_password(payload.token, payload.new_password)
+        normalized_email = supabase_update_password(payload.token, payload.new_password)
     except SupabaseAuthError as exc:
         if _is_auth_rate_limited(str(exc), exc.status_code):
             raise HTTPException(
@@ -935,6 +935,21 @@ def confirm_password_reset(
                 detail="Too many reset attempts right now. Please wait a minute and try again.",
             ) from exc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Keep XCR8's local fallback credentials in sync with Supabase. Otherwise,
+    # accounts that use the local fallback could continue accepting the old password.
+    if normalized_email:
+        user = db.scalar(select(User).where(User.email == _normalize_email(normalized_email)))
+        if user:
+            credential = db.scalar(
+                select(AuthCredential).where(AuthCredential.user_id == user.id)
+            )
+            if credential:
+                salt, password_hash = _hash_password(payload.new_password)
+                credential.password_salt = salt
+                credential.password_hash = password_hash
+                db.add(credential)
+                db.commit()
 
     return {"message": "Password reset successful. You can now log in."}
 

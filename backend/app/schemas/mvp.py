@@ -45,7 +45,8 @@ class PasswordResetRequest(BaseModel):
 
 
 class PasswordResetConfirmRequest(BaseModel):
-    token: str = Field(min_length=16, max_length=512)
+    # Supabase recovery access tokens are JWTs and can exceed 512 characters.
+    token: str = Field(min_length=16, max_length=8192)
     new_password: str = Field(min_length=8, max_length=128)
     confirm_password: str = Field(min_length=8, max_length=128)
 

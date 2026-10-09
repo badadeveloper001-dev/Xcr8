@@ -502,10 +502,17 @@ def supabase_admin_confirm_email(email: str) -> None:
 
 
 def supabase_request_password_reset(email: str) -> None:
+    """Send a recovery email that returns to XCR8's reset-password page."""
+    frontend_url = settings.frontend_url.strip().rstrip("/")
+    params = {}
+    if frontend_url:
+        params["redirect_to"] = f"{frontend_url}/auth/reset-password"
+
     with httpx.Client(timeout=15.0) as client:
         response = client.post(
             f"{settings.supabase_url}/auth/v1/recover",
             headers=_auth_headers(),
+            params=params,
             json={"email": email},
         )
 
@@ -513,7 +520,8 @@ def supabase_request_password_reset(email: str) -> None:
         _raise_auth_error(response, "Could not request password reset")
 
 
-def supabase_update_password(access_token: str, new_password: str) -> None:
+def supabase_update_password(access_token: str, new_password: str) -> str | None:
+    """Update the Supabase password and return the verified account email."""
     with httpx.Client(timeout=15.0) as client:
         response = client.put(
             f"{settings.supabase_url}/auth/v1/user",
@@ -527,3 +535,10 @@ def supabase_update_password(access_token: str, new_password: str) -> None:
 
     if response.status_code >= 400:
         _raise_auth_error(response, "Invalid or expired reset token.")
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    email = payload.get("email") if isinstance(payload, dict) else None
+    return str(email).strip().lower() if email else None
