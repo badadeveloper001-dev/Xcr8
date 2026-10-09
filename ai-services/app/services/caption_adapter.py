@@ -379,6 +379,17 @@ def _build_contextual_hashtags(source_text: str, platform: str, language: str) -
             merged.append(tag)
     return merged[:8]
 
+_GENERIC_HASHTAGS = {
+    "#xcr8", "#creatoros", "#contentstrategy", "#contentmarketing",
+    "#instagramcreator", "#tiktokcreator", "#xcreator", "#linkedincreator",
+    "#facebookcreator", "#fbcreator", "#shortscreator", "#threadscreator",
+    "#creator", "#globalcreator", "#afrodigital",
+}
+
+
+def _remove_generic_hashtags(hashtags: list[str]) -> list[str]:
+    return [tag for tag in hashtags if tag.lower() not in _GENERIC_HASHTAGS]
+
 
 def adapt_caption(text: str, platform: str, language: str, creator_memory: dict) -> dict:
     if not settings.openai_api_key and not settings.deepseek_api_key:
@@ -437,6 +448,7 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
             if not isinstance(hashtags, list):
                 hashtags = []
             hashtags = [str(tag).strip() for tag in hashtags if str(tag).strip().startswith("#")]
+            hashtags = _remove_generic_hashtags(hashtags)
             if not hashtags:
                 hashtags = _build_contextual_hashtags(text, platform, language)
 
