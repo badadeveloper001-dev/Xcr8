@@ -18,7 +18,6 @@ from app.schemas.mvp import (
     AuthProfileUpdateRequest,
     AuthLoginRequest,
     AuthSignupLinkVerifyRequest,
-    AuthSignupPasswordVerifyRequest,
     AuthSessionResponse,
     AuthSignupCodeVerifyRequest,
     PasswordResetConfirmRequest,
@@ -35,7 +34,6 @@ from app.services.auth import (
     stable_fallback_user_id,
     supabase_mark_onboarding_complete,
     supabase_request_password_reset,
-    supabase_admin_confirm_email,
     supabase_get_user,
     supabase_sign_up,
     supabase_sign_in,
@@ -436,45 +434,6 @@ def signup_verify_link(payload: AuthSignupLinkVerifyRequest, db: Session = Depen
     return _session_payload(user, credential)
 
 
-@router.post("/signup/verify-password", response_model=AuthSessionResponse)
-def signup_verify_password(
-    payload: AuthSignupPasswordVerifyRequest,
-    db: Session = Depends(get_db),
-) -> AuthSessionResponse:
-    normalized_email = _normalize_email(str(payload.email))
-
-    user = db.scalar(select(User).where(User.email == normalized_email))
-    if not user:
-        raise HTTPException(status_code=404, detail="Signup session not found. Please register again.")
-
-    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    if not credential or not _verify_password(payload.password, credential.password_salt, credential.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
-
-    try:
-        supabase_admin_confirm_email(normalized_email)
-    except SupabaseAuthError:
-        # Local auth flow should keep working even when Supabase admin confirmation is unavailable.
-        pass
-
-    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
-    if not profile:
-        profile = CreatorProfile(user_id=user.id, multilingual_profile=[user.language], preferences={})
-        db.add(profile)
-
-    profile.preferences = {
-        **(profile.preferences or {}),
-        "email_code_verified": True,
-        "email_verified_at": datetime.now(tz=UTC).isoformat(),
-        "email_verification_method": "password_fallback",
-    }
-    db.add(profile)
-    db.commit()
-
-    credential = db.scalar(select(AuthCredential).where(AuthCredential.user_id == user.id))
-    return _session_payload(user, credential)
-
-
 @router.post("/signup", response_model=AuthSessionResponse)
 def signup(payload: AuthSignupRequest, db: Session = Depends(get_db)) -> AuthSessionResponse:
     raise HTTPException(
@@ -574,6 +533,19 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
             user.onboarding_complete = True
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    profile_preferences = (
+        profile.preferences if profile and isinstance(profile.preferences, dict) else {}
+    )
+    if (
+        profile
+        and profile_preferences.get("email_verification_method") == "pending"
+        and not profile_preferences.get("email_code_verified", False)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Please verify your email using the code sent during signup before logging in.",
+        )
+
     fallback_login = isinstance(auth_payload, dict) and auth_payload.get("access_token") == "fallback-token"
 
     if credential is None and user.id:
