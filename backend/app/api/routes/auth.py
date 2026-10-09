@@ -34,7 +34,6 @@ from app.services.auth import (
     stable_fallback_user_id,
     supabase_mark_onboarding_complete,
     supabase_request_password_reset,
-    supabase_admin_confirm_email,
     supabase_get_user,
     supabase_sign_up,
     supabase_sign_in,
@@ -534,6 +533,19 @@ def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthSessi
             user.onboarding_complete = True
 
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    profile_preferences = (
+        profile.preferences if profile and isinstance(profile.preferences, dict) else {}
+    )
+    if (
+        profile
+        and profile_preferences.get("email_verification_method") == "pending"
+        and not profile_preferences.get("email_code_verified", False)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Please verify your email using the code sent during signup before logging in.",
+        )
+
     fallback_login = isinstance(auth_payload, dict) and auth_payload.get("access_token") == "fallback-token"
 
     if credential is None and user.id:
