@@ -243,6 +243,7 @@ export default function ComposePage() {
       };
 
       let draft: Awaited<ReturnType<typeof createDistributionDraft>>;
+      let recoveredFromStaleDraft = false;
       try {
         draft = await createDistributionDraft({
           ...draftPayload,
@@ -255,6 +256,7 @@ export default function ComposePage() {
         if (!resumedPostId || !/draft not found/i.test(message)) throw err;
 
         setResumedPostId(null);
+        recoveredFromStaleDraft = true;
         draft = await createDistributionDraft(draftPayload);
       }
 
@@ -281,7 +283,7 @@ export default function ComposePage() {
 
       await queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
       setNotice(
-        resumedPostId
+        resumedPostId && !recoveredFromStaleDraft
           ? "Draft updated. Review below, then approve or publish."
           : "Draft generated and saved. Review below, then approve or publish.",
       );
