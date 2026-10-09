@@ -15,8 +15,7 @@ from app.usage import ledger
 
 COOKIE = "xcr8_usage_session"
 LOGIN_PATHS = {"/api/v1/auth/login", "/api/v1/auth/google/session",
-               "/api/v1/auth/signup/verify-code", "/api/v1/auth/signup/verify-link",
-               "/api/v1/auth/signup/verify-password"}
+               "/api/v1/auth/signup/verify-code", "/api/v1/auth/signup/verify-link"}
 
 
 def sign_user(user_id, expires):
