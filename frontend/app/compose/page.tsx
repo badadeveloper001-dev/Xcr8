@@ -134,9 +134,21 @@ export default function ComposePage() {
               try {
                 const savedDraft = await getDistributionDraft(userId as number, Number(saved.postId));
                 validPostId = savedDraft.post_id;
-              } catch {
-                // Keep the user's local caption/media, but start a fresh server draft.
-                validPostId = null;
+              } catch (err) {
+                const message = getApiErrorMessage(err, "");
+                if (/draft not found/i.test(message)) {
+                  // Only a confirmed stale/non-editable draft should be replaced.
+                  validPostId = null;
+                } else {
+                  // A network/server failure does not prove the saved draft is gone.
+                  // Keep its ID so a later retry can update it instead of duplicating it.
+                  validPostId = Number(saved.postId);
+                  if (!cancelled) {
+                    setNotice(
+                      "Your local draft is available, but Xcr8 couldn't verify its saved server draft. We'll keep it linked and avoid creating a duplicate.",
+                    );
+                  }
+                }
               }
             }
             if (cancelled) return;
