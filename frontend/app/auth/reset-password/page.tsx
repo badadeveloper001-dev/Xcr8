@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense } from "react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { confirmPasswordReset, getApiErrorMessage } from "@/lib/api";
@@ -11,7 +11,15 @@ import { Logo } from "@/components/logo";
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = useMemo(() => searchParams.get("token") ?? "", [searchParams]);
+  const [token, setToken] = useState("");
+
+  useEffect(() => {
+    // Supabase recovery links commonly return the access token in the URL
+    // fragment; also accept a query token for compatible/custom templates.
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const queryToken = searchParams.get("token");
+    setToken(queryToken ?? fragment.get("access_token") ?? "");
+  }, [searchParams]);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -134,7 +142,7 @@ function ResetPasswordContent() {
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {[
               "Strong passwords protect your workspace",
-              "A new password signs you in immediately",
+              "Return to login after updating your password",
             ].map((item) => (
               <div key={item} className="surface-soft rounded-2xl px-3 py-2 text-xs text-slate-400 light:text-slate-600">
                 {item}
