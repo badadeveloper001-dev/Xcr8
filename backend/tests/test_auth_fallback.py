@@ -40,3 +40,17 @@ def test_signup_request_code_falls_back_when_supabase_is_unavailable(monkeypatch
     payload = response.json()
     assert payload["message"]
     assert "message" in payload
+
+
+def test_onboarding_and_profile_take_user_id_from_body_not_query():
+    """Regression: user_id belongs to the JSON payload and auth comes from session cookie."""
+    schema = app.openapi()
+
+    for path in ("/api/v1/auth/onboarding", "/api/v1/auth/profile"):
+        operation = schema["paths"][path]["post"]
+        query_user_ids = [
+            parameter
+            for parameter in operation.get("parameters", [])
+            if parameter.get("name") == "user_id" and parameter.get("in") == "query"
+        ]
+        assert query_user_ids == []

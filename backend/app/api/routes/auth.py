@@ -27,7 +27,7 @@ from app.schemas.mvp import (
     PasswordResetRequestResponse,
     SignupResponse,
 )
-from app.services.current_user import current_user, require_user_match
+from app.services.current_user import current_user
 from app.services.entitlements import effective_plan_id
 from app.services.auth import (
     SupabaseAuthError,
@@ -778,7 +778,7 @@ def update_avatar(
 def update_profile(
     payload: AuthProfileUpdateRequest,
     db: Session = Depends(get_db),
-    _auth_user = Depends(require_user_match),
+    auth_user: User = Depends(current_user),
 ) -> AuthSessionResponse:
     if payload.user_id != auth_user.id:
         raise HTTPException(status_code=403, detail="This request belongs to another account.")
@@ -833,7 +833,7 @@ def update_profile(
 def onboarding(
     payload: OnboardingRequest,
     db: Session = Depends(get_db),
-    _auth_user = Depends(require_user_match),
+    auth_user: User = Depends(current_user),
 ) -> AuthSessionResponse:
     if payload.user_id != auth_user.id:
         raise HTTPException(status_code=403, detail="This request belongs to another account.")
