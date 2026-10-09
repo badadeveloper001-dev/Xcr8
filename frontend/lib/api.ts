@@ -115,11 +115,6 @@ export type SignupVerifyLinkPayload = {
   type?: "email" | "signup";
 };
 
-export type SignupVerifyPasswordPayload = {
-  email: string;
-  password: string;
-};
-
 export type LoginPayload = {
   email: string;
   password: string;
@@ -652,16 +647,6 @@ export async function verifySignupCode(payload: SignupVerifyCodePayload): Promis
 
 export async function verifySignupLink(payload: SignupVerifyLinkPayload): Promise<SessionPayload> {
   const { data } = await apiClient.post<SessionPayload>("/api/v1/auth/signup/verify-link", payload);
-  return data;
-}
-
-export async function verifySignupPassword(
-  payload: SignupVerifyPasswordPayload,
-): Promise<SessionPayload> {
-  const { data } = await apiClient.post<SessionPayload>(
-    "/api/v1/auth/signup/verify-password",
-    payload,
-  );
   return data;
 }
 
