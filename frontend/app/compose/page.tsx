@@ -230,7 +230,7 @@ export default function ComposePage() {
         selected_platforms: selectedPlatforms,
       };
 
-      let draft;
+      let draft: Awaited<ReturnType<typeof createDistributionDraft>>;
       try {
         draft = await createDistributionDraft({
           ...draftPayload,
