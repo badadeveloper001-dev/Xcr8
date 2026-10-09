@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from difflib import SequenceMatcher
 from time import perf_counter
 
 from openai import OpenAI
@@ -34,8 +35,11 @@ SYSTEM_PROMPT = (
     "facts, names, offer, meaning, and language style. Never introduce a different topic, fake experience, "
     "unsupported claim, generic advice, or a recycled previous caption. Keep the creator's level of formality. "
     "Do not add labels such as 'Caption:', 'Creator note:', or 'Here is your post'. Do not repeat the hook inside "
-    "adapted_caption. Hashtags must be directly supported by words or named concepts in source_caption; return an "
-    "empty array when none are useful. Return JSON only, with exactly this shape: "
+    "adapted_caption. Hashtags must be topic-specific and directly supported by source_caption. Do not use generic "
+    "platform/creator/growth tags such as #contentstrategy, #creator, #contentmarketing, or #xcr8. "
+    "Prefer 3-5 precise tags for the actual subject, audience, product, place, or activity; return an "
+    "empty array rather than padding with generic tags. The adapted_caption must be a genuine editorial adaptation, "
+    "not a synonym swap or rearrangement of source sentences. Rebuild the message around a fresh opening or framing, vary sentence structure, and make deliberate platform-specific choices. Keep product names, places, dates, ingredients, offers, and claims accurate. Do not invent testimonials, outcomes, prices, or facts. If the source is already short, make only the changes needed for a natural platform-native version rather than padding it. Return JSON only, with exactly this shape: "
     "{\"adapted_caption\":\"...\",\"hashtags\":[\"#example\"],\"hook\":\"...\"}. "
     "For Instagram, use readable spacing and at most 5 useful hashtags. For Facebook, favor natural paragraphs "
     "and avoid hashtag stuffing. For Threads, be conversational and stay within 500 characters. For YouTube "
@@ -268,6 +272,10 @@ def _extract_keywords(text: str, max_items: int = 4) -> list[str]:
         "really",
         "very",
         "more",
+        "launching", "collection", "saturday", "sunday", "monday", "tuesday",
+        "wednesday", "thursday", "friday", "today", "tomorrow", "our", "you",
+        "post", "caption", "content", "creator", "creators", "business", "brand",
+        "using", "make", "made", "show", "share", "help", "want",
     }
     deduped: list[str] = []
     for token in tokens:
@@ -319,6 +327,33 @@ def _has_source_anchor(candidate: str, source_text: str, language: str) -> bool:
     candidate_tokens = set(_extract_keywords(candidate, max_items=40))
     return any(keyword in candidate_tokens for keyword in source_keywords)
 
+def _is_meaningful_rewrite(candidate: str, source_text: str) -> bool:
+    """Reject copy edits and sentence/word rearrangements while allowing fact-preserving rewrites."""
+    tokenize = lambda value: re.findall(r"[a-z0-9]+", value.lower())
+    source_tokens = tokenize(source_text)
+    adapted_tokens = tokenize(candidate)
+    if not source_tokens or not adapted_tokens:
+        return False
+
+    sequence_similarity = SequenceMatcher(None, source_tokens, adapted_tokens).ratio()
+    if sequence_similarity >= 0.84:
+        return False
+
+    # Ignore common grammatical words when checking whether the content itself was rewritten.
+    stop_words = {
+        "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "each",
+        "for", "from", "has", "have", "in", "is", "it", "its", "of", "on", "or",
+        "our", "the", "their", "this", "to", "was", "were", "with", "you", "your",
+    }
+    source_content = {token for token in source_tokens if token not in stop_words}
+    adapted_content = {token for token in adapted_tokens if token not in stop_words}
+    if not source_content or not adapted_content:
+        return sequence_similarity < 0.65
+
+    content_overlap = len(source_content & adapted_content) / len(source_content | adapted_content)
+    return content_overlap <= 0.88
+
+
 
 _VOLATILE_MEMORY_KEYS = {
     "last_master_caption",
@@ -361,6 +396,17 @@ def _build_contextual_hashtags(source_text: str, platform: str, language: str) -
             merged.append(tag)
     return merged[:8]
 
+_GENERIC_HASHTAGS = {
+    "#xcr8", "#creatoros", "#contentstrategy", "#contentmarketing",
+    "#instagramcreator", "#tiktokcreator", "#xcreator", "#linkedincreator",
+    "#facebookcreator", "#fbcreator", "#shortscreator", "#threadscreator",
+    "#creator", "#globalcreator", "#afrodigital",
+}
+
+
+def _remove_generic_hashtags(hashtags: list[str]) -> list[str]:
+    return [tag for tag in hashtags if tag.lower() not in _GENERIC_HASHTAGS]
+
 
 def adapt_caption(text: str, platform: str, language: str, creator_memory: dict) -> dict:
     if not settings.openai_api_key and not settings.deepseek_api_key:
@@ -397,6 +443,15 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
                                     ),
                                     "language_profile": creator_memory.get("language_profile", {}),
                                 },
+                                "platform_guidance": {
+                                    "instagram": "Lead with a clear, relatable opening; use airy spacing and a natural community tone.",
+                                    "tiktok": "Use a punchy, spoken-language opening that feels native to a short video; avoid forced trends or bait.",
+                                    "linkedin": "Frame the concrete lesson or professional relevance; use a thoughtful, credible voice.",
+                                    "x": "Make one sharp point in concise, conversational language; prioritize clarity over hype.",
+                                    "facebook": "Use a warm, natural community-facing voice and a complete thought.",
+                                    "threads": "Sound conversational and personal without engagement bait.",
+                                    "youtube_shorts": "Keep it concise, searchable, and tied directly to what viewers will see.",
+                                }.get(platform.lower(), "Make the caption natural for the selected platform without inventing facts."),
                                 "constraints": {
                                     "max_caption_length": PLATFORM_LIMITS.get(platform, 2200),
                                     "hook_max_length": 180,
@@ -419,6 +474,7 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
             if not isinstance(hashtags, list):
                 hashtags = []
             hashtags = [str(tag).strip() for tag in hashtags if str(tag).strip().startswith("#")]
+            hashtags = _remove_generic_hashtags(hashtags)
             if not hashtags:
                 hashtags = _build_contextual_hashtags(text, platform, language)
 
@@ -426,8 +482,9 @@ def adapt_caption(text: str, platform: str, language: str, creator_memory: dict)
                 not adapted_caption
                 or _looks_generic(adapted_caption)
                 or not _has_source_anchor(adapted_caption, text, language)
+                or not _is_meaningful_rewrite(adapted_caption, text)
             ):
-                raise ValueError("Caption provider returned a generic or unrelated adaptation")
+                raise ValueError("Caption provider returned a generic, unchanged, or unrelated adaptation")
 
             if _looks_generic(hook):
                 hook = _build_dynamic_hook(text, platform)

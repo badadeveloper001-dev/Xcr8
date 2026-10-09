@@ -43,3 +43,8 @@ def test_caption_fallback_does_not_add_xcr8_promotional_hashtags():
 
     assert "#xcr8" not in result["hashtags"]
     assert "#creatoros" not in result["hashtags"]
+    assert "#contentstrategy" not in result["hashtags"]
+    assert "#instagramcreator" not in result["hashtags"]
+    assert "#contentmarketing" not in result["hashtags"]
+    assert "#skincare" in result["hashtags"]
+    assert "#lagos" in result["hashtags"]

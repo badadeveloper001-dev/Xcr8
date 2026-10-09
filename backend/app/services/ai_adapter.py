@@ -134,6 +134,10 @@ def _extract_keywords(text: str, max_items: int = 3) -> list[str]:
         "what",
         "where",
         "while",
+        "launching", "collection", "saturday", "sunday", "monday", "tuesday",
+        "wednesday", "thursday", "friday", "today", "tomorrow", "our", "you",
+        "post", "caption", "content", "creator", "creators", "business", "brand",
+        "using", "make", "made", "show", "share", "help", "want",
     }
     result: list[str] = []
     for token in tokens:
@@ -174,23 +178,12 @@ def _memory_hint(creator_memory: dict) -> str:
 
 
 def _hashtags(platform: str, language: str) -> list[str]:
-    base = ["#contentstrategy"]
-    ptag = {
-        "instagram": "#instagramcreator",
-        "tiktok": "#tiktokcreator",
-        "x": "#xcreator",
-        "linkedin": "#linkedincreator",
-        "facebook": "#fbcreator",
-        "youtube_shorts": "#shortscreator",
-        "threads": "#threadscreator",
-    }.get(platform, "#creator")
-    ltag = {
-        "english": "#contentmarketing",
-        "nigerian_pidgin": "#naijacreator",
-        "yoruba": "#yorubacreator",
-        "code_switch": "#afrodigital",
-    }.get(language, "#globalcreator")
-    return [ptag, ltag, *base]
+    """Only add language-community tags when they are genuinely relevant."""
+    if language == "nigerian_pidgin":
+        return ["#naijacreator"]
+    if language == "yoruba":
+        return ["#yorubacreator"]
+    return []
 
 
 def _contextual_hashtags(text: str, platform: str, language: str) -> list[str]:
