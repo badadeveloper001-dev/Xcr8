@@ -68,13 +68,13 @@ export default function FeaturesPage() {
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: "XCR8 Features",
-    url: "https://www.xcr8.tech/features",
+    url: "https://xcr8.tech/features",
     description:
       "Features for planning, AI-assisted creation, visual production, social publishing, performance tracking, and creator growth.",
     isPartOf: {
       "@type": "WebSite",
       name: "XCR8",
-      url: "https://www.xcr8.tech",
+      url: "https://xcr8.tech",
     },
   };
 

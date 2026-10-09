@@ -103,13 +103,13 @@ const pricingJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebPage",
   name: "XCR8 Pricing",
-  url: "https://www.xcr8.tech/pricing",
+  url: "https://xcr8.tech/pricing",
   description:
     "Explore XCR8 plans for AI-assisted content creation, visual production, social publishing, and creator growth.",
   isPartOf: {
     "@type": "WebSite",
     name: "XCR8",
-    url: "https://www.xcr8.tech",
+    url: "https://xcr8.tech",
   },
 };
 

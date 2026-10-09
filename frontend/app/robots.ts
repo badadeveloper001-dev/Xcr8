@@ -13,6 +13,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin/", "/auth/", "/dashboard/", "/onboarding/", "/settings/", "/api/"],
       },
     ],
-    sitemap: "https://www.xcr8.tech/sitemap.xml",
+    sitemap: "https://xcr8.tech/sitemap.xml",
   };
 }
