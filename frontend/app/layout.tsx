@@ -12,7 +12,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.xcr8.tech"),
+  metadataBase: new URL("https://xcr8.tech"),
   title: {
     default: "XCR8 | AI Creator Workspace",
     template: "%s | XCR8",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     title: "XCR8 | AI Creator Workspace",
     description:
       "Plan, create, publish, and grow with XCR8, an AI creator workspace built for creators and marketing teams.",
-    url: "https://www.xcr8.tech/welcome",
+    url: "https://xcr8.tech/welcome",
     locale: "en_US",
   },
   twitter: {
@@ -46,7 +46,7 @@ const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "XCR8",
-  url: "https://www.xcr8.tech",
+  url: "https://xcr8.tech",
   description:
     "XCR8 is an AI creator workspace for planning content, creating visuals, publishing across social platforms, and tracking performance.",
 };
@@ -55,7 +55,7 @@ const websiteSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "XCR8",
-  url: "https://www.xcr8.tech",
+  url: "https://xcr8.tech",
   description:
     "AI creator workspace for planning, creating, publishing, and tracking social content.",
 };
