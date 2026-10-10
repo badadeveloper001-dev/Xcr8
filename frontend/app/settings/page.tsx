@@ -1047,7 +1047,7 @@ export default function SettingsPage() {
                         Six-digit code sent to {email || "your account email"}
                         <input
                           value={deletionCode}
-                          onChange={(event) => setDeletionCode(event.target.value.replace(/\\D/g, "").slice(0, 6))}
+                          onChange={(event) => setDeletionCode(event.target.value.split("").filter((character) => character >= "0" && character <= "9").join("").slice(0, 6))}
                           inputMode="numeric"
                           autoComplete="one-time-code"
                           maxLength={6}
