@@ -102,13 +102,19 @@ def _collect_media_urls(posts: list[ContentPost]) -> set[str]:
     return urls
 
 
-def _delete_referenced_media(urls: set[str]) -> None:
+def _delete_referenced_media(urls: set[str], extra_object_paths: set[str] | None = None) -> None:
     """Remove only media URLs that can be tied to XCR8's own configured storage."""
     base_url = str(settings.supabase_url or "").strip().rstrip("/")
     service_key = str(settings.supabase_service_role_key or "").strip()
     bucket = str(settings.storage_bucket or "xcr8-assets").strip() or "xcr8-assets"
     storage_host = urlparse(base_url).netloc.lower() if base_url else ""
-    object_paths: set[str] = set()
+    object_paths: set[str] = {
+        path.strip("/")
+        for path in (extra_object_paths or set())
+        if isinstance(path, str)
+        and path.strip("/").startswith("uploads/")
+        and not any(part == ".." for part in path.strip("/").split("/"))
+    }
     local_paths: set[Path] = set()
 
     for raw_url in urls:
@@ -157,6 +163,8 @@ def _delete_referenced_media(urls: set[str]) -> None:
                 json={"prefixes": sorted(object_paths)},
             )
         if response.status_code >= 400:
+            if response.status_code in {400, 404} and "not found" in response.text.lower():
+                return
             logger.error("Storage cleanup failed with status %s", response.status_code)
             raise HTTPException(
                 status_code=503,
@@ -370,6 +378,13 @@ def _delete_local_account_data(db: Session, user: User) -> None:
     posts = list(db.scalars(select(ContentPost).where(ContentPost.user_id == user_id)).all())
     post_ids = [post.id for post in posts]
     media_urls = _collect_media_urls(posts)
+    usage_rows = list(db.scalars(select(UsageLedger).where(UsageLedger.user_id == user_id)).all())
+    upload_object_paths = {
+        str((row.event_meta or {}).get("object_path") or "").strip()
+        for row in usage_rows
+        if isinstance(row.event_meta, dict)
+        and str((row.event_meta or {}).get("object_path") or "").strip()
+    }
     profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user_id))
     profile_preferences = profile.preferences if profile and isinstance(profile.preferences, dict) else {}
     avatar_url = profile_preferences.get("avatar_url")
@@ -428,7 +443,7 @@ def _delete_local_account_data(db: Session, user: User) -> None:
 
     # Remove storage objects before mutating database rows. If this fails, the account
     # remains intact and the user can retry from the same authenticated session.
-    _delete_referenced_media(media_urls)
+    _delete_referenced_media(media_urls, upload_object_paths)
 
     # Remove visits tied to personal referral/watermark links before those links go away.
     visit_filters = []
