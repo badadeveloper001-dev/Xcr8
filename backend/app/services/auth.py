@@ -408,7 +408,7 @@ def supabase_delete_user_by_email(email: str) -> bool:
     page = 1
     per_page = 200
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with httpx.Client(timeout=5.0) as client:
             while True:
                 response = client.get(
                     f"{url}/auth/v1/admin/users",
