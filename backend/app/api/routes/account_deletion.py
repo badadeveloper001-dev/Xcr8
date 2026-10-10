@@ -479,9 +479,7 @@ def _delete_local_account_data(db: Session, user: User) -> None:
         db.execute(delete(TrendRecommendation).where(TrendRecommendation.trend_signal_id.in_(trend_ids)))
         db.execute(delete(IntelligenceFeedback).where(IntelligenceFeedback.trend_signal_id.in_(trend_ids)))
 
-    db.execute(delete(PostVariant).where(PostVariant.post_id.in_(post_ids)) if post_ids else delete(PostVariant).where(False))
     db.execute(delete(ScheduledPost).where(or_(ScheduledPost.user_id == user_id, ScheduledPost.workspace_id.in_(empty_workspace_ids))) if empty_workspace_ids else delete(ScheduledPost).where(ScheduledPost.user_id == user_id))
-    db.execute(delete(AIGeneration).where(AIGeneration.post_id.in_(post_ids)) if post_ids else delete(AIGeneration).where(False))
     db.execute(delete(ContentPost).where(workspace_filter))
     db.execute(delete(WatermarkLink).where(or_(WatermarkLink.creator_user_id == user_id, WatermarkLink.content_post_id.in_(post_ids) if post_ids else False)))
     db.execute(delete(ConnectedPlatform).where(or_(ConnectedPlatform.user_id == user_id, ConnectedPlatform.workspace_id.in_(empty_workspace_ids))) if empty_workspace_ids else delete(ConnectedPlatform).where(ConnectedPlatform.user_id == user_id))
