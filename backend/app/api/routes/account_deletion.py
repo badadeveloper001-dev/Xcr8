@@ -258,6 +258,16 @@ def _revoke_external_platform_tokens(connections: list[tuple[str, dict]]) -> lis
     return results
 
 
+
+def _payment_events_allow_detachment(db: Session) -> bool:
+    """Require the accounting-preservation migration before deleting any account data."""
+    try:
+        columns = inspect(db.get_bind()).get_columns("payment_events")
+    except Exception:  # noqa: BLE001 - unknown schema must fail closed
+        return False
+    return any(column.get("name") == "user_id" and column.get("nullable") is True for column in columns)
+
+
 def _delete_unmapped_user_telemetry(db: Session, user_id: int) -> None:
     """Remove user-linked Pulse telemetry tables created by SQL migrations, not ORM models."""
     bind = db.get_bind()
@@ -514,6 +524,11 @@ def delete_account(
         for row in db.scalars(select(ConnectedPlatform).where(ConnectedPlatform.user_id == user.id)).all()
     ]
     try:
+        if not _payment_events_allow_detachment(db):
+            raise HTTPException(
+                status_code=503,
+                detail="The account-deletion database migration is not applied. No account data was deleted; please retry later.",
+            )
         _delete_local_account_data(db, user)
         # Remove the Supabase identity before committing local deletion. If identity
         # administration fails, rollback keeps the local account intact and retryable.
