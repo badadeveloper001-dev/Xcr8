@@ -9,7 +9,7 @@ import tempfile
 from urllib.parse import unquote, urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
@@ -354,6 +354,7 @@ def request_account_deletion_code(
 @router.post("/deletion")
 def delete_account(
     payload: DeleteAccountRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
@@ -414,7 +415,7 @@ def delete_account(
         COOKIE,
         path="/",
         httponly=True,
-        secure=bool(os.getenv("ENVIRONMENT") == "production"),
+        secure=request.url.scheme == "https" or os.getenv("ENVIRONMENT") == "production",
         samesite="lax",
     )
     return {"deleted": True, "message": "Your XCR8 account and associated personal data have been deleted."}
