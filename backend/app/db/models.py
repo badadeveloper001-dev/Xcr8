@@ -519,7 +519,7 @@ class PaymentEvent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     provider_event_id: Mapped[str] = mapped_column(String(160), index=True)
     provider: Mapped[str] = mapped_column(String(80), index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     plan: Mapped[str] = mapped_column(String(32), index=True)
     status: Mapped[str] = mapped_column(String(32), index=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
