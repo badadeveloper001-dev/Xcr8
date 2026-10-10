@@ -338,6 +338,128 @@ def verify_signup_email_code(email: str, code: str, code_hash: str) -> bool:
     return hmac.compare_digest(expected, code_hash)
 
 
+
+def send_account_deletion_code(email: str, code: str) -> None:
+    """Send a purpose-specific, time-limited confirmation code for account deletion."""
+    _ensure_smtp_configured()
+
+    message = EmailMessage()
+    message["Subject"] = "Confirm your XCR8 account deletion"
+    sender_name = settings.smtp_from_name.strip() or "XCR8"
+    message["From"] = f"{sender_name} <{settings.smtp_from_email.strip()}>"
+    message["To"] = email
+    message.set_content(
+        (
+            "A request was made to permanently delete your XCR8 account.\n\n"
+            f"Your confirmation code is: {code}\n"
+            f"This code expires in {max(1, int(settings.signup_code_ttl_minutes))} minutes.\n\n"
+            "Enter this code in XCR8 only if you requested account deletion. "
+            "If you did not request this, ignore this email; your account will remain active."
+        )
+    )
+
+    try:
+        if settings.smtp_use_ssl:
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+                server.login(settings.smtp_username, settings.smtp_password)
+                server.send_message(message)
+            return
+
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+            server.ehlo()
+            if settings.smtp_use_tls:
+                server.starttls()
+                server.ehlo()
+            server.login(settings.smtp_username, settings.smtp_password)
+            server.send_message(message)
+    except (OSError, smtplib.SMTPException) as exc:
+        raise SupabaseAuthError(
+            detail="The account-deletion confirmation email could not be sent. Please try again later.",
+            status_code=503,
+        ) from exc
+
+
+def supabase_delete_user_by_email(email: str) -> bool:
+    """Delete exactly matching Supabase Auth identity; fail closed on admin API errors.
+
+    Returns False only when Supabase is not configured at all or no matching identity exists.
+    If Supabase is configured but admin deletion cannot be safely completed, raises an error.
+    """
+    url = str(settings.supabase_url or "").strip().rstrip("/")
+    key = str(settings.supabase_service_role_key or "").strip()
+    if not url and not key:
+        return False
+    if not url or not key:
+        raise SupabaseAuthError(
+            detail="Account deletion is temporarily unavailable because identity administration is not configured.",
+            status_code=503,
+        )
+
+    normalized = str(email or "").strip().lower()
+    if not normalized:
+        raise SupabaseAuthError("The account email is missing.", 400)
+
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    matching_id: str | None = None
+    page = 1
+    per_page = 200
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            while True:
+                response = client.get(
+                    f"{url}/auth/v1/admin/users",
+                    headers=headers,
+                    params={"page": page, "per_page": per_page},
+                )
+                if response.status_code >= 400:
+                    raise SupabaseAuthError(
+                        "Could not verify the account's authentication identity. Please try again later.",
+                        503,
+                    )
+                payload = response.json()
+                users = payload.get("users") if isinstance(payload, dict) else None
+                if not isinstance(users, list):
+                    raise SupabaseAuthError("The authentication service returned an invalid response.", 503)
+                matches = [
+                    item for item in users
+                    if isinstance(item, dict)
+                    and str(item.get("email") or "").strip().lower() == normalized
+                    and str(item.get("id") or "").strip()
+                ]
+                if len(matches) > 1:
+                    raise SupabaseAuthError(
+                        "Account deletion needs support because multiple authentication identities match this email.",
+                        503,
+                    )
+                if matches:
+                    matching_id = str(matches[0]["id"])
+                    break
+                if len(users) < per_page:
+                    break
+                page += 1
+
+            if not matching_id:
+                return False
+
+            response = client.delete(f"{url}/auth/v1/admin/users/{matching_id}", headers=headers)
+            if response.status_code not in {200, 204}:
+                raise SupabaseAuthError(
+                    "Could not remove the account's authentication identity. No local account data was deleted.",
+                    503,
+                )
+            return True
+    except SupabaseAuthError:
+        raise
+    except (httpx.RequestError, ValueError, TypeError) as exc:
+        raise SupabaseAuthError(
+            "The authentication service is temporarily unavailable. No local account data was deleted.",
+            503,
+        ) from exc
+
 def send_signup_email_code(email: str, code: str) -> None:
     _ensure_smtp_configured()
 

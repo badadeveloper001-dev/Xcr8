@@ -27,6 +27,7 @@ import { updateAvatarUrl } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SocialPlatformIcon, type SocialPlatformId } from "@/components/social-platform-icon";
 import { useActiveCreatorIdentity } from "@/lib/use-active-creator-identity";
+import { deleteOwnAccount, requestAccountDeletionCode } from "@/lib/account-deletion";
 
 const platforms = [
   { id: "instagram", label: "Instagram", cls: "badge-ig" },
@@ -68,6 +69,12 @@ export default function SettingsPage() {
   const [profilePhone, setProfilePhone] = useState(phone ?? "");
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDescription, setWorkspaceDescription] = useState("");
+  const [showAccountDeletion, setShowAccountDeletion] = useState(false);
+  const [deletionCodeRequested, setDeletionCodeRequested] = useState(false);
+  const [deletionCode, setDeletionCode] = useState("");
+  const [deletionConfirmation, setDeletionConfirmation] = useState("");
+  const [requestingDeletionCode, setRequestingDeletionCode] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (hasHydrated && !userId) router.replace("/auth/login");
@@ -326,6 +333,58 @@ export default function SettingsPage() {
       setError(getApiErrorMessage(err, "Could not upload profile picture."));
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+
+  const handleRequestDeletionCode = async () => {
+    setRequestingDeletionCode(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await requestAccountDeletionCode();
+      setDeletionCodeRequested(true);
+      setNotice(result.message);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not send the account-deletion confirmation code."));
+    } finally {
+      setRequestingDeletionCode(false);
+    }
+  };
+
+  const handleAccountDeletion = async () => {
+    if (deletionConfirmation !== "DELETE") {
+      setError('Type "DELETE" exactly to confirm permanent account deletion.');
+      return;
+    }
+    if (deletionCode.length !== 6) {
+      setError("Enter the six-digit confirmation code sent to your email.");
+      return;
+    }
+
+    setDeletingAccount(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await deleteOwnAccount({ code: deletionCode, confirmation: "DELETE" });
+      queryClient.clear();
+      clearSession();
+      try {
+        localStorage.removeItem("xcr8-settings-alerts");
+      } catch {
+        // Session state is already cleared; local preference cleanup is best effort.
+      }
+      const manualReview = result.platforms_needing_manual_review ?? [];
+      window.alert(
+        manualReview.length
+          ? `Your XCR8 account has been deleted. Please also review XCR8 access in these platform settings: ${manualReview.join(", ")}.`
+          : "Your XCR8 account and associated personal data have been deleted.",
+      );
+      router.replace("/auth/login");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Account deletion could not be completed. Your account has not been deleted."));
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -934,6 +993,114 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-slate-500">
             Connect only channels you actively publish to this week for cleaner recommendations.
           </p>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.32, delay: 0.1 }}
+          className="rounded-2xl border border-rose-500/30 bg-rose-500/[0.04] p-5"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-rose-500/10 p-2 text-rose-400">
+              <Trash2 size={17} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-rose-300 light:text-rose-700">Delete account</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Permanently remove your XCR8 account, creator profiles, content, memories, connected credentials,
+                and associated personal data. Payment records that must be retained for accounting may be kept
+                without your account link.
+              </p>
+              {!showAccountDeletion ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAccountDeletion(true);
+                    setError(null);
+                    setNotice(null);
+                  }}
+                  className="mt-4 rounded-xl border border-rose-500/35 bg-rose-500/10 px-4 py-2.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 light:text-rose-700"
+                >
+                  Continue to deletion
+                </button>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-xl border border-rose-500/20 bg-black/10 p-3 text-xs leading-5 text-slate-300 light:bg-white light:text-slate-700">
+                    <strong className="text-rose-300 light:text-rose-700">This cannot be undone.</strong>
+                    {" "}Your account data will be removed. Shared workspaces are preserved for their remaining members.
+                    XCR8 will attempt to revoke connected-platform access; if a provider does not confirm revocation,
+                    you may need to remove XCR8 from that platform's security settings.
+                  </div>
+                  {!deletionCodeRequested ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleRequestDeletionCode()}
+                      disabled={requestingDeletionCode}
+                      className="w-full rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-60 light:text-rose-700"
+                    >
+                      {requestingDeletionCode ? "Sending confirmation code..." : "Email me a confirmation code"}
+                    </button>
+                  ) : (
+                    <>
+                      <label className="block text-xs font-medium text-slate-300 light:text-slate-700">
+                        Six-digit code sent to {email || "your account email"}
+                        <input
+                          value={deletionCode}
+                          onChange={(event) => setDeletionCode(event.target.value.split("").filter((character) => character >= "0" && character <= "9").join("").slice(0, 6))}
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          placeholder="000000"
+                          className="xcr8-input mt-1.5 w-full"
+                        />
+                      </label>
+                      <label className="block text-xs font-medium text-slate-300 light:text-slate-700">
+                        Type DELETE to confirm
+                        <input
+                          value={deletionConfirmation}
+                          onChange={(event) => setDeletionConfirmation(event.target.value)}
+                          autoComplete="off"
+                          placeholder="DELETE"
+                          className="xcr8-input mt-1.5 w-full"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void handleAccountDeletion()}
+                        disabled={deletingAccount || deletionCode.length !== 6 || deletionConfirmation !== "DELETE"}
+                        className="w-full rounded-xl bg-rose-600 px-4 py-3 text-xs font-bold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingAccount ? "Deleting account..." : "Permanently delete my account"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRequestDeletionCode()}
+                        disabled={requestingDeletionCode}
+                        className="w-full rounded-xl border border-white/10 px-4 py-2.5 text-xs font-medium text-slate-400 transition hover:bg-white/5 disabled:opacity-50 light:border-slate-200 light:text-slate-600"
+                      >
+                        {requestingDeletionCode ? "Requesting..." : "Send a new code"}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAccountDeletion(false);
+                      setDeletionCodeRequested(false);
+                      setDeletionCode("");
+                      setDeletionConfirmation("");
+                      setError(null);
+                    }}
+                    disabled={deletingAccount}
+                    className="w-full rounded-xl border border-white/10 px-4 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-50 light:border-slate-200 light:text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </motion.section>
 
         <motion.div

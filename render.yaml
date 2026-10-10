@@ -28,6 +28,8 @@ services:
         - shared/**
         - ai-services/**
         - scripts/render-start-platform.sh
+        - scripts/render_dispatch_due.py
+        - migrations/**
         - render.yaml
     envVars:
       - fromGroup: xcr8-generated-secrets
@@ -49,6 +51,8 @@ services:
         value: "true"
       - key: PULSE_USER_EMAIL_ENABLED
         value: "false"
+      - key: ACCOUNT_DELETION_ENCRYPTION_KEY
+        sync: false
       - key: DATABASE_URL
         sync: false
       - key: FRONTEND_URL

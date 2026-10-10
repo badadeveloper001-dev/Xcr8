@@ -100,6 +100,17 @@ def install(app):
                 user_id = verify_user(request.cookies.get(COOKIE, ""))
                 if not user_id:
                     return JSONResponse({"detail": "Please sign in again to use AI."}, status_code=401)
+                # A valid signature is insufficient after account deletion; verify the local row.
+                try:
+                    from app.db.models import User
+                    from app.db.session import SessionLocal
+
+                    with SessionLocal() as auth_db:
+                        if auth_db.get(User, user_id) is None:
+                            return JSONResponse({"detail": "This XCR8 account no longer exists. Please sign in again."}, status_code=401)
+                except Exception:  # noqa: BLE001 - fail closed if account status cannot be verified
+                    ledger.log.exception("Could not verify signed session against the account database")
+                    return JSONResponse({"detail": "Authentication could not be verified. Please retry."}, status_code=503)
                 # /distribution/approve has no user_id in its payload. Do not consume
                 # its body here or require a client identity field that the route does not carry.
                 if path != "/api/v1/distribution/approve":
