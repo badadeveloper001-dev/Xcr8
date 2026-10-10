@@ -863,17 +863,26 @@ def delete_account(
         connections = [
             {
                 "platform": row.platform.value if hasattr(row.platform, "value") else str(row.platform),
-                "auth_meta": dict(row.auth_meta or {}),
+                "auth_meta": {
+                    key: (row.auth_meta or {}).get(key)
+                    for key in ("access_token", "refresh_token", "source_user_access_token", "connection_method")
+                    if isinstance(row.auth_meta, dict) and (row.auth_meta or {}).get(key) is not None
+                },
             }
             for row in db.scalars(
                 select(ConnectedPlatform).where(ConnectedPlatform.user_id == user.id)
             ).all()
         ]
-        billing_meta = dict(user.billing_meta or {}) if isinstance(user.billing_meta, dict) else {}
+        billing_meta = user.billing_meta if isinstance(user.billing_meta, dict) else {}
+        # Keep only the fields needed to verify/cancel recurring billing.
+        recovery_billing_meta = {
+            "paystack_subscription_code": str(billing_meta.get("paystack_subscription_code") or ""),
+            "subscription_status": str(billing_meta.get("subscription_status") or ""),
+        }
         resources = _delete_local_account_data(db, user)
         recovery_payload = {
             "email": user.email,
-            "billing_meta": billing_meta,
+            "billing_meta": recovery_billing_meta,
             "connections": connections,
             "media_urls": resources["media_urls"],
             "upload_object_paths": resources["upload_object_paths"],

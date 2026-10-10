@@ -698,7 +698,7 @@ class AccountDeletionJob(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     # Deliberately no FK: the job must survive deletion of its user.
-    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="requested", index=True)
     current_stage: Mapped[str] = mapped_column(String(64), default="queued")
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
