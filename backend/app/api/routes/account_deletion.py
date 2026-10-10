@@ -108,10 +108,16 @@ def _delete_referenced_media(urls: set[str], extra_object_paths: set[str] | None
     service_key = str(settings.supabase_service_role_key or "").strip()
     bucket = str(settings.storage_bucket or "xcr8-assets").strip() or "xcr8-assets"
     storage_host = urlparse(base_url).netloc.lower() if base_url else ""
+    if not base_url and any("/storage/v1/object/public/" in urlparse(raw_url).path for raw_url in urls):
+        raise HTTPException(
+            status_code=503,
+            detail="XCR8 could not verify its storage configuration. No account database records were deleted; please retry.",
+        )
     object_paths: set[str] = {
         path.strip("/")
         for path in (extra_object_paths or set())
-        if isinstance(path, str)
+        if base_url
+        and isinstance(path, str)
         and path.strip("/").startswith("uploads/")
         and not any(part == ".." for part in path.strip("/").split("/"))
     }
