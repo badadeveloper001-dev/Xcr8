@@ -357,7 +357,7 @@ export default function SettingsPage() {
       setError('Type "DELETE" exactly to confirm permanent account deletion.');
       return;
     }
-    if (!/^\\d{6}$/.test(deletionCode)) {
+    if (deletionCode.length !== 6) {
       setError("Enter the six-digit confirmation code sent to your email.");
       return;
     }
