@@ -36,6 +36,7 @@ from app.db.models import (
     PostVariant,
     PulseAffectedUser,
     PulseEvent,
+    PulseNotification,
     ReferralCode,
     ReferralRelationship,
     ScheduledPost,
@@ -494,8 +495,9 @@ def _delete_local_account_data(db: Session, user: User) -> None:
     db.execute(delete(UsagePeriod).where(UsagePeriod.user_id == user_id))
     db.execute(delete(UsageAccount).where(UsageAccount.user_id == user_id))
     db.execute(delete(UsageLedger).where(or_(UsageLedger.user_id == user_id, UsageLedger.workspace_id.in_(empty_workspace_ids))) if empty_workspace_ids else delete(UsageLedger).where(UsageLedger.user_id == user_id))
-    db.execute(delete(PulseEvent).where(PulseEvent.user_id == user_id))
-    db.execute(delete(PulseAffectedUser).where(PulseAffectedUser.user_id == user_id))
+    db.execute(delete(PulseEvent).where(or_(PulseEvent.user_id == user_id, PulseEvent.affected_user_email == user.email)))
+    db.execute(delete(PulseAffectedUser).where(or_(PulseAffectedUser.user_id == user_id, PulseAffectedUser.email == user.email)))
+    db.execute(delete(PulseNotification).where(PulseNotification.target == user.email))
     db.execute(delete(WorkspaceMembership).where(WorkspaceMembership.user_id == user_id))
     if empty_workspace_ids:
         # Only delete workspace records after all data tied to the now-empty workspaces is removed.
