@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlparse
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import MetaData, Table, delete, inspect, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -168,6 +168,28 @@ def _delete_referenced_media(urls: set[str]) -> None:
         ) from exc
 
 
+
+def _delete_unmapped_user_telemetry(db: Session, user_id: int) -> None:
+    """Remove user-linked Pulse telemetry tables created by SQL migrations, not ORM models."""
+    bind = db.get_bind()
+    try:
+        existing = set(inspect(bind).get_table_names())
+        metadata = MetaData()
+        # Child telemetry first; these tables intentionally do not own account identity.
+        for name in ("pulse_ai_attempts", "pulse_value_events", "pulse_ai_requests"):
+            if name not in existing:
+                continue
+            table = Table(name, metadata, autoload_with=bind)
+            if "user_id" in table.c:
+                db.execute(delete(table).where(table.c.user_id == user_id))
+    except Exception as exc:
+        logger.exception("Could not inspect or remove user-linked Pulse telemetry")
+        raise HTTPException(
+            status_code=503,
+            detail="Account deletion paused because user-linked usage telemetry could not be safely removed.",
+        ) from exc
+
+
 def _delete_local_account_data(db: Session, user: User) -> None:
     user_id = user.id
     posts = list(db.scalars(select(ContentPost).where(ContentPost.user_id == user_id)).all())
@@ -265,6 +287,8 @@ def _delete_local_account_data(db: Session, user: User) -> None:
         .where(InfluencerReferral.created_by_user_id == user_id)
         .values(created_by_user_id=None)
     )
+
+    _delete_unmapped_user_telemetry(db, user_id)
 
     # Financial payment events are retained for accounting, but detached from the account.
     db.execute(update(PaymentEvent).where(PaymentEvent.user_id == user_id).values(user_id=None))
