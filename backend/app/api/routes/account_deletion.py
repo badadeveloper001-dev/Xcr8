@@ -149,7 +149,7 @@ def _delete_referenced_media(urls: set[str]) -> None:
         "Content-Type": "application/json",
     }
     try:
-        with httpx.Client(timeout=20.0) as client:
+        with httpx.Client(timeout=8.0) as client:
             response = client.post(
                 f"{base_url}/storage/v1/object/{bucket}/remove",
                 headers=headers,
@@ -191,7 +191,7 @@ def _cancel_paystack_subscription(user: User) -> None:
 
     headers = {"Authorization": f"Bearer {secret}", "Content-Type": "application/json"}
     try:
-        with httpx.Client(timeout=12.0) as client:
+        with httpx.Client(timeout=5.0) as client:
             fetched = client.get(f"{base_url}/subscription/{quote(code, safe='')}", headers=headers)
             if fetched.status_code >= 400:
                 raise HTTPException(
@@ -250,7 +250,7 @@ def _cancel_paystack_subscription(user: User) -> None:
 def _revoke_external_platform_tokens(connections: list[tuple[str, dict]]) -> list[dict[str, str]]:
     """Best-effort provider revocation; local credential removal remains authoritative."""
     results: list[dict[str, str]] = []
-    with httpx.Client(timeout=4.0) as client:
+    with httpx.Client(timeout=3.0) as client:
         for platform, auth_meta in connections:
             meta = auth_meta if isinstance(auth_meta, dict) else {}
             access_token = str(meta.get("access_token") or "").strip()
