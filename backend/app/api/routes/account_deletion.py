@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Literal
 import tempfile
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -170,6 +170,81 @@ def _delete_referenced_media(urls: set[str]) -> None:
         ) from exc
 
 
+
+
+
+def _cancel_paystack_subscription(user: User) -> None:
+    """Disable an active recurring Paystack subscription before account data is removed."""
+    billing = user.billing_meta if isinstance(user.billing_meta, dict) else {}
+    code = str(billing.get("paystack_subscription_code") or "").strip()
+    local_status = str(billing.get("subscription_status") or "").strip().lower()
+    if not code or local_status in {"disabled", "complete", "completed", "non-renewing", "cancelled", "canceled"}:
+        return
+
+    secret = str(settings.paystack_secret_key or "").strip()
+    base_url = str(settings.paystack_base_url or "https://api.paystack.co").strip().rstrip("/")
+    if not secret:
+        raise HTTPException(
+            status_code=503,
+            detail="Your recurring subscription could not be checked or cancelled. No account data was deleted; contact support or retry later.",
+        )
+
+    headers = {"Authorization": f"Bearer {secret}", "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            fetched = client.get(f"{base_url}/subscription/{quote(code, safe='')}", headers=headers)
+            if fetched.status_code >= 400:
+                raise HTTPException(
+                    status_code=503,
+                    detail="XCR8 could not verify your recurring subscription. No account data was deleted; please retry.",
+                )
+            payload = fetched.json()
+            subscription = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(payload, dict) or payload.get("status") is not True or not isinstance(subscription, dict):
+                raise HTTPException(
+                    status_code=503,
+                    detail="XCR8 could not verify your recurring subscription. No account data was deleted; please retry.",
+                )
+
+            remote_status = str(subscription.get("status") or "").strip().lower()
+            if remote_status in {"disabled", "complete", "completed", "non-renewing", "cancelled", "canceled"}:
+                return
+            if remote_status != "active":
+                raise HTTPException(
+                    status_code=503,
+                    detail="XCR8 could not confirm the subscription's billing state. No account data was deleted; please retry.",
+                )
+
+            email_token = str(subscription.get("email_token") or "").strip()
+            if not email_token:
+                raise HTTPException(
+                    status_code=503,
+                    detail="XCR8 could not securely cancel your recurring subscription. No account data was deleted; please contact support.",
+                )
+
+            disabled = client.post(
+                f"{base_url}/subscription/disable",
+                headers=headers,
+                json={"code": code, "token": email_token},
+            )
+            if disabled.status_code >= 400:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Paystack did not confirm subscription cancellation. No account data was deleted; please retry or contact support.",
+                )
+            result = disabled.json()
+            if not isinstance(result, dict) or result.get("status") is not True:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Paystack did not confirm subscription cancellation. No account data was deleted; please retry or contact support.",
+                )
+    except HTTPException:
+        raise
+    except (httpx.RequestError, ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="XCR8 could not safely confirm subscription cancellation. No account data was deleted; please retry.",
+        ) from exc
 
 
 def _revoke_external_platform_tokens(connections: list[tuple[str, dict]]) -> list[dict[str, str]]:
@@ -530,6 +605,7 @@ def delete_account(
                 status_code=503,
                 detail="The account-deletion database migration is not applied. No account data was deleted; please retry later.",
             )
+        _cancel_paystack_subscription(user)
         _delete_local_account_data(db, user)
         # Remove the Supabase identity before committing local deletion. If identity
         # administration fails, rollback keeps the local account intact and retryable.
