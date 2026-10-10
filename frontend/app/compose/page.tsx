@@ -125,7 +125,34 @@ export default function ComposePage() {
             setSelectedPlatforms(saved.selectedPlatforms?.length ? saved.selectedPlatforms : ["instagram", "facebook"]);
             setScheduleAt(saved.scheduleAt || "");
             setMediaItems(Array.isArray(saved.mediaItems) ? saved.mediaItems : []);
-            setResumedPostId(saved.postId || null);
+
+            // Local browser drafts can outlive the server-side draft (for example,
+            // after it has been approved, scheduled, published, or removed).
+            // Verify the ID before attempting to update the server draft.
+            let validPostId: number | null = null;
+            if (Number.isInteger(saved.postId) && Number(saved.postId) > 0) {
+              try {
+                const savedDraft = await getDistributionDraft(userId as number, Number(saved.postId));
+                validPostId = savedDraft.post_id;
+              } catch (err) {
+                const message = getApiErrorMessage(err, "");
+                if (/draft not found/i.test(message)) {
+                  // Only a confirmed stale/non-editable draft should be replaced.
+                  validPostId = null;
+                } else {
+                  // A network/server failure does not prove the saved draft is gone.
+                  // Keep its ID so a later retry can update it instead of duplicating it.
+                  validPostId = Number(saved.postId);
+                  if (!cancelled) {
+                    setNotice(
+                      "Your local draft is available, but Xcr8 couldn't verify its saved server draft. We'll keep it linked and avoid creating a duplicate.",
+                    );
+                  }
+                }
+              }
+            }
+            if (cancelled) return;
+            setResumedPostId(validPostId);
           }
         } catch {
           window.localStorage.removeItem(localDraftKey);
@@ -203,9 +230,8 @@ export default function ComposePage() {
     setNotice(null);
 
     try {
-      const draft = await createDistributionDraft({
+      const draftPayload = {
         user_id: userId,
-        ...(resumedPostId ? { post_id: resumedPostId } : {}),
         title,
         media_url: mediaItems[0]?.url ?? "",
         media_urls: mediaItems.map((item) => item.url),
@@ -214,7 +240,25 @@ export default function ComposePage() {
         master_caption: caption,
         primary_language: "english",
         selected_platforms: selectedPlatforms,
-      });
+      };
+
+      let draft: Awaited<ReturnType<typeof createDistributionDraft>>;
+      let recoveredFromStaleDraft = false;
+      try {
+        draft = await createDistributionDraft({
+          ...draftPayload,
+          ...(resumedPostId ? { post_id: resumedPostId } : {}),
+        });
+      } catch (err) {
+        // A draft may become non-editable between restore and generation. The
+        // backend rejects that stale ID before reserving usage or creating content.
+        const message = getApiErrorMessage(err, "");
+        if (!resumedPostId || !/draft not found/i.test(message)) throw err;
+
+        setResumedPostId(null);
+        recoveredFromStaleDraft = true;
+        draft = await createDistributionDraft(draftPayload);
+      }
 
       setResumedPostId(draft.post_id);
       setDistributionDraft({
@@ -239,7 +283,7 @@ export default function ComposePage() {
 
       await queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
       setNotice(
-        resumedPostId
+        resumedPostId && !recoveredFromStaleDraft
           ? "Draft updated. Review below, then approve or publish."
           : "Draft generated and saved. Review below, then approve or publish.",
       );
