@@ -135,6 +135,7 @@ def test_platform_revocation_retry_tracks_duplicate_platform_connections():
     # success cannot safely skip either of two same-platform connections.
     assert pending == [
         (1, "instagram", {"access_token": "token-b"}),
+        (2, "youtube_shorts", {"access_token": "token-c"}),
     ]
 
 
