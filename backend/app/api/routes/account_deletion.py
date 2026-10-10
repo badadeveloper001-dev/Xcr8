@@ -169,6 +169,84 @@ def _delete_referenced_media(urls: set[str]) -> None:
 
 
 
+
+def _revoke_external_platform_tokens(connections: list[tuple[str, dict]]) -> list[dict[str, str]]:
+    """Best-effort provider revocation; local credential removal remains authoritative."""
+    results: list[dict[str, str]] = []
+    with httpx.Client(timeout=10.0) as client:
+        for platform, auth_meta in connections:
+            meta = auth_meta if isinstance(auth_meta, dict) else {}
+            access_token = str(meta.get("access_token") or "").strip()
+            refresh_token = str(meta.get("refresh_token") or "").strip()
+            source_token = str(meta.get("source_user_access_token") or "").strip()
+            token = source_token if platform in {"facebook", "instagram"} and source_token else access_token
+            if not token or str(meta.get("connection_method") or "") == "manual":
+                results.append({"platform": platform, "status": "no_oauth_token"})
+                continue
+            try:
+                if platform in {"facebook", "instagram"}:
+                    response = client.delete(
+                        "https://graph.facebook.com/me/permissions",
+                        params={"access_token": token},
+                    )
+                elif platform == "threads":
+                    response = client.delete(
+                        "https://graph.threads.net/v1.0/me/permissions",
+                        params={"access_token": token},
+                    )
+                elif platform == "youtube_shorts":
+                    response = client.post(
+                        "https://oauth2.googleapis.com/revoke",
+                        data={"token": refresh_token or token},
+                    )
+                elif platform == "x":
+                    if not settings.twitter_client_id:
+                        results.append({"platform": platform, "status": "not_confirmed"})
+                        continue
+                    response = client.post(
+                        "https://api.x.com/2/oauth2/revoke",
+                        data={
+                            "client_id": settings.twitter_client_id,
+                            "token": refresh_token or token,
+                            "token_type_hint": "refresh_token" if refresh_token else "access_token",
+                        },
+                    )
+                elif platform == "linkedin":
+                    if not settings.linkedin_client_id or not settings.linkedin_client_secret:
+                        results.append({"platform": platform, "status": "not_confirmed"})
+                        continue
+                    response = client.post(
+                        "https://www.linkedin.com/oauth/v2/revoke",
+                        data={
+                            "client_id": settings.linkedin_client_id,
+                            "client_secret": settings.linkedin_client_secret,
+                            "token": refresh_token or token,
+                        },
+                    )
+                elif platform == "tiktok":
+                    if not settings.tiktok_client_key or not settings.tiktok_client_secret:
+                        results.append({"platform": platform, "status": "not_confirmed"})
+                        continue
+                    response = client.post(
+                        "https://open.tiktokapis.com/v2/oauth/revoke/",
+                        json={
+                            "client_key": settings.tiktok_client_key,
+                            "client_secret": settings.tiktok_client_secret,
+                            "token": refresh_token or token,
+                        },
+                    )
+                else:
+                    results.append({"platform": platform, "status": "not_supported"})
+                    continue
+                results.append({
+                    "platform": platform,
+                    "status": "revoked" if 200 <= response.status_code < 300 else "not_confirmed",
+                })
+            except httpx.RequestError:
+                results.append({"platform": platform, "status": "not_confirmed"})
+    return results
+
+
 def _delete_unmapped_user_telemetry(db: Session, user_id: int) -> None:
     """Remove user-linked Pulse telemetry tables created by SQL migrations, not ORM models."""
     bind = db.get_bind()
@@ -420,6 +498,10 @@ def delete_account(
         db.commit()
         raise HTTPException(status_code=400, detail="Incorrect confirmation code.")
 
+    connections_to_revoke = [
+        (row.platform.value if hasattr(row.platform, "value") else str(row.platform), dict(row.auth_meta or {}))
+        for row in db.scalars(select(ConnectedPlatform).where(ConnectedPlatform.user_id == user.id)).all()
+    ]
     try:
         _delete_local_account_data(db, user)
         # Remove the Supabase identity before committing local deletion. If identity
@@ -445,4 +527,11 @@ def delete_account(
         secure=request.url.scheme == "https" or os.getenv("ENVIRONMENT") == "production",
         samesite="lax",
     )
-    return {"deleted": True, "message": "Your XCR8 account and associated personal data have been deleted."}
+    revocation_results = _revoke_external_platform_tokens(connections_to_revoke)
+    unconfirmed = [item["platform"] for item in revocation_results if item["status"] not in {"revoked", "no_oauth_token"}]
+    return {
+        "deleted": True,
+        "message": "Your XCR8 account and associated personal data have been deleted.",
+        "external_platform_revocation": revocation_results,
+        "platforms_needing_manual_review": sorted(set(unconfirmed)),
+    }
