@@ -384,7 +384,7 @@ def _delete_unmapped_user_telemetry(db: Session, user_id: int) -> None:
         ) from exc
 
 
-def _delete_local_account_data(db: Session, user: User) -> None:
+def _delete_local_account_data(db: Session, user: User) -> dict:
     user_id = user.id
     posts = list(db.scalars(select(ContentPost).where(ContentPost.user_id == user_id)).all())
     post_ids = [post.id for post in posts]
@@ -650,6 +650,10 @@ def _process_deletion_job(db: Session, job: AccountDeletionJob) -> dict:
 
     try:
         if not _job_stage_complete(job, "paystack_cancellation"):
+            job.current_stage = "paystack_cancellation"
+            job.updated_at = datetime.now(UTC)
+            db.commit()
+            db.refresh(job)
             billing_meta = recovery.get("billing_meta")
             _cancel_paystack_subscription(SimpleNamespace(
                 billing_meta=billing_meta if isinstance(billing_meta, dict) else {}
@@ -657,6 +661,10 @@ def _process_deletion_job(db: Session, job: AccountDeletionJob) -> dict:
             _store_job_stage(db, job, "paystack_cancellation", {"status": "completed"})
 
         if not _job_stage_complete(job, "media_cleanup"):
+            job.current_stage = "media_cleanup"
+            job.updated_at = datetime.now(UTC)
+            db.commit()
+            db.refresh(job)
             media_urls = recovery.get("media_urls")
             object_paths = recovery.get("upload_object_paths")
             _delete_referenced_media(
@@ -666,6 +674,10 @@ def _process_deletion_job(db: Session, job: AccountDeletionJob) -> dict:
             _store_job_stage(db, job, "media_cleanup", {"status": "completed"})
 
         if not _job_stage_complete(job, "supabase_identity"):
+            job.current_stage = "supabase_identity"
+            job.updated_at = datetime.now(UTC)
+            db.commit()
+            db.refresh(job)
             email = str(recovery.get("email") or "").strip()
             if not email:
                 raise RuntimeError("Missing identity recovery reference")
@@ -676,6 +688,10 @@ def _process_deletion_job(db: Session, job: AccountDeletionJob) -> dict:
         results = job.stage_results if isinstance(job.stage_results, dict) else {}
         previous = results.get("platform_revocation")
         if not isinstance(previous, dict) or previous.get("status") != "completed":
+            job.current_stage = "platform_revocation"
+            job.updated_at = datetime.now(UTC)
+            db.commit()
+            db.refresh(job)
             raw_connections = recovery.get("connections")
             connections: list[tuple[str, dict]] = []
             if isinstance(raw_connections, list):
@@ -754,6 +770,21 @@ def process_pending_account_deletions(
 ) -> dict:
     _authorize_deletion_cron(authorization)
     now = datetime.now(UTC)
+    # Purge encrypted recovery secrets after the bounded 30-day retention window,
+    # including jobs that have already reached manual review.
+    expired_manual_jobs = list(db.scalars(
+        select(AccountDeletionJob).where(
+            AccountDeletionJob.status == "manual_review",
+            AccountDeletionJob.payload_expires_at <= now,
+            AccountDeletionJob.recovery_payload_encrypted.is_not(None),
+        )
+    ).all())
+    for expired_job in expired_manual_jobs:
+        expired_job.recovery_payload_encrypted = None
+        expired_job.updated_at = now
+    if expired_manual_jobs:
+        db.commit()
+
     jobs = list(db.scalars(
         select(AccountDeletionJob)
         .where(
