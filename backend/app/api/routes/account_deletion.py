@@ -294,6 +294,11 @@ def _delete_local_account_data(db: Session, user: User) -> None:
     posts = list(db.scalars(select(ContentPost).where(ContentPost.user_id == user_id)).all())
     post_ids = [post.id for post in posts]
     media_urls = _collect_media_urls(posts)
+    profile = db.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user_id))
+    profile_preferences = profile.preferences if profile and isinstance(profile.preferences, dict) else {}
+    avatar_url = profile_preferences.get("avatar_url")
+    if isinstance(avatar_url, str) and avatar_url.strip():
+        media_urls.add(avatar_url.strip())
     trend_ids = list(db.scalars(select(TrendSignalEvent.id).where(TrendSignalEvent.user_id == user_id)).all())
     watermark_ids = list(db.scalars(select(WatermarkLink.id).where(WatermarkLink.creator_user_id == user_id)).all())
     referral_codes = list(db.scalars(select(ReferralCode.code).where(ReferralCode.owner_user_id == user_id)).all())
@@ -375,11 +380,7 @@ def _delete_local_account_data(db: Session, user: User) -> None:
         )
     )
     db.execute(delete(AcquisitionAttribution).where(AcquisitionAttribution.user_id == user_id))
-    db.execute(
-        update(ReferralCode)
-        .where(ReferralCode.owner_user_id == user_id)
-        .values(owner_user_id=None, active=False)
-    )
+    db.execute(delete(ReferralCode).where(ReferralCode.owner_user_id == user_id))
     db.execute(update(GrowthCampaign).where(GrowthCampaign.created_by_user_id == user_id).values(created_by_user_id=None))
     db.execute(
         update(InfluencerReferral)
