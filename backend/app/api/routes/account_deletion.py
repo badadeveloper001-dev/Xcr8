@@ -9,7 +9,7 @@ import tempfile
 from urllib.parse import unquote, urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
@@ -59,6 +59,7 @@ from app.services.auth import (
     verify_signup_email_code,
 )
 from app.services.current_user import current_user
+from app.services.usage_cockpit import COOKIE
 
 router = APIRouter(prefix="/account", tags=["account"])
 logger = logging.getLogger(__name__)
@@ -353,6 +354,7 @@ def request_account_deletion_code(
 @router.post("/deletion")
 def delete_account(
     payload: DeleteAccountRequest,
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> dict:
@@ -408,4 +410,11 @@ def delete_account(
         logger.exception("Account deletion failed for local user id %s", user.id)
         raise HTTPException(status_code=503, detail="Account deletion could not be completed. Your local account remains available; please retry.") from exc
 
+    response.delete_cookie(
+        COOKIE,
+        path="/",
+        httponly=True,
+        secure=bool(os.getenv("ENVIRONMENT") == "production"),
+        samesite="lax",
+    )
     return {"deleted": True, "message": "Your XCR8 account and associated personal data have been deleted."}
