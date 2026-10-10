@@ -3,13 +3,15 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.main import app
-from app.api.routes.account_deletion import DeleteAccountRequest, _collect_media_urls
+from app.api.routes.account_deletion import DeleteAccountRequest, _cancel_paystack_subscription, _collect_media_urls
+from app.core.config import settings
 
 
 @pytest.fixture
@@ -65,3 +67,26 @@ def test_media_collection_includes_post_media_and_metadata_urls():
         "https://cdn.example.com/alternate.mp4",
         "https://cdn.example.com/preview.jpg",
     }
+
+
+
+def test_account_deletion_does_not_require_paystack_when_no_subscription_exists(monkeypatch):
+    monkeypatch.setattr(settings, "paystack_secret_key", "")
+    user = SimpleNamespace(billing_meta={})
+
+    _cancel_paystack_subscription(user)
+
+
+def test_active_paystack_subscription_fails_closed_when_cancellation_is_unavailable(monkeypatch):
+    monkeypatch.setattr(settings, "paystack_secret_key", "")
+    user = SimpleNamespace(
+        billing_meta={
+            "paystack_subscription_code": "SUB_test",
+            "subscription_status": "active",
+        }
+    )
+
+    with pytest.raises(HTTPException) as error:
+        _cancel_paystack_subscription(user)
+
+    assert error.value.status_code == 503
