@@ -1,4 +1,4 @@
-name: Pulse Accounting Test
+name: Focused Backend Tests
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   pulse:
-    name: Pulse — focused pytest
+    name: Backend — account deletion and Pulse tests
     runs-on: ubuntu-latest
 
     steps:
@@ -22,4 +22,4 @@ jobs:
         run: pip install -r backend/requirements.txt -r ai-services/requirements.txt pytest
 
       - name: Run focused Pulse tests
-        run: PYTHONPATH=backend pytest -q backend/tests/test_pulse_costs.py
+        run: PYTHONPATH=backend pytest -q backend/tests/test_account_deletion.py backend/tests/test_pulse_costs.py
