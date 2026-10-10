@@ -18,6 +18,6 @@ export async function deleteOwnAccount(payload: {
   code: string;
   confirmation: "DELETE";
 }): Promise<AccountDeletionResult> {
-  const { data } = await apiClient.post<AccountDeletionResult>("/api/v1/account/deletion", payload);
+  const { data } = await apiClient.post<AccountDeletionResult>("/api/v1/account/deletion", payload, { timeout: 90_000 });
   return data;
 }
