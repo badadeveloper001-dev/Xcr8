@@ -447,10 +447,6 @@ def _delete_local_account_data(db: Session, user: User) -> None:
         )
         media_urls.update(_collect_media_urls(workspace_media_posts))
 
-    # Remove storage objects before mutating database rows. If this fails, the account
-    # remains intact and the user can retry from the same authenticated session.
-    _delete_referenced_media(media_urls, upload_object_paths)
-
     # Remove visits tied to personal referral/watermark links before those links go away.
     visit_filters = []
     if watermark_ids:
@@ -526,7 +522,10 @@ def _delete_local_account_data(db: Session, user: User) -> None:
         db.execute(delete(Workspace).where(Workspace.id.in_(empty_workspace_ids)))
 
     db.delete(user)
+    # Flush every local deletion first so foreign-key/schema failures happen before
+    # external storage is changed. A storage failure still rolls back this transaction.
     db.flush()
+    _delete_referenced_media(media_urls, upload_object_paths)
 
 
 @router.post("/deletion/request")
