@@ -316,6 +316,8 @@ def _delete_local_account_data(db: Session, user: User) -> None:
     db.execute(delete(IntelligenceFeedback).where(IntelligenceFeedback.user_id == user_id))
     db.execute(delete(IntelligenceNotification).where(or_(IntelligenceNotification.user_id == user_id, IntelligenceNotification.workspace_id.in_(empty_workspace_ids))) if empty_workspace_ids else delete(IntelligenceNotification).where(IntelligenceNotification.user_id == user_id))
     db.execute(delete(AIFeedback).where(AIFeedback.user_id == user_id))
+    db.execute(delete(AuthCredential).where(AuthCredential.user_id == user_id))
+    db.execute(delete(CreatorProfile).where(CreatorProfile.user_id == user_id))
     db.execute(delete(UsagePeriod).where(UsagePeriod.user_id == user_id))
     db.execute(delete(UsageAccount).where(UsageAccount.user_id == user_id))
     db.execute(delete(UsageLedger).where(or_(UsageLedger.user_id == user_id, UsageLedger.workspace_id.in_(empty_workspace_ids))) if empty_workspace_ids else delete(UsageLedger).where(UsageLedger.user_id == user_id))
