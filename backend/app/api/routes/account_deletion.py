@@ -5,7 +5,6 @@ import logging
 import os
 from pathlib import Path
 from typing import Literal
-import re
 import tempfile
 from urllib.parse import unquote, urlparse
 
@@ -131,7 +130,10 @@ def _delete_referenced_media(urls: set[str]) -> None:
         try:
             path.unlink(missing_ok=True)
         except OSError as exc:
-            logger.warning("Could not remove local account media %s: %s", path.name, exc)
+            raise HTTPException(
+                status_code=503,
+                detail="XCR8 could not remove all local media. No account database records were deleted; please retry.",
+            ) from exc
 
     if not object_paths:
         return
@@ -173,7 +175,7 @@ def _delete_referenced_media(urls: set[str]) -> None:
 def _revoke_external_platform_tokens(connections: list[tuple[str, dict]]) -> list[dict[str, str]]:
     """Best-effort provider revocation; local credential removal remains authoritative."""
     results: list[dict[str, str]] = []
-    with httpx.Client(timeout=10.0) as client:
+    with httpx.Client(timeout=4.0) as client:
         for platform, auth_meta in connections:
             meta = auth_meta if isinstance(auth_meta, dict) else {}
             access_token = str(meta.get("access_token") or "").strip()
@@ -238,11 +240,20 @@ def _revoke_external_platform_tokens(connections: list[tuple[str, dict]]) -> lis
                 else:
                     results.append({"platform": platform, "status": "not_supported"})
                     continue
+                succeeded = 200 <= response.status_code < 300
+                if succeeded and platform == "tiktok":
+                    try:
+                        provider_payload = response.json()
+                        provider_error = provider_payload.get("error") if isinstance(provider_payload, dict) else None
+                        if isinstance(provider_error, dict) and str(provider_error.get("code") or "ok").lower() not in {"", "ok"}:
+                            succeeded = False
+                    except ValueError:
+                        succeeded = False
                 results.append({
                     "platform": platform,
-                    "status": "revoked" if 200 <= response.status_code < 300 else "not_confirmed",
+                    "status": "revoked" if succeeded else "not_confirmed",
                 })
-            except httpx.RequestError:
+            except Exception:  # noqa: BLE001 - deletion continues even if a provider cannot revoke
                 results.append({"platform": platform, "status": "not_confirmed"})
     return results
 
