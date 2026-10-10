@@ -354,6 +354,43 @@ def _revoke_external_platform_tokens(connections: list[tuple[str, dict]]) -> lis
 
 
 
+def _pending_platform_connections(
+    connections: list[tuple[str, dict]], previous_results: list
+) -> list[tuple[int, str, dict]]:
+    """Retry revocation per saved connection, not per platform name.
+
+    Older jobs stored only platform-level results. For those records, reuse a
+    successful result only when that platform has exactly one saved connection;
+    duplicate-platform connections must be retried because their old result
+    cannot identify which credential was revoked.
+    """
+    platform_counts: dict[str, int] = {}
+    for platform, _auth_meta in connections:
+        platform_counts[platform] = platform_counts.get(platform, 0) + 1
+
+    confirmed_indexes = {
+        int(item["connection_index"])
+        for item in previous_results
+        if isinstance(item, dict)
+        and item.get("status") in {"revoked", "no_oauth_token"}
+        and str(item.get("connection_index", "")).isdigit()
+    }
+    legacy_confirmed_platforms = {
+        str(item.get("platform"))
+        for item in previous_results
+        if isinstance(item, dict)
+        and "connection_index" not in item
+        and item.get("status") in {"revoked", "no_oauth_token"}
+        and platform_counts.get(str(item.get("platform")), 0) == 1
+    }
+
+    return [
+        (index, platform, auth_meta)
+        for index, (platform, auth_meta) in enumerate(connections)
+        if index not in confirmed_indexes and platform not in legacy_confirmed_platforms
+    ]
+
+
 def _payment_events_allow_detachment(db: Session) -> bool:
     """Require the accounting-preservation migration before deleting any account data."""
     try:
@@ -702,13 +739,12 @@ def _process_deletion_job(db: Session, job: AccountDeletionJob) -> dict:
                         if platform and isinstance(auth_meta, dict):
                             connections.append((platform, auth_meta))
             previous_results = previous.get("results", []) if isinstance(previous, dict) else []
-            confirmed_platforms = {
-                str(item.get("platform"))
-                for item in previous_results
-                if isinstance(item, dict) and item.get("status") in {"revoked", "no_oauth_token"}
-            }
-            pending = [item for item in connections if item[0] not in confirmed_platforms]
-            latest = _revoke_external_platform_tokens(pending)
+            pending = _pending_platform_connections(connections, previous_results)
+            latest: list[dict[str, str]] = []
+            for connection_index, platform, auth_meta in pending:
+                for result in _revoke_external_platform_tokens([(platform, auth_meta)]):
+                    # Store only the position in the encrypted recovery snapshot, never credentials.
+                    latest.append({**result, "connection_index": str(connection_index)})
             combined = [
                 item for item in previous_results
                 if isinstance(item, dict) and item.get("status") in {"revoked", "no_oauth_token"}
