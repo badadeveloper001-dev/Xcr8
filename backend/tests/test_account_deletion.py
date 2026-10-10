@@ -115,3 +115,41 @@ def test_deletion_recovery_processor_requires_cron_authentication(client, monkey
     monkeypatch.setattr(settings, "cron_secret", "cron-test-secret")
     response = client.post("/api/v1/account/deletion/process-pending")
     assert response.status_code == 401
+
+
+def test_platform_revocation_retry_tracks_duplicate_platform_connections():
+    from app.api.routes.account_deletion import _pending_platform_connections
+
+    connections = [
+        ("instagram", {"access_token": "token-a"}),
+        ("instagram", {"access_token": "token-b"}),
+        ("youtube_shorts", {"access_token": "token-c"}),
+    ]
+    previous_results = [
+        {"platform": "instagram", "status": "revoked", "connection_index": "0"},
+        {"platform": "youtube_shorts", "status": "revoked"},
+    ]
+
+    pending = _pending_platform_connections(connections, previous_results)
+
+    # Indexed success skips only the exact connection. Legacy platform-level
+    # success cannot safely skip either of two same-platform connections.
+    assert pending == [
+        (1, "instagram", {"access_token": "token-b"}),
+    ]
+
+
+def test_platform_revocation_retry_reuses_legacy_result_for_unique_platform():
+    from app.api.routes.account_deletion import _pending_platform_connections
+
+    connections = [
+        ("instagram", {"access_token": "token-a"}),
+        ("youtube_shorts", {"access_token": "token-b"}),
+    ]
+    previous_results = [
+        {"platform": "instagram", "status": "revoked"},
+    ]
+
+    pending = _pending_platform_connections(connections, previous_results)
+
+    assert pending == [(1, "youtube_shorts", {"access_token": "token-b"})]
