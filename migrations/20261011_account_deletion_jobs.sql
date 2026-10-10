@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.account_deletion_jobs (
     lease_expires_at TIMESTAMPTZ NULL,
     payload_expires_at TIMESTAMPTZ NULL,
     recovery_payload_encrypted TEXT NULL,
-    stage_results JSONB NOT NULL DEFAULT '{}'::jsonb,
+    stage_results JSON NOT NULL DEFAULT '{}'::json,
     last_error_code VARCHAR(64) NULL,
     last_error_message TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
