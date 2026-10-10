@@ -127,7 +127,6 @@ def test_platform_revocation_retry_tracks_duplicate_platform_connections():
     ]
     previous_results = [
         {"platform": "instagram", "status": "revoked", "connection_index": "0"},
-        {"platform": "youtube_shorts", "status": "revoked"},
     ]
 
     pending = _pending_platform_connections(connections, previous_results)
