@@ -90,3 +90,28 @@ def test_active_paystack_subscription_fails_closed_when_cancellation_is_unavaila
         _cancel_paystack_subscription(user)
 
     assert error.value.status_code == 503
+
+
+
+def test_account_deletion_recovery_payload_is_encrypted_and_requires_a_key(monkeypatch):
+    from cryptography.fernet import Fernet
+    from app.services.account_deletion_recovery import decrypt_payload, encrypt_payload
+
+    monkeypatch.setattr(settings, "account_deletion_encryption_key", "")
+    with pytest.raises(RuntimeError):
+        encrypt_payload({"email": "creator@example.com"})
+
+    key = Fernet.generate_key().decode("ascii")
+    monkeypatch.setattr(settings, "account_deletion_encryption_key", key)
+    payload = {"email": "creator@example.com", "connections": [{"platform": "x", "auth_meta": {"access_token": "secret"}}]}
+    encrypted = encrypt_payload(payload)
+
+    assert "creator@example.com" not in encrypted
+    assert "secret" not in encrypted
+    assert decrypt_payload(encrypted) == payload
+
+
+def test_deletion_recovery_processor_requires_cron_authentication(client, monkeypatch):
+    monkeypatch.setattr(settings, "cron_secret", "cron-test-secret")
+    response = client.post("/api/v1/account/deletion/process-pending")
+    assert response.status_code == 401

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     pulse_slow_request_ms: int = 6000
     pulse_user_email_enabled: bool = False
     cron_secret: str = ""
+    account_deletion_encryption_key: str = ""
     oauth_state_secret: str = ""
     ai_internal_token: str = ""
     billing_webhook_secret: str = ""

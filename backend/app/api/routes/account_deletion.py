@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import uuid
+import hmac
 import logging
 import os
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Literal
 import tempfile
 from urllib.parse import quote, unquote, urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import MetaData, Table, delete, inspect, or_, select, update
+from sqlalchemy import MetaData, Table, and_, delete, inspect, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.deps import get_db
 from app.db.models import (
+    AccountDeletionJob,
     AIFeedback,
     AIGeneration,
     AcquisitionAttribution,
@@ -51,6 +55,7 @@ from app.db.models import (
     Workspace,
     WorkspaceMembership,
 )
+from app.services.account_deletion_recovery import decrypt_payload, encrypt_payload
 from app.services.auth import (
     SupabaseAuthError,
     generate_signup_email_code,
@@ -525,7 +530,7 @@ def _delete_local_account_data(db: Session, user: User) -> None:
     # Flush every local deletion first so foreign-key/schema failures happen before
     # external storage is changed. A storage failure still rolls back this transaction.
     db.flush()
-    _delete_referenced_media(media_urls, upload_object_paths)
+    return {"media_urls": sorted(media_urls), "upload_object_paths": sorted(upload_object_paths)}
 
 
 @router.post("/deletion/request")
@@ -573,6 +578,208 @@ def request_account_deletion_code(
     }
 
 
+def _job_stage_complete(job: AccountDeletionJob, stage: str) -> bool:
+    results = job.stage_results if isinstance(job.stage_results, dict) else {}
+    result = results.get(stage)
+    return isinstance(result, dict) and result.get("status") == "completed"
+
+
+def _store_job_stage(db: Session, job: AccountDeletionJob, stage: str, result: dict) -> None:
+    results = dict(job.stage_results) if isinstance(job.stage_results, dict) else {}
+    results[stage] = result
+    job.stage_results = results
+    job.current_stage = stage
+    job.updated_at = datetime.now(UTC)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+
+def _finish_job_failure(db: Session, job: AccountDeletionJob, stage: str, error: Exception) -> None:
+    now = datetime.now(UTC)
+    job.current_stage = stage
+    job.last_error_code = type(error).__name__[:64]
+    # Do not persist provider responses, tokens, email addresses, or exception text.
+    job.last_error_message = "A required deletion cleanup step did not complete."
+    job.lease_expires_at = None
+    if job.attempt_count >= 8:
+        job.status = "manual_review"
+        job.next_attempt_at = None
+    else:
+        job.status = "retry_pending"
+        job.next_attempt_at = now + timedelta(minutes=min(1440, 2 ** min(job.attempt_count, 10)))
+    job.updated_at = now
+    db.add(job)
+    db.commit()
+
+
+def _process_deletion_job(db: Session, job: AccountDeletionJob) -> dict:
+    now = datetime.now(UTC)
+    if job.payload_expires_at and now >= job.payload_expires_at:
+        job.recovery_payload_encrypted = None
+        job.status = "manual_review"
+        job.lease_expires_at = None
+        job.next_attempt_at = None
+        job.last_error_code = "recovery_payload_expired"
+        job.last_error_message = "Encrypted recovery data expired before all cleanup steps were confirmed."
+        db.commit()
+        return {"status": job.status, "job_id": job.id, "local_data_deleted": True}
+
+    if not job.recovery_payload_encrypted:
+        job.status = "manual_review"
+        job.lease_expires_at = None
+        job.next_attempt_at = None
+        job.last_error_code = "recovery_payload_missing"
+        job.last_error_message = "Recovery data is unavailable; manual review is required."
+        db.commit()
+        return {"status": job.status, "job_id": job.id, "local_data_deleted": True}
+
+    job.status = "processing"
+    job.attempt_count = int(job.attempt_count or 0) + 1
+    job.last_attempt_at = now
+    job.lease_expires_at = now + timedelta(minutes=5)
+    job.updated_at = now
+    db.commit()
+    db.refresh(job)
+
+    try:
+        recovery = decrypt_payload(job.recovery_payload_encrypted)
+    except Exception as exc:
+        _finish_job_failure(db, job, "decrypt_recovery_payload", exc)
+        return {"status": job.status, "job_id": job.id, "local_data_deleted": True}
+
+    try:
+        if not _job_stage_complete(job, "paystack_cancellation"):
+            billing_meta = recovery.get("billing_meta")
+            _cancel_paystack_subscription(SimpleNamespace(
+                billing_meta=billing_meta if isinstance(billing_meta, dict) else {}
+            ))
+            _store_job_stage(db, job, "paystack_cancellation", {"status": "completed"})
+
+        if not _job_stage_complete(job, "media_cleanup"):
+            media_urls = recovery.get("media_urls")
+            object_paths = recovery.get("upload_object_paths")
+            _delete_referenced_media(
+                {item for item in media_urls if isinstance(item, str)} if isinstance(media_urls, list) else set(),
+                {item for item in object_paths if isinstance(item, str)} if isinstance(object_paths, list) else set(),
+            )
+            _store_job_stage(db, job, "media_cleanup", {"status": "completed"})
+
+        if not _job_stage_complete(job, "supabase_identity"):
+            email = str(recovery.get("email") or "").strip()
+            if not email:
+                raise RuntimeError("Missing identity recovery reference")
+            # This helper is idempotent: a missing identity is treated as already removed.
+            supabase_delete_user_by_email(email)
+            _store_job_stage(db, job, "supabase_identity", {"status": "completed"})
+
+        results = job.stage_results if isinstance(job.stage_results, dict) else {}
+        previous = results.get("platform_revocation")
+        if not isinstance(previous, dict) or previous.get("status") != "completed":
+            raw_connections = recovery.get("connections")
+            connections: list[tuple[str, dict]] = []
+            if isinstance(raw_connections, list):
+                for item in raw_connections:
+                    if isinstance(item, dict):
+                        platform = str(item.get("platform") or "").strip()
+                        auth_meta = item.get("auth_meta")
+                        if platform and isinstance(auth_meta, dict):
+                            connections.append((platform, auth_meta))
+            previous_results = previous.get("results", []) if isinstance(previous, dict) else []
+            confirmed_platforms = {
+                str(item.get("platform"))
+                for item in previous_results
+                if isinstance(item, dict) and item.get("status") in {"revoked", "no_oauth_token"}
+            }
+            pending = [item for item in connections if item[0] not in confirmed_platforms]
+            latest = _revoke_external_platform_tokens(pending)
+            combined = [
+                item for item in previous_results
+                if isinstance(item, dict) and item.get("status") in {"revoked", "no_oauth_token"}
+            ] + latest
+            all_confirmed = all(
+                item.get("status") in {"revoked", "no_oauth_token"}
+                for item in combined
+            )
+            _store_job_stage(
+                db, job, "platform_revocation",
+                {"status": "completed" if all_confirmed else "pending", "results": combined},
+            )
+            if not all_confirmed:
+                raise RuntimeError("External platform revocation needs retry or manual review")
+
+        job.status = "completed"
+        job.current_stage = "completed"
+        job.completed_at = datetime.now(UTC)
+        job.lease_expires_at = None
+        job.next_attempt_at = None
+        job.recovery_payload_encrypted = None
+        job.last_error_code = None
+        job.last_error_message = None
+        db.add(job)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        job = db.get(AccountDeletionJob, job.id)
+        if job is None:
+            logger.error("Account deletion job disappeared during processing")
+            return {"status": "manual_review", "local_data_deleted": True}
+        _finish_job_failure(db, job, job.current_stage or "unknown", exc)
+
+    revocation = (job.stage_results or {}).get("platform_revocation", {}) if isinstance(job.stage_results, dict) else {}
+    revocation_results = revocation.get("results", []) if isinstance(revocation, dict) else []
+    return {
+        "status": job.status,
+        "job_id": job.id,
+        "local_data_deleted": True,
+        "platforms_needing_manual_review": [
+            str(item.get("platform")) for item in revocation_results
+            if isinstance(item, dict) and item.get("status") not in {"revoked", "no_oauth_token"}
+        ],
+    }
+
+
+def _authorize_deletion_cron(authorization: str | None) -> None:
+    secret = str(settings.cron_secret or "").strip()
+    if not secret:
+        raise HTTPException(status_code=503, detail="Deletion recovery is not configured.")
+    if not authorization or not hmac.compare_digest(authorization, f"Bearer {secret}"):
+        raise HTTPException(status_code=401, detail="Unauthorized deletion-recovery request.")
+
+
+@router.post("/deletion/process-pending")
+def process_pending_account_deletions(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _authorize_deletion_cron(authorization)
+    now = datetime.now(UTC)
+    jobs = list(db.scalars(
+        select(AccountDeletionJob)
+        .where(
+            or_(
+                AccountDeletionJob.status.in_(["requested", "retry_pending"]),
+                and_(
+                    AccountDeletionJob.status == "processing",
+                    AccountDeletionJob.lease_expires_at <= now,
+                ),
+            ),
+            or_(AccountDeletionJob.next_attempt_at.is_(None), AccountDeletionJob.next_attempt_at <= now),
+        )
+        .order_by(AccountDeletionJob.created_at.asc())
+        .limit(10)
+        .with_for_update(skip_locked=True)
+    ).all())
+    for job in jobs:
+        job.status = "processing"
+        job.lease_expires_at = now + timedelta(minutes=5)
+        job.updated_at = now
+    db.commit()
+
+    results = [_process_deletion_job(db, job) for job in jobs]
+    return {"processed": len(results), "results": results}
+
+
 @router.post("/deletion")
 def delete_account(
     payload: DeleteAccountRequest,
@@ -615,33 +822,58 @@ def delete_account(
         db.commit()
         raise HTTPException(status_code=400, detail="Incorrect confirmation code.")
 
-    connections_to_revoke = [
-        (row.platform.value if hasattr(row.platform, "value") else str(row.platform), dict(row.auth_meta or {}))
-        for row in db.scalars(select(ConnectedPlatform).where(ConnectedPlatform.user_id == user.id)).all()
-    ]
+    if not _payment_events_allow_detachment(db):
+        raise HTTPException(
+            status_code=503,
+            detail="The account-deletion database migration is not applied. No account data was deleted; please retry later.",
+        )
+
     try:
-        if not _payment_events_allow_detachment(db):
-            raise HTTPException(
-                status_code=503,
-                detail="The account-deletion database migration is not applied. No account data was deleted; please retry later.",
-            )
-        _cancel_paystack_subscription(user)
-        _delete_local_account_data(db, user)
-        # Remove the Supabase identity before committing local deletion. If identity
-        # administration fails, rollback keeps the local account intact and retryable.
-        # The media cleanup above is idempotent, so it is safe to retry after failure.
-        supabase_delete_user_by_email(user.email)
+        connections = [
+            {
+                "platform": row.platform.value if hasattr(row.platform, "value") else str(row.platform),
+                "auth_meta": dict(row.auth_meta or {}),
+            }
+            for row in db.scalars(
+                select(ConnectedPlatform).where(ConnectedPlatform.user_id == user.id)
+            ).all()
+        ]
+        billing_meta = dict(user.billing_meta or {}) if isinstance(user.billing_meta, dict) else {}
+        resources = _delete_local_account_data(db, user)
+        recovery_payload = {
+            "email": user.email,
+            "billing_meta": billing_meta,
+            "connections": connections,
+            "media_urls": resources["media_urls"],
+            "upload_object_paths": resources["upload_object_paths"],
+        }
+        job = AccountDeletionJob(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            status="requested",
+            current_stage="queued",
+            attempt_count=0,
+            payload_expires_at=datetime.now(UTC) + timedelta(days=30),
+            recovery_payload_encrypted=encrypt_payload(recovery_payload),
+            stage_results={},
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        db.add(job)
+        # The local deletion and recovery record commit together. External cleanup
+        # begins only after the durable record exists.
         db.commit()
+        db.refresh(job)
     except HTTPException:
         db.rollback()
         raise
-    except SupabaseAuthError as exc:
-        db.rollback()
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
         db.rollback()
-        logger.exception("Account deletion failed for local user id %s", user.id)
-        raise HTTPException(status_code=503, detail="Account deletion could not be completed. Your local account remains available; please retry.") from exc
+        logger.exception("Account deletion request could not be durably recorded")
+        raise HTTPException(
+            status_code=503,
+            detail="Account deletion could not be safely recorded. No account data was deleted; please retry.",
+        ) from exc
 
     response.delete_cookie(
         COOKIE,
@@ -650,11 +882,15 @@ def delete_account(
         secure=request.url.scheme == "https" or os.getenv("ENVIRONMENT") == "production",
         samesite="lax",
     )
-    revocation_results = _revoke_external_platform_tokens(connections_to_revoke)
-    unconfirmed = [item["platform"] for item in revocation_results if item["status"] not in {"revoked", "no_oauth_token"}]
+    result = _process_deletion_job(db, job)
+    revocation = (job.stage_results or {}).get("platform_revocation", {}) if isinstance(job.stage_results, dict) else {}
     return {
         "deleted": True,
-        "message": "Your XCR8 account and associated personal data have been deleted.",
-        "external_platform_revocation": revocation_results,
-        "platforms_needing_manual_review": sorted(set(unconfirmed)),
+        "message": (
+            "Your XCR8 account data has been deleted."
+            if result.get("status") == "completed"
+            else "Your XCR8 account data has been deleted. Some external cleanup is still being retried."
+        ),
+        "deletion_job": result,
+        "external_platform_revocation": revocation.get("results", []) if isinstance(revocation, dict) else [],
     }

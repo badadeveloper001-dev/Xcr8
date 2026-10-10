@@ -688,3 +688,28 @@ class GrowthEvent(Base):
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     event_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class AccountDeletionJob(Base):
+    """Durable recovery state retained independently of the deleted user row."""
+
+    __tablename__ = "account_deletion_jobs"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_account_deletion_jobs_user_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # Deliberately no FK: the job must survive deletion of its user.
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="requested", index=True)
+    current_stage: Mapped[str] = mapped_column(String(64), default="queued")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    payload_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recovery_payload_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stage_results: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
