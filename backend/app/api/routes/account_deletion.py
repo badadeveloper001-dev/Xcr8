@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import logging
 import os
 from pathlib import Path
+from typing import Literal
 import re
 import tempfile
 from urllib.parse import unquote, urlparse
@@ -71,7 +72,7 @@ _DELETE_REQUESTED_KEY = "account_deletion_code_requested_at"
 
 class DeleteAccountRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
-    confirmation: str = Field(min_length=6, max_length=6)
+    confirmation: Literal["DELETE"]
 
 
 def _profile_preferences(profile: CreatorProfile) -> dict:
