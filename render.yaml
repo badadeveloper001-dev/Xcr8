@@ -227,3 +227,26 @@ services:
           type: web
           name: xcr8-creator-os-api
           property: hostport
+
+  - type: cron
+    name: xcr8-account-deletion-cleanup
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: feat/account-deletion
+    schedule: "* * * * *"
+    buildCommand: echo "No additional scheduler dependencies"
+    startCommand: python scripts/render_account_deletion_cleanup.py
+    buildFilter:
+      paths:
+        - scripts/render_account_deletion_cleanup.py
+        - render.yaml
+    envVars:
+      - fromGroup: xcr8-generated-secrets
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: BACKEND_API_URL
+        fromService:
+          type: web
+          name: xcr8-creator-os-api
+          property: hostport
