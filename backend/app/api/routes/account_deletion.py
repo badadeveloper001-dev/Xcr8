@@ -674,7 +674,7 @@ def _process_deletion_job(db: Session, job: AccountDeletionJob) -> dict:
     job.status = "processing"
     job.attempt_count = int(job.attempt_count or 0) + 1
     job.last_attempt_at = now
-    job.lease_expires_at = now + timedelta(minutes=5)
+    job.lease_expires_at = now + timedelta(minutes=15)
     job.updated_at = now
     db.commit()
     db.refresh(job)
@@ -834,17 +834,47 @@ def process_pending_account_deletions(
             or_(AccountDeletionJob.next_attempt_at.is_(None), AccountDeletionJob.next_attempt_at <= now),
         )
         .order_by(AccountDeletionJob.created_at.asc())
-        .limit(10)
+        .limit(1)
         .with_for_update(skip_locked=True)
     ).all())
     for job in jobs:
         job.status = "processing"
-        job.lease_expires_at = now + timedelta(minutes=5)
+        job.lease_expires_at = now + timedelta(minutes=15)
         job.updated_at = now
     db.commit()
 
     results = [_process_deletion_job(db, job) for job in jobs]
     return {"processed": len(results), "results": results}
+
+
+def _account_deletion_response(job: AccountDeletionJob) -> dict:
+    """Return one stable status contract for the Settings client."""
+    status = str(job.status or "requested")
+    results = job.stage_results if isinstance(job.stage_results, dict) else {}
+    revocation = results.get("platform_revocation", {})
+    revocation_results = revocation.get("results", []) if isinstance(revocation, dict) else []
+    manual_review = [
+        str(item.get("platform")) for item in revocation_results
+        if isinstance(item, dict) and item.get("status") not in {"revoked", "no_oauth_token"}
+    ]
+    if status == "completed":
+        message = "Your XCR8 account data has been deleted and external cleanup is complete."
+    elif status == "manual_review":
+        message = "Your XCR8 account data has been deleted, but some external cleanup needs support review."
+    else:
+        message = "Your XCR8 account data has been deleted. External cleanup is queued and will continue automatically."
+    return {
+        "deleted": True,
+        "status": status,
+        "message": message,
+        "deletion_job": {
+            "status": status,
+            "job_id": job.id,
+            "local_data_deleted": True,
+        },
+        "external_platform_revocation": revocation_results,
+        "platforms_needing_manual_review": manual_review,
+    }
 
 
 @router.post("/deletion")
@@ -915,6 +945,10 @@ def delete_account(
             "paystack_subscription_code": str(billing_meta.get("paystack_subscription_code") or ""),
             "subscription_status": str(billing_meta.get("subscription_status") or ""),
         }
+        # Stop recurring billing before the irreversible local deletion. If Paystack
+        # cannot confirm the subscription state/cancellation, the transaction rolls
+        # back and the user's local account data remains intact.
+        _cancel_paystack_subscription(SimpleNamespace(billing_meta=recovery_billing_meta))
         resources = _delete_local_account_data(db, user)
         recovery_payload = {
             "email": user.email,
@@ -931,7 +965,7 @@ def delete_account(
             attempt_count=0,
             payload_expires_at=datetime.now(UTC) + timedelta(days=30),
             recovery_payload_encrypted=encrypt_payload(recovery_payload),
-            stage_results={},
+            stage_results={"paystack_cancellation": {"status": "completed"}},
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
@@ -958,15 +992,6 @@ def delete_account(
         secure=request.url.scheme == "https" or os.getenv("ENVIRONMENT") == "production",
         samesite="lax",
     )
-    result = _process_deletion_job(db, job)
-    revocation = (job.stage_results or {}).get("platform_revocation", {}) if isinstance(job.stage_results, dict) else {}
-    return {
-        "deleted": True,
-        "message": (
-            "Your XCR8 account data has been deleted."
-            if result.get("status") == "completed"
-            else "Your XCR8 account data has been deleted. Some external cleanup is still being retried."
-        ),
-        "deletion_job": result,
-        "external_platform_revocation": revocation.get("results", []) if isinstance(revocation, dict) else [],
-    }
+    # Leave external cleanup to the authenticated cron worker. This avoids a race
+    # where the request handler and cron worker both process the newly committed job.
+    return _account_deletion_response(job)

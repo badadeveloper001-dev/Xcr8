@@ -375,11 +375,14 @@ export default function SettingsPage() {
         // Session state is already cleared; local preference cleanup is best effort.
       }
       const manualReview = result.platforms_needing_manual_review ?? [];
-      window.alert(
-        manualReview.length
-          ? `Your XCR8 account has been deleted. Please also review XCR8 access in these platform settings: ${manualReview.join(", ")}.`
-          : "Your XCR8 account and associated personal data have been deleted.",
-      );
+      const alertMessage = manualReview.length
+        ? `Your XCR8 account data has been deleted. Please review access for: ${manualReview.join(", ")}.`
+        : result.status === "completed"
+          ? "Your XCR8 account and associated personal data have been deleted, and external cleanup is complete."
+          : result.status === "manual_review"
+            ? "Your XCR8 account data has been deleted, but some external cleanup needs support review."
+            : result.message || "Your XCR8 account data has been deleted. External cleanup is queued and will continue automatically.";
+      window.alert(alertMessage);
       router.replace("/auth/login");
     } catch (err) {
       setError(getApiErrorMessage(err, "Account deletion could not be completed. Your account has not been deleted."));

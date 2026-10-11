@@ -2,7 +2,9 @@ import { apiClient } from "@/lib/api";
 
 export type AccountDeletionResult = {
   deleted: boolean;
+  status: "requested" | "processing" | "retry_pending" | "completed" | "manual_review";
   message: string;
+  deletion_job: { status: string; job_id?: string; local_data_deleted: boolean };
   external_platform_revocation: Array<{ platform: string; status: string }>;
   platforms_needing_manual_review: string[];
 };
