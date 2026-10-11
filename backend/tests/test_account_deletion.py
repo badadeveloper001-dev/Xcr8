@@ -140,6 +140,25 @@ def test_platform_revocation_retry_tracks_duplicate_platform_connections():
     ]
 
 
+def test_legacy_revocation_result_does_not_skip_duplicate_platform_connections():
+    from app.api.routes.account_deletion import _pending_platform_connections
+
+    connections = [
+        ("instagram", {"access_token": "token-a"}),
+        ("instagram", {"access_token": "token-b"}),
+    ]
+    previous_results = [
+        {"platform": "instagram", "status": "revoked"},
+    ]
+
+    pending = _pending_platform_connections(connections, previous_results)
+
+    assert pending == [
+        (0, "instagram", {"access_token": "token-a"}),
+        (1, "instagram", {"access_token": "token-b"}),
+    ]
+
+
 def test_platform_revocation_retry_reuses_legacy_result_for_unique_platform():
     from app.api.routes.account_deletion import _pending_platform_connections
 
