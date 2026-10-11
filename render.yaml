@@ -210,7 +210,7 @@ services:
     runtime: python
     plan: starter
     region: frankfurt
-    branch: main
+    branch: feat/account-deletion
     schedule: "* * * * *"
     buildCommand: echo "No additional scheduler dependencies"
     startCommand: python scripts/render_dispatch_due.py
