@@ -198,7 +198,12 @@ def _cancel_paystack_subscription(user: User) -> None:
     billing = user.billing_meta if isinstance(user.billing_meta, dict) else {}
     code = str(billing.get("paystack_subscription_code") or "").strip()
     local_status = str(billing.get("subscription_status") or "").strip().lower()
-    if not code or local_status in {"disabled", "complete", "completed", "non-renewing", "cancelled", "canceled"}:
+    if not code:
+        if local_status in {"active", "trialing", "past_due", "non-renewing"}:
+            raise HTTPException(
+                status_code=503,
+                detail="XCR8 could not verify your recurring subscription. No account data was deleted; please contact support.",
+            )
         return
 
     secret = str(settings.paystack_secret_key or "").strip()

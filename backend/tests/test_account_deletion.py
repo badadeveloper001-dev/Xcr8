@@ -291,3 +291,55 @@ def test_ambiguous_paystack_cancellation_fails_closed(monkeypatch):
 
     assert error.value.status_code == 503
     assert "No account data was deleted" in error.value.detail
+
+
+def test_active_local_subscription_without_paystack_code_fails_closed(monkeypatch):
+    monkeypatch.setattr(settings, "paystack_secret_key", "")
+    user = SimpleNamespace(billing_meta={"subscription_status": "active"})
+
+    with pytest.raises(HTTPException) as error:
+        _cancel_paystack_subscription(user)
+
+    assert error.value.status_code == 503
+    assert "No account data was deleted" in error.value.detail
+
+
+def test_stale_local_cancelled_status_does_not_skip_remote_verification(monkeypatch):
+    import app.api.routes.account_deletion as deletion
+
+    class FakeResponse:
+        status_code = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.posts = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, headers):
+            return FakeResponse({"status": True, "data": {"status": "active", "email_token": "safe-token"}})
+
+        def post(self, url, headers, json):
+            self.posts.append(json)
+            return FakeResponse({"status": True})
+
+    fake = FakeClient(timeout=5)
+    monkeypatch.setattr(settings, "paystack_secret_key", "test-secret")
+    monkeypatch.setattr(deletion.httpx, "Client", lambda timeout: fake)
+
+    deletion._cancel_paystack_subscription(SimpleNamespace(billing_meta={
+        "paystack_subscription_code": "SUB_test",
+        "subscription_status": "cancelled",
+    }))
+
+    assert len(fake.posts) == 1
