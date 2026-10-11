@@ -4,6 +4,7 @@ from app.api.routes.analytics import router as analytics_router
 from app.api.routes.ai import router as ai_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.account_deletion import router as account_deletion_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.distribution import router as distribution_router
 from app.api.routes.health import router as health_router
@@ -22,6 +23,7 @@ api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(admin_router)
 api_router.include_router(auth_router)
+api_router.include_router(account_deletion_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(distribution_router)
 api_router.include_router(scheduling_router)

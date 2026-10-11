@@ -242,7 +242,7 @@ async def upload_media(
         user_id,
         total_bytes,
         idempotency_key=idempotency_key,
-        event_meta={"route": "/upload", "filename": file.filename, "content_type": file.content_type},
+        event_meta={"route": "/upload", "filename": file.filename, "object_path": f"uploads/{filename}", "content_type": file.content_type},
     )
 
     # Prefer durable object storage in production.
